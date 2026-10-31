@@ -3,23 +3,21 @@
 import { useEffect, useRef, useState } from "react";
 import { BackLink } from "@/components/ui/BackLink";
 import { Banner } from "@/components/ui/Banner";
+import { registerFarmer } from "@/features/farmers";
 import { readDraft, removeDraft, writeDraft } from "@/lib/drafts";
 import { REGISTRATION_STEPS, TOTAL_STEPS } from "../steps";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Stepper } from "./Stepper";
 import { EnumeratorStep } from "./EnumeratorStep";
+import { HouseholdStep } from "./HouseholdStep";
 import { LocationStep } from "./LocationStep";
 import { RegistryStep } from "./RegistryStep";
 import { REGISTRY_TABS } from "../registrySpec";
+import { registrationProblems, toRegistration } from "../registration";
 import { farmerFullName, ReviewStep, tabCompletion } from "./ReviewStep";
 import { SubmitConfirmModal } from "./SubmitConfirmModal";
 import { SubmittedHeader, SubmittedStep, type Submission } from "./SubmittedStep";
 import { WizardFooter } from "./WizardFooter";
-
-// Placeholder until the registry returns the real farmer ID
-function generateFarmerId() {
-  return `FRM-${String(Math.floor(Math.random() * 1_000_000)).padStart(6, "0")}`;
-}
 
 // Draft kept for this browser session only (see lib/drafts). Every step's named fields are captured.
 const DRAFT_KEY = "farmer-registration";
@@ -39,10 +37,17 @@ const formatTime = (iso: string) => new Date(iso).toLocaleString("en-GB", { day:
 
 const clearDraft = () => removeDraft(DRAFT_KEY);
 
+// One key per registration, kept in the draft: a retried or double-clicked submit returns the first
+// registration instead of creating a second record in the registry.
+const newOpId = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `op-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+
+const placeOf = (values: Record<string, string>, levels: string[]) => levels.map((level) => values[`${level}_name`] || values[level]).filter(Boolean);
+
 export function RegisterFarmerWizard() {
   const [currentStep, setCurrentStep] = useState(1);
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [sending, setSending] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: "success" | "info" | "error"; text: string; restored?: boolean } | null>(null);
   // Restored/captured values keyed by field name; bumping `restoreKey` remounts the step so it re-reads them.
@@ -135,13 +140,34 @@ export function RegisterFarmerWizard() {
     setNotice({ tone: "success", text: "Draft discarded — starting a new registration." });
   };
 
-  // The submit button asks first; confirming in the popup sends the registration.
-  const handleSubmit = () => setConfirming(true);
+  // The submit button checks what the registry would refuse, then asks; confirming sends the registration.
+  const handleSubmit = () => {
+    captureStep();
+    const problems = registrationProblems(fieldsRef.current);
+    if (problems.length > 0) {
+      setNotice({ tone: "error", text: `Complete the registration first: ${problems.join(" ")}` });
+      return;
+    }
+    setNotice(null);
+    setConfirming(true);
+  };
 
-  const confirmSubmit = () => {
-    clearDraft();
-    setConfirming(false);
-    setSubmission({ farmerId: generateFarmerId(), submittedAt: new Date().toISOString() });
+  const confirmSubmit = async () => {
+    if (!fieldsRef.current.client_op_id) fieldsRef.current.client_op_id = newOpId();
+    setSending(true);
+    try {
+      const result = await registerFarmer(toRegistration(fieldsRef.current));
+      clearDraft();
+      setFieldsSnapshot({ ...fieldsRef.current });
+      setSubmission({ submissionId: result.submission_id, status: result.status, submittedAt: new Date().toISOString() });
+    } catch (err) {
+      // The draft stays (with its key), so fixing the problem and submitting again is safe.
+      const message = err instanceof Error ? err.message : "The registration could not be sent.";
+      setNotice({ tone: "error", text: `The Farmer Registry did not accept the registration: ${message}` });
+    } finally {
+      setSending(false);
+      setConfirming(false);
+    }
   };
 
   const registerAnother = () => {
@@ -165,7 +191,7 @@ export function RegisterFarmerWizard() {
         <SubmittedStep
           submission={submission}
           farmerName={farmerFullName(fieldsSnapshot)}
-          location={[fieldsSnapshot.region, fieldsSnapshot.zone, fieldsSnapshot.woreda, fieldsSnapshot.kebele].filter(Boolean).join(" › ")}
+          location={placeOf(fieldsSnapshot, ["region", "zone", "woreda", "kebele"]).join(" › ")}
           onRegisterAnother={registerAnother}
         />
       </div>
@@ -177,6 +203,7 @@ export function RegisterFarmerWizard() {
     if (!tab) {
       return <ReviewStep values={fieldsSnapshot} onEditStep={goToStep} />;
     }
+    if (tab.key === "household") return <HouseholdStep initial={fieldsSnapshot} />;
     if (tab.key === "location") return <LocationStep initial={fieldsSnapshot} />;
     if (tab.key === "enumerator") return <EnumeratorStep initial={fieldsSnapshot} />;
     return <RegistryStep key={tab.key} tab={tab} initial={fieldsSnapshot} />;
@@ -215,11 +242,12 @@ export function RegisterFarmerWizard() {
       {confirming && (
         <SubmitConfirmModal
           farmerName={farmerFullName(fieldsSnapshot)}
-          place={[fieldsSnapshot.woreda, fieldsSnapshot.kebele].filter(Boolean).join(", ")}
+          place={placeOf(fieldsSnapshot, ["woreda", "kebele"]).join(", ")}
           completeTabs={tabCompletion(fieldsSnapshot).complete}
           totalTabs={tabCompletion(fieldsSnapshot).total}
           onCancel={() => setConfirming(false)}
-          onConfirm={confirmSubmit}
+          onConfirm={() => void confirmSubmit()}
+          busy={sending}
         />
       )}
     </div>

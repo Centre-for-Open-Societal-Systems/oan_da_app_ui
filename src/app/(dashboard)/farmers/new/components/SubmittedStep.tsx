@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Pill } from "@/components/ui/Pill";
+import { fetchRegistration, humanize, type RegistrationDetail } from "@/features/farmers";
 import { ROLE_LABELS } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -20,11 +21,18 @@ export function SubmittedHeader() {
 }
 
 export interface Submission {
-  /** Placeholder until the registry returns the real farmer ID. */
-  farmerId: string;
+  /** Farmer Registry intake submission id; the Farmer ID (FR-…) only exists once a supervisor approves. */
+  submissionId: string | null;
+  /** PENDING_APPROVAL, or DUPLICATE when this registration had been sent already. */
+  status: string;
   /** ISO timestamp of the submit. */
   submittedAt: string;
 }
+
+const STATUS_TONE: Record<string, string> = {
+  APPROVED: "bg-brand-mint text-brand-green",
+  REJECTED: "bg-danger-wash text-red-700",
+};
 
 interface SubmittedStepProps {
   submission: Submission;
@@ -57,6 +65,37 @@ const linkButton = "inline-flex h-11 items-center justify-center gap-2 whitespac
 export function SubmittedStep({ submission, farmerName, location, onRegisterAnother }: SubmittedStepProps) {
   const user = useAuthStore((s) => s.user);
   const role = useAuthStore((s) => s.role);
+  // The registry's own view of the submission: its application reference and approval state.
+  const [detail, setDetail] = useState<RegistrationDetail | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [checkError, setCheckError] = useState<string | null>(null);
+  const { submissionId } = submission;
+
+  const check = useCallback(() => {
+    if (!submissionId) return;
+    setChecking(true);
+    fetchRegistration(submissionId)
+      .then((d) => {
+        setDetail(d);
+        setCheckError(null);
+      })
+      .catch((err: unknown) => setCheckError(err instanceof Error ? err.message : "Could not read the registration status."))
+      .finally(() => setChecking(false));
+  }, [submissionId]);
+
+  // Read it once on arrival; Refresh asks again.
+  useEffect(() => {
+    if (!submissionId) return;
+    let current = true;
+    fetchRegistration(submissionId)
+      .then((d) => current && setDetail(d))
+      .catch(() => {}); // the status from the submit still shows; Refresh reports errors
+    return () => {
+      current = false;
+    };
+  }, [submissionId]);
+
+  const status = detail?.status ?? (submission.status === "DUPLICATE" ? "PENDING_APPROVAL" : submission.status);
 
   return (
     <Card className="p-0 shadow-card">
@@ -74,10 +113,22 @@ export function SubmittedStep({ submission, farmerName, location, onRegisterAnot
 
       <div className="flex flex-col gap-6 px-4 pb-8 sm:px-8">
         <dl className="grid grid-cols-1 gap-x-8 gap-y-5 rounded-xl border border-line bg-surface px-6 py-5 sm:grid-cols-2">
-          <Detail label="Farmer ID">{submission.farmerId}</Detail>
-          <Detail label="Status">
-            <span className="inline-flex rounded-md bg-warning-wash px-2.5 py-0.5 text-[12.5px] font-semibold text-orange-700">Pending approval</span>
+          <Detail label="Submission ID">
+            <span className="break-all font-mono text-[13px]">{submissionId ?? "—"}</span>
           </Detail>
+          <Detail label="Status">
+            <span className="flex flex-wrap items-center gap-2">
+              <span className={cn("inline-flex rounded-md px-2.5 py-0.5 text-[12.5px] font-semibold", STATUS_TONE[status] ?? "bg-warning-wash text-orange-700")}>{humanize(status) || "Pending approval"}</span>
+              {submissionId && (
+                <button type="button" onClick={check} disabled={checking} className="text-[12.5px] font-medium text-brand-green hover:underline disabled:opacity-60">
+                  {checking ? "Checking…" : "Refresh"}
+                </button>
+              )}
+            </span>
+            {checkError && <span className="mt-1 block text-[12px] font-normal text-red-700">{checkError}</span>}
+          </Detail>
+          <Detail label="Application reference">{detail?.application_reference ?? "—"}</Detail>
+          <Detail label="Record name">{detail?.record_name ?? "—"}</Detail>
           <Detail label="Location">{location || "Not provided"}</Detail>
           <Detail label="Submitted">{formatDateTime(submission.submittedAt)}</Detail>
           <Detail label="Submitted by">
@@ -125,8 +176,8 @@ export function SubmittedStep({ submission, farmerName, location, onRegisterAnot
         </div>
 
         <div className="flex flex-wrap items-center justify-center gap-3">
-          {/* The registry has no farmer-create endpoint yet, so there is no profile to open until it does. */}
-          <button type="button" disabled title="Available once the registration is saved to the registry" className={cn(linkButton, "bg-brand-green text-white disabled:cursor-not-allowed disabled:opacity-60")}>
+          {/* The farmer record, and so its profile, only exists in the registry once a supervisor approves; it then shows in My Farmers. */}
+          <button type="button" disabled title="Available once the supervisor approves; the farmer then appears in My Farmers" className={cn(linkButton, "bg-brand-green text-white disabled:cursor-not-allowed disabled:opacity-60")}>
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
               <circle cx="12" cy="12" r="3" />

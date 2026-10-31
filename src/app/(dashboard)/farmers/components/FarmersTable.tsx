@@ -35,8 +35,11 @@ import { fileDate, type CsvColumn } from "@/lib/download";
 import { downloadTable, formatLabel } from "@/lib/export";
 import type { Farmer } from "@/features/farmers";
 
-// Every farmer the caller may see in one request (the API maximum); search, filters and paging run here.
+// Every farmer the caller may see in one request (the API maximum); filters and paging run here.
 const PAGE_LIMIT = 500;
+// The search box asks the Farmer Registry itself; an empty box lists every approved farmer ("FR-" matches all Farmer-IDs).
+const ALL_FARMERS = "FR-";
+const SEARCH_DELAY_MS = 400;
 
 const STATUS_ORDER = ["Verified", "Pending", "Flagged"];
 
@@ -72,18 +75,25 @@ export function FarmersTable() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [segmentId, setSegmentId] = useState(SEGMENTS[0].id);
   const linkBeneficiaries = useBeneficiariesStore((s) => s.link);
-  // GET /farmers is scoped by the backend: a DA gets linked farmers, officers those in their scope.
+  // GET /farmers is scoped by the backend: a DA gets the farmers of their Kebeles, officers those in their scope.
   const [loaded, setLoaded] = useState<{ rows: Farmer[]; total: number; error: string | null } | null>(null);
+  // The typed text, sent to the registry once typing pauses.
+  const [searchText, setSearchText] = useState("");
+
+  useEffect(() => {
+    const t = setTimeout(() => setSearchText(query.trim()), SEARCH_DELAY_MS);
+    return () => clearTimeout(t);
+  }, [query]);
 
   useEffect(() => {
     let current = true;
-    listFarmers({ limit: PAGE_LIMIT })
+    listFarmers({ search_text: searchText || ALL_FARMERS, page: 1, page_size: PAGE_LIMIT })
       .then(({ items, total }) => current && setLoaded({ rows: items.map(apiFarmerToFarmer), total, error: null }))
       .catch((err: unknown) => current && setLoaded({ rows: [], total: 0, error: err instanceof Error ? err.message : "Could not load farmers." }));
     return () => {
       current = false;
     };
-  }, []);
+  }, [searchText]);
 
   const loading = loaded === null;
   // While the farmers API is unavailable the sample farmers keep the page usable; a banner says so.
@@ -119,7 +129,7 @@ export function FarmersTable() {
     setIsAddOpen(false);
   };
 
-  const rows = applyFilters(source, filters).filter((farmer) => matchesQuery(query, farmer));
+  const rows = applyFilters(source, filters).filter((farmer) => !usingSample || matchesQuery(query, farmer));
   const activeFilterCount = countActiveFilters(filters);
   const { pageRows, paginationProps } = usePagination(rows);
   const allSelected = rows.length > 0 && rows.every((f) => selected.has(f.id));

@@ -16,8 +16,9 @@ export interface ApiFarmer {
   /** DRAFT, PENDING_APPROVAL, APPROVED … */
   registration_state: string | null;
   registered_at: string | null;
-  visit_count: number;
-  last_visit: string | null;
+  /** Only on the cached list; a live registry search does not carry visit data. */
+  visit_count?: number;
+  last_visit?: string | null;
 }
 
 export interface FarmerQuery {
@@ -27,14 +28,33 @@ export interface FarmerQuery {
   state?: string;
   limit?: number;
   start?: number;
+  /**
+   * Name, Farmer-ID or phone. With it the live Farmer Registry is searched (within the caller's scope)
+   * instead of the DA Services cache; "FR-" matches every approved farmer.
+   */
+  search_text?: string;
+  /** 1-based page, with page_size (registry paging). */
+  page?: number;
+  page_size?: number;
 }
 
-/** GET /farmers: a DA's linked farmers; officers' farmers by scope. Sorted by name. */
-export async function listFarmers(q: FarmerQuery = {}): Promise<{ items: ApiFarmer[]; total: number }> {
+/** Paging the backend reports with the list: page / page_size from a registry search, limit / start from the cache. */
+export interface FarmerPage {
+  page?: number;
+  page_size?: number;
+  number_of_pages?: number;
+  limit?: number;
+  start?: number;
+  /** True when scope was applied after the registry answered, so a page may hold fewer rows than page_size. */
+  filtered_client_side?: boolean;
+}
+
+/** GET /farmers: a DA's farmers in their Kebeles; officers' farmers by scope. */
+export async function listFarmers(q: FarmerQuery = {}): Promise<{ items: ApiFarmer[]; total: number; page?: FarmerPage; source?: "registry" | "cache" }> {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(q)) if (value !== undefined && value !== "") query.set(key, String(value));
-  const res = await authRequest<{ data: { farmers: ApiFarmer[]; total: number } }>(`/da-services/farmers?${query}`);
-  return { items: res.data.farmers, total: res.data.total };
+  const res = await authRequest<{ data: { farmers: ApiFarmer[]; total: number; page?: FarmerPage; source?: "registry" | "cache" } }>(`/da-services/farmers?${query}`);
+  return { items: res.data.farmers, total: res.data.total, page: res.data.page, source: res.data.source };
 }
 
 /** GET /farmers/{id}/profile: header and stats of the farmer profile. */
@@ -222,8 +242,8 @@ export function apiFarmerToFarmer(f: ApiFarmer): Farmer {
     status,
     statusReason: reason,
     totalPlots: 0,
-    visits: f.visit_count,
-    lastVisit: splitDateTime(f.last_visit).date,
+    visits: f.visit_count ?? 0,
+    lastVisit: splitDateTime(f.last_visit ?? null).date,
   };
 }
 

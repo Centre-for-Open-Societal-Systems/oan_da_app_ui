@@ -56,7 +56,7 @@ describe("farmer calls", () => {
   it("lists farmers with filters and paging", async () => {
     fetchMock.mockResolvedValueOnce(json({ data: { farmers: [row], total: 1, page: { limit: 20, start: 0 } } }));
 
-    await expect(listFarmers({ kebele: "Bako Tibe", limit: 20 })).resolves.toEqual({ items: [row], total: 1 });
+    await expect(listFarmers({ kebele: "Bako Tibe", limit: 20 })).resolves.toEqual({ items: [row], total: 1, page: { limit: 20, start: 0 } });
     expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/farmers?kebele=Bako+Tibe&limit=20");
   });
 

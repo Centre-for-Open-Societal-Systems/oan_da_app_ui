@@ -2,8 +2,10 @@
 
 import { useState, type ReactNode } from "react";
 import { Card } from "@/components/ui/Card";
+import { optionLabel, useFieldOptions, type FieldOptions } from "@/features/farmers";
 import { cn } from "@/lib/utils";
-import { isFieldVisible, LOCATION_HIERARCHY_FIELDS, REGISTRY_TABS } from "../registrySpec";
+import { householdMembers, registrationProblems } from "../registration";
+import { fieldValue, isFieldVisible, LOCATION_HIERARCHY_FIELDS, optionsFor, REGISTRY_TABS, type RegistryField } from "../registrySpec";
 
 interface ReviewStepProps {
   /** Everything entered so far, keyed by registry field name */
@@ -26,6 +28,7 @@ const TAB_ICONS: Record<string, ReactNode> = {
   location: icon(["M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z", "M12 13a3 3 0 100-6 3 3 0 000 6z"]),
   lands: icon(["M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z", "M8 2v16", "M16 6v16"]),
   crops: icon(["M7 20h10", "M10 20c5.5-2.5.8-6.4 3-10", "M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z", "M14.1 6a7 7 0 00-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z"]),
+  membership: icon(["M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2", "M9 11a4 4 0 100-8 4 4 0 000 8z", "M19 8v6", "M22 11h-6"]),
   livestocks: icon(["M11 4a2 2 0 11-4 0 2 2 0 014 0z", "M18 8a2 2 0 11-4 0 2 2 0 014 0z", "M20 16a2 2 0 11-4 0 2 2 0 014 0z", "M9 10a5 5 0 015 5v3.5a3.5 3.5 0 01-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 015.5 10z"]),
   ids: icon(["M3 5h18a1 1 0 011 1v12a1 1 0 01-1 1H3a1 1 0 01-1-1V6a1 1 0 011-1z", "M7 9h.01", "M11 9h6", "M11 13h6", "M5 16c0-1.1.9-2 2-2s2 .9 2 2"]),
   enumerator: icon(["M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2", "M9 2h6a1 1 0 011 1v2a1 1 0 01-1 1H9a1 1 0 01-1-1V3a1 1 0 011-1z"]),
@@ -39,34 +42,57 @@ interface ReviewRow {
   required?: boolean;
 }
 
-function rowsFor(tabKey: string, values: Record<string, string>): ReviewRow[] {
+/** What the agent sees for a field: the option label for codes, the file name for the document. */
+function display(field: RegistryField, values: Record<string, string>, options: FieldOptions) {
+  if (field.type === "document") return values.identity_document_name || (values.identity_document_id ? "Uploaded" : "");
+  if (field.derive) return field.derive(values);
+  const value = fieldValue(values, field.name);
+  return field.type === "select" || field.type === "radio" ? optionLabel(optionsFor(field, options), value) : value;
+}
+
+/** A field counts as filled by what POST /farmers will send: the document by its uploaded id. */
+const filled = (field: RegistryField, values: Record<string, string>) => !!(field.type === "document" ? values.identity_document_id : fieldValue(values, field.name).trim());
+
+function rowsFor(tabKey: string, values: Record<string, string>, options: FieldOptions = {}): ReviewRow[] {
   const tab = REGISTRY_TABS.find((item) => item.key === tabKey)!;
   const rows: ReviewRow[] = [];
   if (tabKey === "location") {
     // Kebele is the leaf of the hierarchy, so it is the one the registry needs
     for (const field of LOCATION_HIERARCHY_FIELDS) {
-      rows.push({ label: field.label, value: values[field.name] ?? "", required: field.name === "kebele" });
+      rows.push({ label: field.label, value: values[`${field.name}_name`] || values[field.name] || "", required: field.name === "kebele" });
     }
   }
   for (const section of tab.sections) {
     for (const field of section.fields) {
-      if (field.type !== "capture" && isFieldVisible(field, values)) rows.push({ label: field.label, value: values[field.name] ?? "", required: field.required });
+      if (field.type === "capture" || !isFieldVisible(field, values)) continue;
+      rows.push({ label: field.label, value: filled(field, values) || field.derive ? display(field, values, options) : "", required: field.required });
     }
+  }
+  if (tabKey === "household") {
+    const members = householdMembers(values);
+    const relationships = options.HouseholdMember?.relationship_to_the_head;
+    rows.push({ label: "Family size", value: String(1 + members.length) });
+    members.forEach((m, i) => {
+      const name = [m.first_name, m.father_name, m.grandfather_name].filter(Boolean).join(" ");
+      const relation = m.relationship ? optionLabel(relationships, m.relationship) : "";
+      rows.push({ label: `Member ${i + 1}`, value: [name, relation].filter(Boolean).join(" · ") });
+    });
   }
   return rows;
 }
 
 /** The handful of facts an agent checks at a glance on the Farmer tab. */
-function farmerSummary(values: Record<string, string>): ReviewRow[] {
+function farmerSummary(values: Record<string, string>, options: FieldOptions): ReviewRow[] {
   const v = (name: string) => values[name]?.trim() ?? "";
-  const phone = [v("country_code"), v("phone_number")].filter(Boolean).join(" ");
+  const label = (field: string, value: string) => (value ? optionLabel(options.Farmer?.[field], value) : "");
+  const age = REGISTRY_TABS[0].sections.flatMap((s) => s.fields).find((f) => f.name === "estimated_age")?.derive?.(values) ?? "";
   return [
-    { label: "Name", value: [v("first_name"), v("middle_name"), v("last_name")].filter(Boolean).join(" ") },
-    { label: "Gender · Age", value: [v("gender"), v("estimated_age") && `${v("estimated_age")} years`].filter(Boolean).join(" · ") },
-    { label: "Primary phone", value: phone },
-    { label: "Household income", value: v("source_of_income") },
-    { label: "Education level", value: v("education_level") },
-    { label: "Marital status", value: v("marital_status") },
+    { label: "Name", value: [v("first_name"), v("middle_name"), v("last_name")].filter(Boolean).join(" "), required: true },
+    { label: "Gender · Age", value: [label("gender", v("gender")), age && `${age} years`].filter(Boolean).join(" · "), required: true },
+    { label: "Primary phone", value: v("phone_number") },
+    { label: "Source of income", value: label("income_sources", v("income_source")) },
+    { label: "Education level", value: label("education_level", v("education_level")), required: true },
+    { label: "Marital status", value: label("marital_status", v("marital_status")), required: true },
   ];
 }
 
@@ -95,11 +121,13 @@ function Rows({ rows }: { rows: ReviewRow[] }) {
 
 export function ReviewStep({ values, onEditStep }: ReviewStepProps) {
   const [openStep, setOpenStep] = useState<number | null>(1);
+  const { options } = useFieldOptions();
   const tabs = REGISTRY_TABS.map((tab) => {
-    const rows = rowsFor(tab.key, values);
+    const rows = rowsFor(tab.key, values, options);
     return { tab, rows, missing: rows.filter((row) => row.required && !row.value).length };
   });
-  const totalMissing = tabs.reduce((sum, t) => sum + t.missing, 0);
+  // Everything the registry would refuse, including the rules that span tabs (members, land for crops).
+  const problems = registrationProblems(values);
 
   return (
     <Card className="p-0 shadow-card">
@@ -112,16 +140,25 @@ export function ReviewStep({ values, onEditStep }: ReviewStepProps) {
         <p
           className={cn(
             "flex items-start gap-2.5 rounded-lg border px-4 py-3 text-[13px]",
-            totalMissing === 0 ? "border-brand-border bg-brand-mint text-brand-green" : "border-warning-border bg-warning-wash text-orange-700"
+            problems.length === 0 ? "border-brand-border bg-brand-mint text-brand-green" : "border-warning-border bg-warning-wash text-orange-700"
           )}
         >
           <svg className="mt-0.5 h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="10" />
             <path d="M12 16v-4M12 8h.01" />
           </svg>
-          {totalMissing === 0
-            ? "All required fields are complete. The farmer will be sent to your supervisor for approval after you submit."
-            : `${totalMissing} required ${totalMissing === 1 ? "field is" : "fields are"} still empty. Open a tab and use Edit to complete ${totalMissing === 1 ? "it" : "them"} before you submit.`}
+          {problems.length === 0 ? (
+            "All required fields are complete. The farmer will be sent to your supervisor for approval after you submit."
+          ) : (
+            <span>
+              {problems.length} {problems.length === 1 ? "thing needs" : "things need"} fixing before you submit:
+              <ul className="mt-1.5 list-disc pl-5">
+                {problems.map((problem) => (
+                  <li key={problem}>{problem}</li>
+                ))}
+              </ul>
+            </span>
+          )}
         </p>
 
         {tabs.map(({ tab, rows, missing }, index) => {
@@ -157,7 +194,7 @@ export function ReviewStep({ values, onEditStep }: ReviewStepProps) {
 
               {isOpen && (
                 <div className="border-t border-line bg-white px-6 py-5">
-                  <Rows rows={tab.key === "farmer" ? farmerSummary(values) : rows} />
+                  <Rows rows={tab.key === "farmer" ? [...farmerSummary(values, options), ...rows.filter((r) => r.required && !r.value)] : rows} />
                   <button
                     type="button"
                     onClick={() => onEditStep(step)}

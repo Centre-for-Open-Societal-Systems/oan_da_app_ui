@@ -1,19 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Banner } from "@/components/ui/Banner";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { Spinner } from "@/components/ui/Spinner";
 import { Textarea } from "@/components/ui/Textarea";
 import { FormField } from "@/components/ui/FormField";
-import { ProfilePhotoUpload } from "@/features/farmers";
+import { uploadRegistrationDocument, useFieldOptions, type FieldOption, type FieldOptions } from "@/features/farmers";
 import { cn } from "@/lib/utils";
-import { isFieldVisible, type RegistryField, type RegistrySection, type RegistryTab } from "../registrySpec";
+import { isFieldVisible, optionsFor, type RegistryField, type RegistrySection, type RegistryTab } from "../registrySpec";
 
-const INPUT_TYPE = { text: "text", number: "number", date: "date", tel: "tel", select: "text", radio: "text", checkbox: "text", textarea: "text", file: "text", derived: "text", capture: "text" } as const;
+const INPUT_TYPE = { text: "text", number: "number", date: "date", tel: "tel", select: "text", radio: "text", checkbox: "text", textarea: "text", document: "text", derived: "text", capture: "text" } as const;
 
-// Filled in by the registry once the record exists; the agent only sees them here.
-const RECORD_FIELDS = ["Farmer ID", "Record Name", "Status", "Status Reason", "Created By", "Created At", "Last Approved By", "Last Approved At"];
+const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
 
 const CALENDAR_ICON = (
   <svg className="h-4 w-4 text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -25,66 +26,93 @@ const UPLOAD_ICON = "M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v
 
 const GRID = { 3: "md:grid-cols-2 xl:grid-cols-3", 4: "md:grid-cols-2 xl:grid-cols-4" } as const;
 
-// A file picker that looks like the other inputs; only the file's name goes into the draft.
-function FileInput({ field, value, onChange }: { field: RegistryField; value: string; onChange: (value: string) => void }) {
+type Setter = (name: string) => (value: string) => void;
+
+// Uploads the identity document to the registry as soon as it is picked; the draft keeps the returned
+// document id (what POST /farmers takes) and the file name, never the file itself.
+function DocumentInput({ field, values, onChange }: { field: RegistryField; values: Record<string, string>; onChange: Setter }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [state, setState] = useState<{ uploading: boolean; error: string | null }>({ uploading: false, error: null });
+  const name = values.identity_document_name ?? "";
+  const documentId = values.identity_document_id ?? "";
+
+  const upload = async (file: File | undefined) => {
+    if (!file) return;
+    if (file.size > MAX_DOCUMENT_BYTES) return setState({ uploading: false, error: "The file is larger than 5 MB." });
+    setState({ uploading: true, error: null });
+    try {
+      const doc = await uploadRegistrationDocument(file);
+      onChange("identity_document_id")(doc.document_id);
+      onChange("identity_document_name")(doc.file_name || file.name);
+      setState({ uploading: false, error: null });
+    } catch (err) {
+      setState({ uploading: false, error: err instanceof Error ? err.message : "Upload failed. Try again." });
+    } finally {
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+
   return (
     <>
-      <input type="hidden" name={field.name} value={value} readOnly />
+      <input type="hidden" name="identity_document_id" value={documentId} readOnly />
+      <input type="hidden" name="identity_document_name" value={name} readOnly />
       <button
         type="button"
         id={field.name}
+        disabled={state.uploading}
         onClick={() => inputRef.current?.click()}
-        className="flex h-11 w-full items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-left text-sm outline-none transition-all duration-150 hover:border-brand-green hover:ring-1 hover:ring-brand-green/20 focus:border-brand-green focus:ring-2 focus:ring-brand-green/20"
+        className="flex h-11 w-full items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-left text-sm outline-none transition-all duration-150 hover:border-brand-green hover:ring-1 hover:ring-brand-green/20 focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 disabled:cursor-wait"
       >
-        <svg className="h-4 w-4 shrink-0 text-brand-green" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d={UPLOAD_ICON} />
-        </svg>
-        <span className={cn("truncate", value ? "text-zinc-900" : "text-zinc-400")}>{value || `Enter ${field.label}`}</span>
+        {state.uploading ? (
+          <Spinner className="text-brand-green" />
+        ) : (
+          <svg className="h-4 w-4 shrink-0 text-brand-green" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d={UPLOAD_ICON} />
+          </svg>
+        )}
+        <span className={cn("truncate", name ? "text-zinc-900" : "text-zinc-400")}>{state.uploading ? "Uploading to the registry…" : name || "Choose a PDF, JPEG or PNG"}</span>
       </button>
-      <input ref={inputRef} type="file" accept=".pdf,image/jpeg,image/png" className="hidden" onChange={(e) => onChange(e.target.files?.[0]?.name ?? "")} />
+      <input ref={inputRef} type="file" accept=".pdf,image/jpeg,image/png" className="hidden" onChange={(e) => void upload(e.target.files?.[0])} />
+      {state.error ? (
+        <p className="mt-1.5 text-[12.5px] text-red-700">{state.error}</p>
+      ) : documentId ? (
+        <p className="mt-1.5 text-[12.5px] text-brand-green">Uploaded to the Farmer Registry. Pick another file to replace it.</p>
+      ) : null}
     </>
   );
 }
 
-function Field({ field, value, values, enabled, onChange, endAdornment }: { field: RegistryField; value: string; values: Record<string, string>; enabled: boolean; onChange: (value: string) => void; endAdornment?: ReactNode }) {
+interface FieldProps {
+  field: RegistryField;
+  value: string;
+  values: Record<string, string>;
+  options: FieldOption[];
+  /** The registry options are still loading. */
+  loading: boolean;
+  enabled: boolean;
+  onChange: (value: string) => void;
+  endAdornment?: ReactNode;
+}
+
+function Field({ field, value, values, options, loading, enabled, onChange, endAdornment }: FieldProps) {
   const label = field.label;
   const wide = field.wide ? "col-span-full" : undefined;
   const common = { label, htmlFor: field.name, required: field.required, hint: field.hint, className: wide };
 
   if (field.type === "radio") {
-    const selected = value || field.options?.[0] || "";
+    const selected = value || options[0]?.value || "";
     return (
       <FormField {...common}>
         {/* The hidden input carries the choice into the draft; the radios themselves are display only. */}
         <input type="hidden" id={field.name} name={field.name} value={selected} readOnly />
         <div role="radiogroup" aria-label={label} className="flex h-11 items-center gap-6">
-          {field.options?.map((option) => (
-            <label key={option} className="flex cursor-pointer items-center gap-2 text-sm text-ink">
-              <input type="radio" checked={selected === option} onChange={() => onChange(option)} className="h-4 w-4 accent-brand-green" />
-              {option}
+          {options.map((option) => (
+            <label key={option.value} className="flex cursor-pointer items-center gap-2 text-sm text-ink">
+              <input type="radio" checked={selected === option.value} onChange={() => onChange(option.value)} className="h-4 w-4 accent-brand-green" />
+              {option.label}
             </label>
           ))}
         </div>
-      </FormField>
-    );
-  }
-  if (field.type === "derived") {
-    const result = field.derive?.(values) ?? "";
-    return (
-      <FormField {...common}>
-        <input type="hidden" id={field.name} name={field.name} value={result} readOnly />
-        <label className="flex h-11 items-center gap-2.5 text-sm text-ink">
-          <input type="checkbox" checked={result === "Yes"} disabled readOnly className="h-[18px] w-[18px] accent-brand-green" />
-          Derived from upload
-        </label>
-      </FormField>
-    );
-  }
-  if (field.type === "file") {
-    return (
-      <FormField {...common}>
-        <FileInput field={field} value={value} onChange={onChange} />
       </FormField>
     );
   }
@@ -99,9 +127,11 @@ function Field({ field, value, values, enabled, onChange, endAdornment }: { fiel
     <FormField {...common}>
       {field.type === "select" ? (
         <Select id={field.name} name={field.name} value={value} disabled={!enabled} onChange={(e) => onChange(e.target.value)}>
-          <option value="" disabled>{field.placeholder ?? `Select ${label}`}</option>
-          {field.options?.map((option) => (
-            <option key={option} value={option}>{option}</option>
+          <option value="" disabled>{loading ? "Loading options…" : (field.placeholder ?? `Select ${label}`)}</option>
+          {/* A saved code stays selectable while the options load, so the draft does not lose it. */}
+          {value && !options.some((o) => o.value === value) && <option value={value}>{value}</option>}
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
           ))}
         </Select>
       ) : (
@@ -114,7 +144,7 @@ function Field({ field, value, values, enabled, onChange, endAdornment }: { fiel
           disabled={!enabled}
           onChange={(e) => onChange(e.target.value)}
           placeholder={field.placeholder ?? (field.type === "tel" ? "+251 9XXXXXXXX" : `Enter ${label}`)}
-          startAdornment={field.type === "date" || (field.name.includes("date_ec") && !field.derive) ? CALENDAR_ICON : undefined}
+          startAdornment={field.type === "date" ? CALENDAR_ICON : undefined}
           endAdornment={endAdornment}
         />
       )}
@@ -145,25 +175,6 @@ export function Section({ title, description, children }: { title: string; descr
     </section>
   );
 }
-
-function RecordSection() {
-  return (
-    <Section title="Profile and Record Details" description="Manage the profile photo and view auto-filled record details.">
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[250px_1fr]">
-        <ProfilePhotoUpload />
-        <div className="grid grid-cols-1 content-start gap-x-6 gap-y-5 md:grid-cols-2 xl:grid-cols-3">
-          {RECORD_FIELDS.map((label) => (
-            <FormField key={label} label={label} htmlFor={`record-${label}`} required>
-              <Input id={`record-${label}`} readOnly placeholder={`Enter ${label}`} />
-            </FormField>
-          ))}
-        </div>
-      </div>
-    </Section>
-  );
-}
-
-type Setter = (name: string) => (value: string) => void;
 
 /** Reads the device position into the latitude / longitude fields; the enumerator's also get altitude, accuracy and the capture time. */
 function readDevicePosition(onChange: Setter, prefix: "" | "enumerator_", done?: (ok: boolean) => void) {
@@ -214,7 +225,7 @@ function GpsCapture({ values, onChange }: { values: Record<string, string>; onCh
 }
 
 // Consecutive checkboxes share one cell under the heading of the first, e.g. "Members included".
-function CheckboxGroup({ fields, values, onChange }: { fields: RegistryField[]; values: Record<string, string>; onChange: (name: string) => (value: string) => void }) {
+function CheckboxGroup({ fields, values, onChange }: { fields: RegistryField[]; values: Record<string, string>; onChange: Setter }) {
   return (
     <FormField label={fields[0].group ?? fields[0].label} htmlFor={fields[0].name}>
       <div className="flex h-11 flex-wrap items-center gap-x-6 gap-y-2">
@@ -234,7 +245,7 @@ function CheckboxGroup({ fields, values, onChange }: { fields: RegistryField[]; 
   );
 }
 
-function SectionFields({ section, values, onChange }: { section: RegistrySection; values: Record<string, string>; onChange: (name: string) => (value: string) => void }) {
+function SectionFields({ section, values, fieldOptions, loading, onChange }: { section: RegistrySection; values: Record<string, string>; fieldOptions: FieldOptions; loading: boolean; onChange: Setter }) {
   // Fold each run of checkboxes into one cell.
   const cells: RegistryField[][] = [];
   for (const field of section.fields) {
@@ -258,42 +269,75 @@ function SectionFields({ section, values, onChange }: { section: RegistrySection
   );
   return (
     <div className={cn("grid grid-cols-1 content-start gap-x-6 gap-y-5", GRID[section.columns ?? 3])}>
-      {cells.map((cell) =>
-        cell[0].type === "checkbox" ? (
-          <CheckboxGroup key={cell[0].name} fields={cell} values={values} onChange={onChange} />
-        ) : cell[0].type === "capture" ? (
-          <GpsCapture key={cell[0].name} values={values} onChange={onChange} />
-        ) : (
-          <Field key={cell[0].name} field={cell[0]} value={values[cell[0].name] ?? cell[0].defaultValue ?? ""} values={values} enabled={isFieldVisible(cell[0], values)} onChange={onChange(cell[0].name)} endAdornment={cell[0].locate ? pinFor(cell[0]) : undefined} />
-        ),
-      )}
+      {cells.map((cell) => {
+        const field = cell[0];
+        if (field.type === "checkbox") return <CheckboxGroup key={field.name} fields={cell} values={values} onChange={onChange} />;
+        if (field.type === "capture") return <GpsCapture key={field.name} values={values} onChange={onChange} />;
+        if (field.type === "document") {
+          return (
+            <FormField key={field.name} label={field.label} htmlFor={field.name} required={field.required} hint={field.hint}>
+              <DocumentInput field={field} values={values} onChange={onChange} />
+            </FormField>
+          );
+        }
+        return (
+          <Field
+            key={field.name}
+            field={field}
+            value={values[field.name] ?? field.defaultValue ?? ""}
+            values={values}
+            options={optionsFor(field, fieldOptions)}
+            loading={loading && !!field.source}
+            enabled={isFieldVisible(field, values)}
+            onChange={onChange(field.name)}
+            endAdornment={field.locate ? pinFor(field) : undefined}
+          />
+        );
+      })}
     </div>
   );
 }
 
-/** One Farmer Registry tab as collapsible sections. `initial` restores a saved draft (field name → value), `defaults` fill what it leaves empty; `leading` sits above the sections. */
-export function RegistryStep({ tab, initial = {}, defaults, leading }: { tab: RegistryTab; initial?: Record<string, string>; defaults?: Record<string, string>; leading?: ReactNode }) {
-  // `defaults` fill the fields a draft has nothing in (e.g. the signed-in enumerator).
+interface RegistryStepProps {
+  tab: RegistryTab;
+  /** Restores a saved draft (field name → value). */
+  initial?: Record<string, string>;
+  /** Fill the fields the draft has nothing in (e.g. the signed-in enumerator). */
+  defaults?: Record<string, string>;
+  /** Sits above the sections. */
+  leading?: ReactNode;
+  /** Sits below the sections. */
+  trailing?: ReactNode;
+}
+
+/** One Farmer Registry tab as collapsible sections. Dropdowns list the registry's own codes (GET /registries/farmer/field-options). */
+export function RegistryStep({ tab, initial = {}, defaults, leading, trailing }: RegistryStepProps) {
+  const { options: fieldOptions, loading, error } = useFieldOptions();
   const [values, setValues] = useState(() => {
     const merged = { ...initial };
     for (const [name, value] of Object.entries(defaults ?? {})) if (!merged[name]) merged[name] = value;
     return merged;
   });
-  const set = (name: string) => (value: string) => setValues((current) => ({ ...current, [name]: value }));
+  const set: Setter = (name) => (value) => setValues((current) => ({ ...current, [name]: value }));
+  const usesOptions = tab.sections.some((section) => section.fields.some((field) => field.source));
 
   const sections = (
     <div className="flex flex-col gap-5">
-      {tab.key === "farmer" && <RecordSection />}
+      {error && usesOptions && (
+        <Banner tone="error" title="Could not load the Farmer Registry options">
+          {error} Reload the page to try again.
+        </Banner>
+      )}
       {leading}
       {tab.sections.map((section) => (
         <Section key={section.title} title={section.title} description={section.description}>
-          <SectionFields section={section} values={values} onChange={set} />
+          <SectionFields section={section} values={values} fieldOptions={fieldOptions} loading={loading} onChange={set} />
         </Section>
       ))}
+      {trailing}
     </div>
   );
 
-  // Steps without a heading (Location, which adds its own hierarchy card) keep the bare sections.
   if (!tab.heading) return sections;
   return (
     <Card className="p-0 shadow-card">
