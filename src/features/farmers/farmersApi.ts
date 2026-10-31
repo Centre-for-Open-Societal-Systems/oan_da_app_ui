@@ -13,6 +13,8 @@ export interface ApiFarmer {
   woreda: string | null;
   region: string | null;
   total_land_hectares: number | null;
+  /** Land records on the registry's Lands tab; only on a live registry search. */
+  total_plots?: number | null;
   /** DRAFT, PENDING_APPROVAL, APPROVED … */
   registration_state: string | null;
   registered_at: string | null;
@@ -241,7 +243,7 @@ export function apiFarmerToFarmer(f: ApiFarmer): Farmer {
     registeredTime: registered.time,
     status,
     statusReason: reason,
-    totalPlots: 0,
+    totalPlots: f.total_plots ?? 0,
     visits: f.visit_count ?? 0,
     lastVisit: splitDateTime(f.last_visit ?? null).date,
   };
