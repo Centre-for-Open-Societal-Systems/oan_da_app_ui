@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./cropSownApi", () => ({ fetchIntakeForm: vi.fn(), saveFarmerCrop: vi.fn() }));
 
-import { buildRecord, lookupRecord, saveStage } from "./cropSownSubmit";
+import { buildRecord, clearIntakeFormCache, lookupRecord, MissingFieldError, optionId, optionLabel, saveStage } from "./cropSownSubmit";
 import { fetchIntakeForm, saveFarmerCrop } from "./cropSownApi";
 import { valueKey } from "./cropSown";
 import type { Farmer } from "./types";
@@ -20,6 +20,7 @@ const planningForm = {
 };
 
 beforeEach(() => {
+  clearIntakeFormCache();
   vi.mocked(fetchIntakeForm).mockReset().mockResolvedValue(planningForm);
   vi.mocked(saveFarmerCrop).mockReset().mockResolvedValue(saved());
 });
@@ -28,7 +29,23 @@ describe("lookupRecord", () => {
   it("sends a 12-digit Fayda number as fayda_fin and a 16-digit one as fayda_fan_id", () => {
     expect(lookupRecord(farmer, { [valueKey("identity", "fayda_fan_id")]: "1234 5678 9012" })).toEqual({ farmer_id: farmer.id, fayda_fin: "123456789012" });
     expect(lookupRecord(farmer, { [valueKey("identity", "fayda_fan_id")]: "1234567890123456" })).toEqual({ farmer_id: farmer.id, fayda_fan_id: "1234567890123456" });
+    expect(lookupRecord(farmer, { [valueKey("identity", "fayda_fan_id")]: "5837 2910 4628 3715" })).toEqual({ farmer_id: farmer.id, fayda_fan_id: "5837291046283715" });
     expect(lookupRecord(farmer, {})).toEqual({ farmer_id: farmer.id });
+  });
+
+  it("refuses a Fayda number that is neither 12 nor 16 digits", () => {
+    expect(() => lookupRecord(farmer, { [valueKey("identity", "fayda_fan_id")]: "4821 7735 863" })).toThrow("12 digits (FIN) or 16 digits (FAN)");
+  });
+});
+
+describe("catalog choices", () => {
+  it("read plain strings, value_id/value_display and other common shapes without throwing", () => {
+    expect([optionId("Teff"), optionLabel("Teff")]).toEqual(["Teff", "Teff"]);
+    expect([optionId({ value_id: "A", value_display: "Alpha" }), optionLabel({ value_id: "A", value_display: "Alpha" })]).toEqual(["A", "Alpha"]);
+    expect(optionLabel({ value_id: "A" })).toBe("A");
+    expect([optionId({ id: 7, label: "Seven" } as never), optionLabel({ id: 7, label: "Seven" } as never)]).toEqual(["7", "Seven"]);
+    expect(optionLabel({} as never)).toBe("");
+    expect(optionLabel(null)).toBe("");
   });
 });
 
@@ -52,33 +69,47 @@ describe("saveStage", () => {
     [valueKey("planning", "land_id")]: "L-1",
   };
 
-  it("opens the draft with the lookup and season, then saves the tab's list section linked to the subject record", async () => {
+  it("sends a new stage's lookup, season and detail sections in ONE call, with no record ids (the registry owns them)", async () => {
     const { drafts, saved: sections } = await saveStage({ farmer, tab: "planning", values, drafts: {} });
     const calls = vi.mocked(saveFarmerCrop).mock.calls;
 
+    expect(calls).toHaveLength(1);
     expect(sections).toEqual(["crop_farmer_lookup", "cropsown_intake_season_section_01", "cropsown_planning_details_section_01"]);
-    expect(calls[0]).toEqual([farmer.id, "planning", [{ section_id: "crop_farmer_lookup", records: [{ farmer_id: farmer.id, fayda_fin: "123456789012" }] }], {}]);
-    expect(calls[1][2][0]).toEqual({ section_id: "cropsown_intake_season_section_01", records: [{ internal_record_id: "root-1", crop_year: "2026", production_season: "CROP_SEASON_MEHER" }] });
-    expect(calls[1][3]).toEqual({ submissionId: "sub-1" });
-    const list = calls[2][2][0];
-    expect(list.section_id).toBe("cropsown_planning_details_section_01");
-    expect(list.records[0]).toMatchObject({ link_internal_record_id: "root-1", land_id: "L-1" });
-    expect(list.records[0].internal_record_id).toEqual(expect.any(String));
-    expect(calls[2][3]).toEqual({ submissionId: "sub-1" });
+    const [code, form, body, options] = calls[0];
+    expect([code, form, options]).toEqual([farmer.id, "planning", {}]);
+    expect(body[0]).toEqual({ section_id: "crop_farmer_lookup", records: [{ farmer_id: farmer.id, fayda_fin: "123456789012" }] });
+    expect(body[1]).toEqual({ section_id: "cropsown_intake_season_section_01", records: [{ crop_year: "2026", production_season: "CROP_SEASON_MEHER" }] });
+    expect(body[2]).toEqual({ section_id: "cropsown_planning_details_section_01", records: [{ land_id: "L-1" }] });
+    expect(JSON.stringify(body)).not.toContain("internal_record_id");
+    expect(JSON.stringify(body)).not.toContain("link_internal_record_id");
     expect(drafts.planning).toEqual({ submissionId: "sub-1", rootId: "root-1", reference: "REF-1" });
   });
 
-  it("continues an existing draft without opening a new one", async () => {
-    await saveStage({ farmer, tab: "planning", values, drafts: { planning: { submissionId: "sub-9", rootId: "root-9" } } });
-    const calls = vi.mocked(saveFarmerCrop).mock.calls;
-    expect(calls).toHaveLength(1);
-    expect(calls[0][3]).toEqual({ submissionId: "sub-9" });
-    expect(calls[0][2][0].records[0]).toMatchObject({ link_internal_record_id: "root-9" });
+  it("refuses a new stage without a Production Season, pointing at the tab where it is entered", async () => {
+    const { [valueKey("identity", "production_season")]: _omitted, ...without } = values;
+    void _omitted;
+    await expect(saveStage({ farmer, tab: "planning", values: without, drafts: {} })).rejects.toMatchObject({ name: "MissingFieldError", tab: "planning" });
+    expect(saveFarmerCrop).not.toHaveBeenCalled();
+    expect(new MissingFieldError("x", "planning")).toBeInstanceOf(Error);
   });
 
-  it("stops at the first refused save and leaves the drafts untouched", async () => {
+  it("falls back to the registry's documented season codes when the intake-form route has not answered", async () => {
+    vi.mocked(fetchIntakeForm).mockResolvedValue(null as never);
+    await saveStage({ farmer, tab: "planning", values: { ...values, [valueKey("planning", "season")]: "Belg", [valueKey("planning", "commodity")]: "Teff" }, drafts: {} });
+    const body = vi.mocked(saveFarmerCrop).mock.calls[0][2];
+    expect(body[1].records[0]).toEqual({ crop_year: "2026", production_season: "SEASON_MEHER" });
+    expect(body[2].records[0]).toMatchObject({ season: "SEASON_BELG", commodity: "CROP_TEFF" });
+  });
+
+  it("saves the same stage again into its draft, without a second lookup", async () => {
+    await saveStage({ farmer, tab: "planning", values, drafts: { planning: { submissionId: "sub-9", rootId: "root-9" } } });
+    const [, , body, options] = vi.mocked(saveFarmerCrop).mock.calls[0];
+    expect(options).toEqual({ submissionId: "sub-9" });
+    expect(body.map((s) => s.section_id)).toEqual(["cropsown_planning_details_section_01"]);
+  });
+
+  it("leaves the drafts untouched when the save is refused", async () => {
     vi.mocked(saveFarmerCrop).mockRejectedValueOnce(new Error("Registry unavailable, try again."));
     await expect(saveStage({ farmer, tab: "planning", values, drafts: {} })).rejects.toThrow("Registry unavailable");
-    expect(saveFarmerCrop).toHaveBeenCalledTimes(1);
   });
 });

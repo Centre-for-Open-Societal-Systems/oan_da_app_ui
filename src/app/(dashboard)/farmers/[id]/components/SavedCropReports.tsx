@@ -37,7 +37,7 @@ export function SavedCropReports({ farmer }: { farmer: Farmer }) {
       ) : (
         <ul className="divide-y divide-line-soft">
           {crops.map((c) => (
-            <li key={c.submission_id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-[14px]">
+            <li key={c.submission_id ?? c.internal_record_id ?? c.record_name} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-[14px]">
               <span className="font-semibold text-ink">{c.record_name}</span>
               <span className="text-muted">
                 {c.draft_status} · {c.approval_status}

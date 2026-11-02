@@ -65,15 +65,36 @@ export interface ApiSavedCrop extends ApiCropSubmission {
   section_payloads: ApiSectionPayload[];
 }
 
+/** One of the `display_fields` the list gives each row: the registry's own summary of it (Fayda FAN, region, crop year…). */
+export interface ApiDisplayField {
+  field_name: string;
+  order: number;
+  value: string | null;
+}
+
+/**
+ * A row of GET /farmers/{id}/crops, newest first. Most rows are intake submissions (they carry submission_id and form_id);
+ * the last is usually the approved register record of the farmer's crop (internal_record_id, no submission).
+ */
 export interface ApiFarmerCrop {
-  submission_id: string;
+  submission_id?: string;
+  form_id?: string;
+  register_id?: string;
   record_name: string;
-  draft_status: string;
-  approval_status: string;
-  form_id: string;
-  register_id: string;
-  submission_source: string;
-  section_payloads: ApiSectionPayload[] | null;
+  application_reference?: string;
+  draft_status?: string;
+  approval_status?: string;
+  approved_by?: string | null;
+  created_by?: string | null;
+  first_created_at?: string;
+  last_updated_at?: string;
+  /** Rows of the register itself. */
+  internal_record_id?: string;
+  functional_record_id?: string;
+  created_at?: string;
+  submission_source?: string;
+  display_fields?: ApiDisplayField[];
+  section_payloads?: ApiSectionPayload[] | null;
 }
 
 /** One section's records as the save route takes them. */
@@ -124,7 +145,8 @@ export function describeCropSownError(err: unknown): string {
   if (!(err instanceof ApiError)) return err instanceof Error ? err.message : "Could not reach the Crop Sown service.";
   switch (err.status) {
     case 401: return "Your session has ended. Please sign in again.";
-    case 403: return "You do not have access to this farmer.";
+    // The API says why (e.g. "Farmer is not linked or assigned to you."); that is more useful than a generic line.
+    case 403: return err.message && !/^forbidden$/i.test(err.message) ? err.message : "You do not have access to this farmer.";
     case 404: return "Farmer or submission not found.";
     case 502:
     case 504: return "Registry unavailable, try again.";
