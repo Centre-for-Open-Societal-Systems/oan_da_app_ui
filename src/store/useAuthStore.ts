@@ -2,7 +2,8 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Role } from "@/lib/rbac";
 import { clearAllDrafts } from "@/lib/drafts";
-import { revokeRefreshToken } from "@/lib/authApi";
+import { setCsrfProvider } from "@/lib/api";
+import { revokeIamSession, revokeRefreshToken } from "@/lib/authApi";
 
 export interface AuthUser {
   id: string;
@@ -16,6 +17,12 @@ export interface AuthTokens {
   refreshToken: string;
   /** Epoch ms after which the access token is rejected. */
   expiresAt: number;
+  /** IAM-issued sessions only: sent as the X-CSRF-Token header on every call (see lib/iam's IamSession). */
+  csrfToken?: string;
+  /**
+   * Where the tokens come from. "keycloak": issued through the IAM sign-in, no refresh token, so it ends at expiresAt.
+   */
+  provider?: "keycloak";
 }
 
 /** What GET /da-services/me says about the signed-in user beyond identity and role (see features/auth/me). */
@@ -52,6 +59,10 @@ interface AuthState {
   /** Swaps in a refreshed token pair without touching identity or role. */
   setTokens: (tokens: AuthTokens) => void;
   logout: () => void;
+  /** The session ended without the user asking (token lapsed, refresh refused): signs out and raises the re-login popup. */
+  expireSession: () => void;
+  /** True from expireSession until the user signs in again. Not persisted. */
+  sessionExpired: boolean;
   setHasHydrated: (value: boolean) => void;
 }
 
@@ -66,6 +77,7 @@ export const useAuthStore = create<AuthState>()(
       profile: null,
       role: DEFAULT_ROLE,
       hasHydrated: false,
+      sessionExpired: false,
       setUser: (user) => set({ user, isAuthenticated: true }),
       signIn: (user, role, tokens, profile) => set({ user, role, tokens: tokens ?? null, profile: profile ?? null, isAuthenticated: true }),
       setSession: (user, role, profile) => set({ user, role, profile }),
@@ -74,9 +86,14 @@ export const useAuthStore = create<AuthState>()(
         // Drafts hold farmer and visit personal data; none of it may outlive the session.
         clearAllDrafts();
         // Revoke server-side too, so a copied refresh token is useless once the user has logged out.
-        const refreshToken = get().tokens?.refreshToken;
-        if (refreshToken) void revokeRefreshToken(refreshToken);
-        set({ user: null, isAuthenticated: false, tokens: null, profile: null, role: DEFAULT_ROLE });
+        const tokens = get().tokens;
+        if (tokens?.provider === "keycloak") void revokeIamSession(tokens.accessToken);
+        else if (tokens?.refreshToken) void revokeRefreshToken(tokens.refreshToken);
+        set({ user: null, isAuthenticated: false, tokens: null, profile: null, role: DEFAULT_ROLE, sessionExpired: false });
+      },
+      expireSession: () => {
+        get().logout();
+        set({ sessionExpired: true });
       },
       setHasHydrated: (value) => set({ hasHydrated: value }),
     }),
@@ -91,3 +108,6 @@ export const useAuthStore = create<AuthState>()(
     },
   ),
 );
+
+// Every API call sends the session CSRF token as X-CSRF-Token (see lib/api).
+setCsrfProvider(() => useAuthStore.getState().tokens?.csrfToken);

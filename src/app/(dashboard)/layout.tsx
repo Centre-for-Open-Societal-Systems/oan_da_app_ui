@@ -2,13 +2,16 @@ import type { ReactNode } from "react";
 import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { AuthGuard } from "@/components/auth/AuthGuard";
+import { SessionExpiredDialog, SessionExpiryWatcher } from "@/features/auth";
 import { NotificationBell } from "@/features/notifications";
 import { LifecycleHydration } from "./lifecycle/components/LifecycleHydration";
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
-    <AuthGuard>
+    // When the token can no longer be renewed, the user gets the "Session expired" popup and its button opens /login.
+    <AuthGuard expiredFallback={<SessionExpiredDialog />}>
       <LifecycleHydration />
+      <SessionExpiryWatcher />
       <div className="flex h-screen w-full bg-page">
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
