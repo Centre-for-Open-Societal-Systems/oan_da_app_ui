@@ -26,6 +26,7 @@ import { ProfileTabs } from "./ProfileTabs";
 import { ProfileOverview } from "./ProfileOverview";
 import { HoldingsSection } from "./HoldingsSection";
 import { CropSownSection } from "./CropSownSection";
+import { SavedCropReports } from "./SavedCropReports";
 import { LivestockDetailsSection } from "./LivestockDetailsSection";
 import { LivestockHistorySection } from "./LivestockHistorySection";
 import { VisitHistorySection } from "./VisitHistorySection";
@@ -100,7 +101,12 @@ export function FarmerProfileView({ id }: { id: string }) {
         panels={{
           Overview: <ProfileOverview />,
           Holdings: fromApi ? <HoldingsSection plots={loaded.plots} /> : <HoldingsSection />,
-          "Crop Sown Details": <CropSownSection tabs={getCropSownDetails(farmer)} />,
+          "Crop Sown Details": (
+            <>
+              <SavedCropReports farmer={farmer} />
+              <CropSownSection tabs={getCropSownDetails(farmer)} />
+            </>
+          ),
           "Livestock Details": <LivestockDetailsSection tabs={getLivestockReportDetails(farmer)} />,
           "Livestock history": <LivestockHistorySection />,
           "Visit history": fromApi ? <VisitHistorySection visits={loaded.visits} /> : <VisitHistorySection />,

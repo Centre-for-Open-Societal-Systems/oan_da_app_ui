@@ -1,5 +1,6 @@
 // Thin fetch wrapper for the backend. Requests go to this app's /api/v1, which next.config proxies to the
 // backend, so the browser never makes a cross-origin call.
+import { readCookie } from "@/lib/cookies";
 
 export class ApiError extends Error {
   constructor(
@@ -18,18 +19,37 @@ export interface ApiRequest {
   body?: unknown;
   /** Sent as `Authorization: Bearer …`; signed-in calls get it from features/auth (authRequest). */
   accessToken?: string;
+  /** Sent as `X-CSRF-Token`; IAM-issued sessions carry one, required by the backends behind them. */
+  csrfToken?: string;
+  /** Path prefix on this app; defaults to the DA Services API. */
+  prefix?: string;
 }
 
-export async function apiRequest<T>(path: string, { method = "GET", body, accessToken }: ApiRequest = {}): Promise<T> {
+// The CSRF value of the current session. The auth store registers itself here (lib cannot import the store), so
+// every call below, signed in or not, carries X-CSRF-Token without each caller passing it.
+let csrfProvider: () => string | undefined = () => undefined;
+export function setCsrfProvider(provider: () => string | undefined) {
+  csrfProvider = provider;
+}
+
+/** The CSRF token to send now: the session's own, else the X-CSRF-Token cookie a backend may have set. */
+export function currentCsrfToken(): string | undefined {
+  return csrfProvider() ?? readCookie("X-CSRF-Token") ?? undefined;
+}
+
+export async function apiRequest<T>(path: string, { method = "GET", body, accessToken, csrfToken, prefix = "/api/v1" }: ApiRequest = {}): Promise<T> {
   const isForm = typeof FormData !== "undefined" && body instanceof FormData;
   const headers: Record<string, string> = { Accept: "application/json" };
   // A FormData body sets its own multipart Content-Type, boundary included.
   if (body !== undefined && !isForm) headers["Content-Type"] = "application/json";
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  const csrf = csrfToken ?? currentCsrfToken();
+  if (csrf) headers["X-CSRF-Token"] = csrf;
+  if (process.env.NODE_ENV !== "production") console.debug(`[api] ${method} ${prefix}${path} -> header "${csrf ? "X-CSRF-Token" : "(none)"}", Authorization ${accessToken ? "yes" : "no"}`);
 
   let res: Response;
   try {
-    res = await fetch(`/api/v1${path}`, { method, headers, body: body === undefined ? undefined : isForm ? body : JSON.stringify(body) });
+    res = await fetch(`${prefix}${path}`, { method, headers, body: body === undefined ? undefined : isForm ? body : JSON.stringify(body) });
   } catch {
     throw new ApiError("Could not reach the server. Check your connection and try again.", 0);
   }

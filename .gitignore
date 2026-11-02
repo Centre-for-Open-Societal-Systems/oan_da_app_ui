@@ -49,3 +49,6 @@ WORK-LOG-*.csv
 API_CURLS.sh
 API_LIST.txt
 API_LIST.xlsx
+
+# local https certs (npm run dev:sso)
+/certificates

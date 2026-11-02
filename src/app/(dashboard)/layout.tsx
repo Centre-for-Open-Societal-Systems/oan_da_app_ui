@@ -2,13 +2,16 @@ import type { ReactNode } from "react";
 import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { AuthGuard } from "@/components/auth/AuthGuard";
+import { SessionExpiryWatcher } from "@/features/auth";
 import { NotificationBell } from "@/features/notifications";
 import { LifecycleHydration } from "./lifecycle/components/LifecycleHydration";
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
+    // Session-expired dialog hidden for now (not removed): re-add expiredFallback={<SessionExpiredDialog />} to show it again.
     <AuthGuard>
       <LifecycleHydration />
+      <SessionExpiryWatcher />
       <div className="flex h-screen w-full bg-page">
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">

@@ -14,9 +14,13 @@ import {
   CROP_SOWN_FORM,
   FARMERS,
   FarmerAvatar,
+  describeCropSownError,
   findFarmersById,
   getCropSownPrefill,
   registryCode,
+  saveStage,
+  type StageDrafts,
+  useGeoLevels,
   valueKey,
   type CropSownValues,
   type Farmer,
@@ -33,6 +37,28 @@ interface Draft {
 }
 
 type Notice = { tone: "success" | "info" | "error"; title: string; body?: string };
+
+/** A farmer known only by the Farmer ID typed in; the id doubles as the registry code sent to the Crop Sown routes. */
+const farmerFromId = (id: string): Farmer => ({
+  id,
+  regId: id,
+  name: `Farmer ${id}`,
+  email: "",
+  phone: "",
+  kebele: "—",
+  woreda: "",
+  region: "",
+  crop: "—",
+  landHa: 0,
+  livestock: "—",
+  livestockHeads: 0,
+  registeredAt: "—",
+  registeredTime: "",
+  status: "Verified",
+  totalPlots: 0,
+  visits: 0,
+  lastVisit: "—",
+});
 
 const now = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
@@ -52,6 +78,12 @@ export function CropReportForm() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  /** The registry draft of each stage (submission id + subject record), kept between the step-by-step saves. */
+  const [drafts, setDrafts] = useState<StageDrafts>({});
+  const [savingStep, setSavingStep] = useState(false);
+  /** The API's reference for the saved submission, shown on the success popup. */
+  const [reference, setReference] = useState<string>();
 
   useEffect(() => {
     const t = setTimeout(() => setMounted(true), 0);
@@ -63,6 +95,7 @@ export function CropReportForm() {
     const hasDraft = draft && draft.farmerId === f.id;
     const prefill = getCropSownPrefill(f);
     setFarmer(f);
+    setDrafts({});
     setPrefilled(prefill);
     setValues(hasDraft ? draft.values : prefill);
     setTab(CROP_SOWN_FORM[0].key);
@@ -76,7 +109,10 @@ export function CropReportForm() {
   const search = () => {
     const q = query.trim();
     // Search by query or default to demo farmer Lelise Gudeta (FR-88466) if search clicked with empty input
-    const found = q ? findFarmersById(q) : [FARMERS[0]];
+    let found = q ? findFarmersById(q) : [FARMERS[0]];
+    // Not one of the demo farmers: use the ID as typed (e.g. FRM-000103 from the registry), so the Crop Sown routes
+    // can be tried against any farmer the backend knows. The registry fills in the details once it answers.
+    if (found.length === 0 && /^[A-Za-z0-9][A-Za-z0-9_-]{2,}$/.test(q)) found = [farmerFromId(q)];
     setMatches(found);
     if (found.length === 1) {
       choose(found[0]);
@@ -99,8 +135,19 @@ export function CropReportForm() {
   };
 
   // Each stage is saved before moving on, so a closed tab or lost connection costs at most the current stage.
-  const saveAndNext = () => {
-    if (saveDraft()) goTo(tabIndex + 1);
+  const saveAndNext = async () => {
+    if (!farmer || savingStep || !saveDraft()) return;
+    setSavingStep(true);
+    try {
+      const result = await saveStage({ farmer, tab, values, drafts, geoIds });
+      setDrafts(result.drafts);
+      setNotice(null);
+      goTo(tabIndex + 1);
+    } catch (err) {
+      setNotice({ tone: "error", title: `${current.label} not saved`, body: describeCropSownError(err) });
+    } finally {
+      setSavingStep(false);
+    }
   };
 
   const handleOpenConfirm = (e?: FormEvent) => {
@@ -109,12 +156,24 @@ export function CropReportForm() {
     setShowConfirmModal(true);
   };
 
-  const handleConfirmSubmit = () => {
-    if (!farmer) return;
-    removeDraft(DRAFT_KEY);
-    setSubmitted(true);
-    setShowConfirmModal(false);
-    setShowSuccessModal(true);
+  // Saves the last stage (the earlier ones were saved by Save & Next) and shows the application reference.
+  const handleConfirmSubmit = async () => {
+    if (!farmer || isSaving) return;
+    setIsSaving(true);
+    try {
+      const result = await saveStage({ farmer, tab, values, drafts, geoIds });
+      setDrafts(result.drafts);
+      setReference(result.drafts.planning?.reference ?? Object.values(result.drafts).find((d) => d?.reference)?.reference);
+      removeDraft(DRAFT_KEY);
+      setSubmitted(true);
+      setShowConfirmModal(false);
+      setShowSuccessModal(true);
+    } catch (err) {
+      setShowConfirmModal(false);
+      setNotice({ tone: "error", title: "Crop report not submitted", body: describeCropSownError(err) });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleBackToStart = () => {
@@ -138,6 +197,9 @@ export function CropReportForm() {
     setTab(CROP_SOWN_FORM[i].key);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
+  // Region and zone options come from the API; zones follow the region chosen on this stage.
+  const regionSection = current?.sections.find((s) => s.fields.some((f) => f.key === "region"));
+  const { regionOptions, zoneOptions, geoIds } = useGeoLevels(regionSection ? values[valueKey(regionSection.id, "region")] : undefined, regionSection ? values[valueKey(regionSection.id, "zone")] : undefined);
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -367,6 +429,7 @@ export function CropReportForm() {
                             onChange={(v) => setValues((prev) => ({ ...prev, [k]: v }))}
                             // Registry data stays as fetched; the DA enters only what they observe on the plot.
                             autoFilled={k in prefilled}
+                            options={field.key === "region" ? regionOptions : field.key === "zone" ? zoneOptions : undefined}
                           />
                         );
                       })}
@@ -423,10 +486,10 @@ export function CropReportForm() {
                     type="button"
                     variant="brand"
                     onClick={saveAndNext}
-                    disabled={submitted}
+                    disabled={submitted || savingStep}
                     className="flex items-center gap-1.5 px-6 py-2.5 font-semibold"
                   >
-                    Save &amp; Next →
+                    {savingStep ? "Saving…" : "Save & Next →"}
                   </Button>
                 )}
               </div>
@@ -521,9 +584,10 @@ export function CropReportForm() {
                   type="button"
                   variant="brand"
                   onClick={handleConfirmSubmit}
+                  disabled={isSaving}
                   className="flex items-center gap-1.5 px-6 py-2 font-semibold"
                 >
-                  Confirm &amp; submit →
+                  {isSaving ? "Submitting…" : <>Confirm &amp; submit →</>}
                 </Button>
               </div>
             </div>
@@ -570,6 +634,7 @@ export function CropReportForm() {
               <span className="h-2 w-2 rounded-full bg-amber-600" />
               Pending Woreda review
             </div>
+            {reference && <p className="mt-3 text-[12.5px] text-muted">Reference: <span className="font-semibold text-ink">{reference}</span></p>}
 
             {/* Action button: Back to farmer profile */}
             <div className="mt-6 pt-5 border-t border-line">

@@ -13,13 +13,16 @@ interface CropSownFieldInputProps {
   onChange: (value: string) => void;
   /** Fetched from the registries when the farmer was found: shown in its input, but read-only. */
   autoFilled?: boolean;
+  /** Replaces the field's built-in options, e.g. regions and zones fetched from the Crop Sown geo levels. */
+  options?: readonly string[];
 }
 
 const MULTI_SEPARATOR = ", ";
 const READ_ONLY = "cursor-not-allowed border-gray-200 bg-surface text-ink-soft hover:border-gray-200 hover:ring-0 focus:border-gray-200 focus:ring-0";
 
 // One Crop Sown field, rendered by its registry type. Values stay strings (multi-select joins with ", ").
-export function CropSownFieldInput({ id, field, value, onChange, autoFilled = false }: CropSownFieldInputProps) {
+export function CropSownFieldInput({ id, field: baseField, value, onChange, autoFilled = false, options }: CropSownFieldInputProps) {
+  const field = options ? { ...baseField, options } : baseField;
   const isRequired = field.key === "crop_year" || field.key === "production_season" || field.key === "land_prep_method";
   return (
     <div className="flex min-w-0 flex-col gap-2">

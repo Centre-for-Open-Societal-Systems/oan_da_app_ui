@@ -55,8 +55,8 @@ export function toMeSession({ data }: MeResponse): MeSession | null {
  * GET /me. With `accessToken` (right after sign-in, before the session is stored) the call is made with that
  * token as is; without it the stored session is used and refreshed when needed.
  */
-export function fetchMe(accessToken?: string): Promise<MeResponse> {
-  return accessToken ? apiRequest<MeResponse>("/da-services/me", { accessToken }) : authRequest<MeResponse>("/da-services/me");
+export function fetchMe(accessToken?: string, csrfToken?: string): Promise<MeResponse> {
+  return accessToken ? apiRequest<MeResponse>("/da-services/me", { accessToken, csrfToken }) : authRequest<MeResponse>("/da-services/me");
 }
 
 /**
