@@ -11,7 +11,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { AuthCard } from "../../components/AuthCard";
 
 const NO_COOKIE_MESSAGE =
-  "Keycloak signed you in, but this browser did not receive the session cookie. IAM sets it for *.development.oanstaging.com, so open the portal on an https address under that domain; localhost cannot receive it.";
+  "Keycloak signed you in, but IAM's session cookie did not reach this portal. IAM sets it for its shared cookie domain (*.development.oanstaging.com on dev), so the portal must be opened on an https address under that domain.";
 
 /** An error Keycloak or IAM reported in the URL; its text is shown as is. */
 class ReportedError extends Error {}
@@ -25,8 +25,8 @@ function callbackErrorMessage(err: unknown): string {
   return "Something went wrong while signing in. Please try again.";
 }
 
-// /auth/callback: where Keycloak returns the browser (?code=…, direct sign-in) or /api/auth/iam/complete sends it
-// (IAM sign-in). Collects the token, stores the session in the browser (the auth store persists to localStorage) and opens the dashboard.
+// /auth/callback: where IAM returns the browser after the Keycloak sign-in (the login's return_url). Reads who IAM's
+// cookies belong to, stores the session in the browser (the auth store persists to localStorage) and opens the dashboard.
 export function KeycloakCallback() {
   const router = useRouter();
   const signIn = useAuthStore((s) => s.signIn);

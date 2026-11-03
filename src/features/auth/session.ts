@@ -1,6 +1,5 @@
 import { ApiError, apiPost, apiRequest, type ApiRequest } from "@/lib/api";
 import { readCookie } from "@/lib/cookies";
-import { refreshIamTokens } from "@/lib/iam";
 import { useAuthStore, type AuthTokens } from "@/store/useAuthStore";
 
 /** Successful POST /api/v1/auth/refresh; /auth/login answers in the same shape. */
@@ -37,23 +36,8 @@ let inflight: Promise<string | null> | null = null;
  */
 export function refreshSession(): Promise<string | null> {
   inflight ??= (async () => {
-    const provider = useAuthStore.getState().tokens?.provider;
-    // Keycloak session (via IAM): IAM renews it from the access token. A refused renewal ends the session.
-    if (provider === "keycloak") {
-      const current = useAuthStore.getState().tokens;
-      if (!current) return null;
-      try {
-        const fresh = await refreshIamTokens(current.accessToken);
-        useAuthStore.getState().setTokens({ ...current, accessToken: fresh.accessToken, csrfToken: fresh.csrfToken ?? current.csrfToken, expiresAt: fresh.expiresAt });
-        return fresh.accessToken;
-      } catch (err) {
-        if (err instanceof ApiError && [400, 401, 403].includes(err.status)) {
-          useAuthStore.getState().expireSession();
-          return null;
-        }
-        throw err;
-      }
-    }
+    // An IAM session lives in IAM's cookies; the /api/v1 proxy renews it on the way, so there is nothing to do here.
+    if (useAuthStore.getState().tokens?.provider === "iam") return null;
     const refreshToken = useAuthStore.getState().tokens?.refreshToken;
     if (!refreshToken) return null;
     try {
@@ -83,9 +67,8 @@ export async function getAccessToken(): Promise<string | null> {
   return refreshSession();
 }
 
-// The access token and the CSRF value come from the same IAM callback and are stored as a pair; the CSRF value goes
-// out as the X-CSRF-Token header on every call, GET included. The Crop Sown backend may rotate it with a cookie on its
-// own responses (first-party here, since those calls go through this app's proxy), so that cookie wins when present.
+// X-CSRF-Token goes out on every call when the page can read one (the session's own, else the cookie of that name); for
+// an IAM session the /api/v1 proxy adds IAM's CSRF cookie itself when the page sends none.
 const csrfTokenNow = () => useAuthStore.getState().tokens?.csrfToken ?? readCookie("X-CSRF-Token") ?? undefined;
 
 /** A 401, or the staff CSRF rejection (403 naming the CSRF token): the stored pair is no good any more. */
@@ -96,6 +79,16 @@ const isRejectedPair = (err: unknown) => err instanceof ApiError && (err.status 
  * the sign-in starts again (AuthGuard sends the signed-out user to /login); other sessions retry once with a refresh.
  */
 export async function authRequest<T>(path: string, init: Omit<ApiRequest, "accessToken" | "csrfToken"> = {}): Promise<T> {
+  // IAM session: the browser's IAM cookies are the credentials (the /api/v1 proxy sends them as Bearer + CSRF and
+  // renews an expired token). A 401 that survives that renewal means the IAM session is over.
+  if (useAuthStore.getState().tokens?.provider === "iam") {
+    try {
+      return await apiRequest<T>(path, { ...init, csrfToken: csrfTokenNow() });
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) useAuthStore.getState().expireSession();
+      throw err;
+    }
+  }
   const accessToken = await getAccessToken();
   if (!accessToken) throw new ApiError("Your session has ended. Please sign in again.", 401);
   try {
@@ -104,8 +97,6 @@ export async function authRequest<T>(path: string, init: Omit<ApiRequest, "acces
     if (!isRejectedPair(err)) throw err;
     console.warn(`[auth] ${path} was rejected (${(err as ApiError).status}): ${(err as ApiError).message}.`);
     if ((err as ApiError).status !== 401) {
-      // The CSRF value does not match the session: nothing a refresh would fix for a Keycloak pair.
-      if (useAuthStore.getState().tokens?.provider === "keycloak") useAuthStore.getState().expireSession();
       throw err;
     }
     // 401: renew once and retry. A refused renewal has already ended the session (refreshSession).
