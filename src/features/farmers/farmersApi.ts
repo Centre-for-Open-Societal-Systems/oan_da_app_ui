@@ -1,4 +1,6 @@
 import { authRequest } from "@/features/auth";
+import { ApiError } from "@/lib/api";
+import { labelOfCode } from "./cropSownSpecApply";
 import type { Farmer, FarmerStatus, Plot, Visit } from "./types";
 
 /** One row of GET /api/v1/da-services/farmers. */
@@ -13,50 +15,49 @@ export interface ApiFarmer {
   woreda: string | null;
   region: string | null;
   total_land_hectares: number | null;
-  /** Land records on the registry's Lands tab; only on a live registry search. */
-  total_plots?: number | null;
+  /** Number of land records (plots). */
+  total_plots: number | null;
+  /** Time-limited link to the farmer's photo (about an hour); null when there is none. */
+  photo_url: string | null;
   /** DRAFT, PENDING_APPROVAL, APPROVED … */
   registration_state: string | null;
   registered_at: string | null;
-  /** Only on the cached list; a live registry search does not carry visit data. */
   visit_count?: number;
   last_visit?: string | null;
 }
 
 export interface FarmerQuery {
-  woreda?: string;
-  kebele?: string;
-  /** Registration state, e.g. "APPROVED". */
-  state?: string;
-  limit?: number;
-  start?: number;
-  /**
-   * Name, Farmer-ID or phone. With it the live Farmer Registry is searched (within the caller's scope)
-   * instead of the DA Services cache; "FR-" matches every approved farmer.
-   */
-  search_text?: string;
-  /** 1-based page, with page_size (registry paging). */
+  /** Name, Farmer-ID or phone. The list always needs one: "FR-" matches every farmer. */
+  searchText?: string;
+  /** 1-based. */
   page?: number;
-  page_size?: number;
+  /** Default 50, at most 500. */
+  pageSize?: number;
 }
 
-/** Paging the backend reports with the list: page / page_size from a registry search, limit / start from the cache. */
-export interface FarmerPage {
-  page?: number;
-  page_size?: number;
-  number_of_pages?: number;
-  limit?: number;
-  start?: number;
-  /** True when scope was applied after the registry answered, so a page may hold fewer rows than page_size. */
-  filtered_client_side?: boolean;
+/** What the list sends as the search text to get every farmer: each Farmer-ID starts with it. */
+export const ALL_FARMERS_SEARCH = "FR-";
+
+/** GET /farmers?search_text=&page=&page_size=: farmers in the caller's scope (a DA's assigned kebele, a supervisor's woreda, all for Admin). */
+export async function listFarmers({ searchText, page = 1, pageSize = 50 }: FarmerQuery = {}): Promise<{ items: ApiFarmer[]; total: number }> {
+  const query = new URLSearchParams({ search_text: searchText?.trim() || ALL_FARMERS_SEARCH, page: String(page), page_size: String(pageSize) });
+  const res = await authRequest<{ data: { farmers: ApiFarmer[]; total: number } }>(`/da-services/farmers?${query}`);
+  return { items: res.data.farmers, total: res.data.total };
 }
 
-/** GET /farmers: a DA's farmers in their Kebeles; officers' farmers by scope. */
-export async function listFarmers(q: FarmerQuery = {}): Promise<{ items: ApiFarmer[]; total: number; page?: FarmerPage; source?: "registry" | "cache" }> {
-  const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(q)) if (value !== undefined && value !== "") query.set(key, String(value));
-  const res = await authRequest<{ data: { farmers: ApiFarmer[]; total: number; page?: FarmerPage; source?: "registry" | "cache" } }>(`/da-services/farmers?${query}`);
-  return { items: res.data.farmers, total: res.data.total, page: res.data.page, source: res.data.source };
+/** The text to show for a failed farmer call, following the backend's error table. */
+export function describeFarmerError(err: unknown): string {
+  if (!(err instanceof ApiError)) return err instanceof Error ? err.message : "Could not load farmers.";
+  switch (err.status) {
+    case 401: return "Your session has ended. Please sign in again.";
+    case 403: return "You don't have access to this farmer.";
+    case 404: return "Farmer not found.";
+    case 502:
+    case 503:
+    case 504: return "Registry unavailable, try again.";
+    // 400: the details texts, else the message.
+    default: return err.details ? Object.values(err.details).join(" ") : err.message;
+  }
 }
 
 /** GET /farmers/{id}/profile: header and stats of the farmer profile. */
@@ -67,15 +68,22 @@ export interface ApiFarmerProfile {
   kebele: string | null;
   woreda: string | null;
   region: string | null;
+  /** Comes without the +251 prefix, unlike the list. */
   phone: string | null;
   email: string | null;
-  verification_state: string | null;
+  gender?: string | null;
+  education_level?: string | null;
+  /** Parts the registry could not deliver, e.g. ["household"]; the UI says "partial data" for them. */
+  incomplete_sections?: string[];
+  /** Not in the collection's example response; older backends send it. */
+  verification_state?: string | null;
   /** Open follow-up tasks for this farmer. */
-  pending_actions: number;
+  pending_actions?: number;
   household_size: number | null;
   total_land_area: number | null;
   land_ownership: string | null;
-  primary_crop: string | null;
+  /** Not in the collection's example response. */
+  primary_crop?: string | null;
   registration_date: string | null;
   last_visit_date: string | null;
   last_visit_outcome: string | null;
@@ -88,6 +96,12 @@ const farmerPath = (id: string, part: string) => `/da-services/farmers/${encodeU
 export async function fetchFarmerProfile(farmerId: string): Promise<ApiFarmerProfile> {
   const res = await authRequest<{ data: ApiFarmerProfile }>(farmerPath(farmerId, "profile"));
   return res.data;
+}
+
+/** GET /farmers/{id}/photo: a fresh photo link (the one in the list expires after about an hour); null when there is no photo. */
+export async function fetchFarmerPhoto(farmerId: string): Promise<string | null> {
+  const res = await authRequest<{ data: { photo_url: string | null } }>(farmerPath(farmerId, "photo"));
+  return res.data.photo_url;
 }
 
 /** One row of GET /farmers/{id}/visits, newest first. */
@@ -216,6 +230,15 @@ function splitDateTime(iso: string | null): { date: string; time: string } {
   return { date: day.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }), time: iso.length > 10 ? iso.slice(11, 16) : "" };
 }
 
+/** The profile sends the phone without +251 ("964815374"), the list with it ("+251964815374"): shown one way. */
+export function withCountryCode(phone: string | null | undefined): string {
+  const digits = (phone ?? "").replace(/[^\d+]/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("+")) return digits;
+  if (digits.startsWith("251")) return `+${digits}`;
+  return `+251${digits.replace(/^0/, "")}`;
+}
+
 /** Registry state → the three-way status pill; the state itself is the hover reason when not approved. */
 export function toFarmerStatus(state: string | null): { status: FarmerStatus; reason?: string } {
   if (!state || state === "APPROVED") return { status: "Verified" };
@@ -229,9 +252,13 @@ export function apiFarmerToFarmer(f: ApiFarmer): Farmer {
   const { status, reason } = toFarmerStatus(f.registration_state);
   return {
     id: f.farmer_id,
+    regId: f.reg_id ?? undefined,
+    avatar: f.photo_url ?? undefined,
     name: f.farmer_name,
     email: "",
-    phone: f.phone ?? "",
+    phone: withCountryCode(f.phone),
+    landUnknown: f.total_land_hectares === null || f.total_land_hectares === undefined,
+    plotsUnknown: f.total_plots === null || f.total_plots === undefined,
     kebele: f.kebele ?? "—",
     woreda: f.woreda ?? "",
     region: f.region ?? "",
@@ -252,12 +279,14 @@ export function apiFarmerToFarmer(f: ApiFarmer): Farmer {
 /** The profile header and stats as a Farmer; plot and visit counts come from their own calls. */
 export function profileToFarmer(p: ApiFarmerProfile, counts: { plots: number; visits: number }): Farmer {
   const registered = splitDateTime(p.registration_date);
-  const { status, reason } = toFarmerStatus(p.verification_state);
+  const { status, reason } = toFarmerStatus(p.verification_state ?? null);
   return {
     id: p.farmer_id,
+    regId: p.reg_id ?? undefined,
     name: p.name,
     email: p.email ?? "",
-    phone: p.phone ?? "",
+    phone: withCountryCode(p.phone),
+    landUnknown: p.total_land_area === null || p.total_land_area === undefined,
     kebele: p.kebele ?? "—",
     woreda: p.woreda ?? "",
     region: p.region ?? "",
@@ -281,11 +310,12 @@ export function apiPlotToPlot(p: ApiPlot): Plot {
     code: p.plot_id,
     crop: humanize(p.current_land_use) || "—",
     areaHa: p.area_in_hectare ?? 0,
-    soil: p.soil_fertility ?? "—",
+    // Registry codes (SF_HIGH, OWNER, CROP_SHARING) are shown by their labels.
+    soil: (p.soil_fertility && (labelOfCode("SOIL_FERTILITY", p.soil_fertility) ?? humanize(p.soil_fertility))) || "—",
     zone: p.land_kebele ?? "—",
     lat: Number.NaN,
     lng: Number.NaN,
-    tenure: humanize(p.land_ownership_type) || "—",
+    tenure: (p.land_ownership_type && (labelOfCode("OWNERSHIP_TYPE", p.land_ownership_type) ?? humanize(p.land_ownership_type))) || "—",
   };
 }
 

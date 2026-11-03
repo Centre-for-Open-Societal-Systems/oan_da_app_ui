@@ -4,6 +4,7 @@ import {
   apiFarmerToFarmer,
   apiPlotToPlot,
   apiVisitToVisit,
+  describeFarmerError,
   fetchFarmerPlots,
   fetchFarmerProfile,
   fetchFarmerVisits,
@@ -12,6 +13,7 @@ import {
   toFarmerStatus,
   type ApiFarmer,
 } from "./farmersApi";
+import { ApiError } from "@/lib/api";
 import { registryCode } from "./components/planVisit";
 import { FARMERS } from "./data";
 
@@ -38,6 +40,8 @@ const row: ApiFarmer = {
   woreda: "ET04-W01",
   region: "ET04",
   total_land_hectares: 1.2,
+  total_plots: 2,
+  photo_url: "https://storage.example/photo.jpg",
   registration_state: "APPROVED",
   registered_at: "2026-05-12 08:20:00",
   visit_count: 9,
@@ -53,11 +57,18 @@ beforeEach(() => {
 });
 
 describe("farmer calls", () => {
-  it("lists farmers with filters and paging", async () => {
-    fetchMock.mockResolvedValueOnce(json({ data: { farmers: [row], total: 1, page: { limit: 20, start: 0 } } }));
+  it("lists farmers by search text and page", async () => {
+    fetchMock.mockResolvedValueOnce(json({ data: { farmers: [row], total: 1 } }));
 
-    await expect(listFarmers({ kebele: "Bako Tibe", limit: 20 })).resolves.toEqual({ items: [row], total: 1, page: { limit: 20, start: 0 } });
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/farmers?kebele=Bako+Tibe&limit=20");
+    await expect(listFarmers({ searchText: "Lelise", page: 2, pageSize: 20 })).resolves.toEqual({ items: [row], total: 1 });
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/farmers?search_text=Lelise&page=2&page_size=20");
+  });
+
+  it("searches for FR- (every farmer) when the search box is empty", async () => {
+    fetchMock.mockResolvedValueOnce(json({ data: { farmers: [], total: 0 } }));
+
+    await listFarmers({ searchText: "  " });
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/farmers?search_text=FR-&page=1&page_size=50");
   });
 
   it("reads the profile, visits and plots of one farmer", async () => {
@@ -82,6 +93,9 @@ describe("mapping", () => {
   it("turns a list row into a table farmer", () => {
     expect(apiFarmerToFarmer(row)).toMatchObject({
       id: "FRM-000103",
+      regId: "FR-88341",
+      avatar: "https://storage.example/photo.jpg",
+      totalPlots: 2,
       name: "Lelise Gudeta",
       kebele: "Bako Tibe",
       crop: "—",
@@ -92,6 +106,13 @@ describe("mapping", () => {
       visits: 9,
       lastVisit: "12 Jun 2026",
     });
+  });
+
+  it("words farmer errors as the backend error table says", () => {
+    expect(describeFarmerError(new ApiError("x", 403))).toBe("You don't have access to this farmer.");
+    expect(describeFarmerError(new ApiError("x", 404))).toBe("Farmer not found.");
+    expect(describeFarmerError(new ApiError("x", 502))).toBe("Registry unavailable, try again.");
+    expect(describeFarmerError(new ApiError("usr: Field required", 400))).toBe("usr: Field required");
   });
 
   it("maps registry states onto the status pill", () => {
@@ -121,5 +142,36 @@ describe("mapping", () => {
   it("sends the registry id for API farmers and the mock code for sample ones", () => {
     expect(registryCode(apiFarmerToFarmer(row))).toBe("FRM-000103");
     expect(registryCode(FARMERS[0])).toMatch(/^FR-\d{5}$/);
+  });
+});
+
+// The collection's saved responses (OAN-DA-Farmers: "List farmers", "Farmer profile", "Farmer plots").
+describe("mapping the collection's example responses", () => {
+  it("shows a list row with nulls as dashes and initials, not as 0 ha or a broken photo", () => {
+    const bare: ApiFarmer = { ...row, phone: null, photo_url: null, total_land_hectares: null, total_plots: null };
+    expect(apiFarmerToFarmer(bare)).toMatchObject({ phone: "", avatar: undefined, landUnknown: true, plotsUnknown: true, landHa: 0, totalPlots: 0 });
+    expect(apiFarmerToFarmer({ ...row, phone: "+251964815374", total_land_hectares: 4.25, total_plots: 2 })).toMatchObject({ phone: "+251964815374", landUnknown: false, plotsUnknown: false, landHa: 4.25, totalPlots: 2 });
+  });
+
+  it("reads the profile example: phone without +251, no verification_state or primary_crop", () => {
+    const profile = {
+      farmer_id: "38ef1bcb-a359-45b4-b813-dd0d2b05c864", reg_id: "FR-675618129549", name: "Aster Mulugeta Assefa", phone: "964815374", email: null, gender: "female",
+      education_level: "PRIMARY", kebele: "Lekatit", woreda: "Shire Endaslasie town", region: "Tigray", total_land_area: 4.25, land_ownership: "HYBRID", household_size: 0,
+      registration_date: "2026-10-30 14:16:40.292811", last_visit_date: null, last_visit_outcome: null, pending_actions: 0, can_edit: true, is_linked: false, incomplete_sections: [],
+    };
+    expect(profileToFarmer(profile, { plots: 2, visits: 0 })).toMatchObject({ regId: "FR-675618129549", phone: "+251964815374", status: "Verified", crop: "—", landHa: 4.25, landUnknown: false, registeredAt: "30 Oct 2026", registeredTime: "14:16" });
+    expect(profileToFarmer({ ...profile, total_land_area: null }, { plots: 0, visits: 0 })).toMatchObject({ landUnknown: true });
+  });
+
+  it("shows the plots' registry codes as labels", () => {
+    expect(apiPlotToPlot({ plot_id: "0065cd98", area_in_hectare: 1.75, land_ownership_type: "OWNER", soil_fertility: "SF_HIGH", current_land_use: "AGRICULTURAL", land_kebele: null, certificate_provided: false }))
+      .toMatchObject({ areaHa: 1.75, tenure: "Owner", soil: "High", crop: "Agricultural", zone: "—" });
+    expect(apiPlotToPlot({ plot_id: "5069b1b1", area_in_hectare: null, land_ownership_type: "TENANT", soil_fertility: "SF_MEDIUM", current_land_use: "GRAZING", land_kebele: null, certificate_provided: false }))
+      .toMatchObject({ areaHa: 0, tenure: "Tenant", soil: "Medium", crop: "Grazing" });
+  });
+
+  it("words 503 and a 400's details as the integration guide says", () => {
+    expect(describeFarmerError(new ApiError("x", 503))).toBe("Registry unavailable, try again.");
+    expect(describeFarmerError(new ApiError("Validation failed", 400, { kebele: "Kebele is required", phone: "Invalid phone" }))).toBe("Kebele is required Invalid phone");
   });
 });

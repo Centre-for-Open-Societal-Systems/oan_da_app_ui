@@ -1,5 +1,6 @@
 import { Card } from "@/components/ui/Card";
 import { ETHIOPIAN_MONTHS, toEthiopian } from "@/lib/ethiopian";
+import { HelpDot } from "../../leave-admin/shared";
 import { LEAVE_YEAR } from "./leave";
 
 type KeyDateTone = "federal" | "region" | "local" | "blocked";
@@ -24,7 +25,10 @@ export function KeyDates() {
   return (
     <Card className="p-0">
       <div className="flex items-center justify-between gap-3 border-b border-line-soft px-5 py-4">
-        <h3 className="text-[17px] font-bold text-ink">Key dates</h3>
+        <h3 className="flex items-center gap-2 text-[17px] font-bold text-ink">
+          Key dates
+          <HelpDot title="Key dates" text="Upcoming holidays, blocked periods and windows that affect leave. Colours show who set each date." />
+        </h3>
         <span className="text-[12.5px] text-ink-soft">Leave year {LEAVE_YEAR}</span>
       </div>
       <ul className="flex flex-col gap-4 px-5 py-4">

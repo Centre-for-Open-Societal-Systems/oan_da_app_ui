@@ -1,103 +1,100 @@
 import { describe, expect, it } from "vitest";
-import { registrationProblems, toRegistration } from "./registration";
+import { buildRegistrationBody, EMPTY_FORM, errorsFromDetails, stepOfField, validateStep, type RegistrationForm } from "./registration";
 
-const complete: Record<string, string> = {
-  first_name: "Tolosa",
-  middle_name: "Bekele",
-  last_name: "Haile",
-  gender: "MALE",
-  birth_date: "1988-04-12",
-  phone_number: "0911 223 344",
-  education_level: "PRIMARY",
-  marital_status: "MARRIED",
-  income_source: "SOI_CROP_PRODUCTION",
-  region: "ET04",
-  zone: "ET0408",
-  woreda: "ET040801",
-  kebele: "ET04080101",
-  identity_document_type: "IDDOC_FAYDA",
-  identity_document_id: "523293a6-ec28-4c5d-8549-1ca3784c3dfd",
-  members_count: "1",
-  member_0_first_name: "Almaz",
-  member_0_grandfather_name: "Worku",
-  member_0_gender: "FEMALE",
-  member_0_birth_date: "1990-02-20",
-  member_0_relationship: "SPOUSE",
-  land_ownership_type: "OWNER",
-  area_in_hectare: "1.5",
-  soil_fertility: "SF_HIGH",
-  commodity: "CROP_TEFF",
-  season: "SEASON_MEHER",
-  livestock_type: "LSTK_CATTLE",
-  head_count: "3",
-  client_op_id: "op-1",
+// A registration filled as the collection's "Register farmer" body.
+const filled: RegistrationForm = {
+  ...EMPTY_FORM,
+  first_name: " Abebe ",
+  father_name: "Kebede",
+  grandfather_name: "Tesfaye",
+  gender: "male",
+  date_of_birth: "1985-04-12",
+  phone: "0911234567",
+  national_id: "1234 5678 9012 3456",
+  marital_status: "married",
+  education_level: "read_write",
+  income_sources: ["crop", "livestock"],
+  places: { region: "ET04", zone: "ET0408", woreda: "ET040801", kebele: "ET04080101" },
+  placeNames: { region: "Oromia", zone: "Z", woreda: "W", kebele: "K" },
+  location: "9.03 38.74 2350 5",
+  household_size: "2",
+  members: [{ first_name: "Almaz", grandfather_name: "Bekele", gender: "female", date_of_birth: "1990-01-01", relationship: "spouse" }],
+  lands: [{ ownership: "owner", area_hectare: "1.5" }],
+  crops: [{ name: "teff", planted_date: "2026-07-01", season: "meher" }],
+  livestock: [{ animal: "cattle", count: "3", system: "mixed" }],
+  document: { id: "doc-123", name: "fayda.pdf" },
 };
 
-describe("registrationProblems", () => {
-  it("passes a complete registration", () => {
-    expect(registrationProblems(complete)).toEqual([]);
+describe("buildRegistrationBody", () => {
+  it("builds the POST /farmers body of the collection: codes, the kebele id, the document id and the client_op_id", () => {
+    expect(buildRegistrationBody(filled, "reg-1")).toEqual({
+      client_op_id: "reg-1",
+      first_name: "Abebe",
+      father_name: "Kebede",
+      grandfather_name: "Tesfaye",
+      gender: "male",
+      date_of_birth: "1985-04-12",
+      phone: "+251911234567",
+      kebele: "ET04080101",
+      national_id: "1234567890123456",
+      location: "9.03 38.74 2350 5",
+      marital_status: "married",
+      education_level: "read_write",
+      income_sources: ["crop", "livestock"],
+      household: { size: 2, members: [{ first_name: "Almaz", grandfather_name: "Bekele", gender: "female", date_of_birth: "1990-01-01", relationship: "spouse" }] },
+      identity_document_id: "doc-123",
+      lands: [{ ownership: "owner", area_hectare: 1.5 }],
+      crops: [{ name: "teff", planted_date: "2026-07-01", season: "meher" }],
+      livestock: [{ animal: "cattle", count: 3, system: "mixed" }],
+    });
   });
 
-  it("names every missing required field, member field and the location", () => {
-    const problems = registrationProblems({ members_count: "1" });
-    expect(problems).toContain("Farmer: First Name is required.");
-    expect(problems).toContain("Documents: Identity Document is required.");
-    expect(problems).toContain("Location: pick the region, zone, woreda and kebele.");
-    expect(problems).toContain("Household: member 1 needs First Name.");
+  it("leaves out empty optional fields, empty rows and an empty household", () => {
+    const body = buildRegistrationBody(
+      { ...filled, location: "", marital_status: "", education_level: "", income_sources: [], household_size: "", members: [], lands: [{ ownership: "", area_hectare: "" }], crops: [], livestock: [] },
+      "reg-2",
+    );
+    for (const key of ["location", "marital_status", "education_level", "income_sources", "household", "lands", "crops", "livestock"]) expect(body).not.toHaveProperty(key);
+    expect(body.client_op_id).toBe("reg-2");
   });
 
-  it("asks for the conditional answers the registry requires", () => {
-    const problems = registrationProblems({ ...complete, disabled: "Yes", income_source: "SOI_OTHERS", is_primary_cooperative_member: "Yes" });
-    expect(problems).toContain("Farmer: Disability Type is required.");
-    expect(problems).toContain("Farmer: Other Income Source is required.");
-    expect(problems).toContain("Membership: Primary Cooperative Name is required.");
-  });
-
-  it("needs a land parcel for crops and livestock", () => {
-    const noLand = { ...complete, land_ownership_type: "", area_in_hectare: "" };
-    expect(registrationProblems(noLand)).toContain("Lands: crops and livestock belong to a land parcel; add the parcel first.");
+  it("keeps the client_op_id it is given, so a retry of the same registration is not a second farmer", () => {
+    expect(buildRegistrationBody(filled, "reg-same").client_op_id).toBe("reg-same");
   });
 });
 
-describe("toRegistration", () => {
-  it("maps the wizard fields onto POST /farmers", () => {
-    const body = toRegistration(complete);
-    expect(body).toMatchObject({
-      first_name: "Tolosa",
-      father_name: "Bekele",
-      grandfather_name: "Haile",
-      gender: "MALE",
-      date_of_birth: "1988-04-12",
-      phone: "0911223344",
-      kebele: "ET04080101",
-      income_sources: ["SOI_CROP_PRODUCTION"],
-      disabled: false,
-      identity_document_id: "523293a6-ec28-4c5d-8549-1ca3784c3dfd",
-      identity_document_type: "IDDOC_FAYDA",
-      client_op_id: "op-1",
-    });
-    expect(body.household).toMatchObject({ size: 2, other_land_owner: false, father_included: true });
-    expect(body.household?.members[0]).toEqual({ first_name: "Almaz", father_name: undefined, grandfather_name: "Worku", gender: "FEMALE", date_of_birth: "1990-02-20", relationship: "SPOUSE" });
-    expect(body.membership).toEqual({
-      is_primary_cooperative_member: false,
-      primary_cooperative_name: undefined,
-      is_cooperative_union_member: false,
-      cooperative_union_name: undefined,
-      is_farmer_cluster_member: false,
-      farmer_cluster_role: undefined,
-      primary_commodity: undefined,
-    });
-    expect(body.lands).toEqual([{ ownership: "OWNER", area_hectare: 1.5, soil_fertility: "SF_HIGH", current_land_use: undefined, means_of_acquisition: undefined, year_of_acquisition: undefined, remark: undefined }]);
-    expect(body.crops).toEqual([{ name: "CROP_TEFF", planted_date: undefined, season: "SEASON_MEHER", end_use: undefined }]);
-    expect(body.livestock?.[0]).toMatchObject({ animal: "LSTK_CATTLE", count: 3 });
+describe("validateStep", () => {
+  it("passes the filled registration", () => {
+    expect(validateStep("review", filled)).toEqual({});
   });
 
-  it("leaves out land, crops, livestock and conditional answers that were not given", () => {
-    const body = toRegistration({ first_name: "Rahel", disabled: "No", disability_type: "VISION" });
-    expect(body.lands).toEqual([]);
-    expect(body.crops).toEqual([]);
-    expect(body.livestock).toEqual([]);
-    expect(body.disability_type).toBeUndefined();
-    expect(body.household?.size).toBe(1);
+  it("asks for the farmer's required details and checks phone, national id and birth date", () => {
+    expect(Object.keys(validateStep("farmer", EMPTY_FORM)).sort()).toEqual(["date_of_birth", "father_name", "first_name", "gender", "grandfather_name", "national_id", "phone"]);
+    const wrong = validateStep("farmer", { ...filled, phone: "12345", national_id: "123", date_of_birth: "2999-01-01" });
+    expect(wrong.phone).toContain("+251");
+    expect(wrong.national_id).toContain("12-digit FIN or the 16-digit FAN");
+    expect(wrong.date_of_birth).toContain("future");
+  });
+
+  it("needs the whole place cascade down to the kebele", () => {
+    expect(validateStep("location", { ...filled, places: { region: "ET04" } })).toMatchObject({ zone: "Zone is required.", woreda: "Woreda is required.", kebele: "Kebele is required." });
+  });
+
+  it("checks rows only once they are started", () => {
+    expect(validateStep("holdings", { ...filled, lands: [{ ownership: "", area_hectare: "" }], crops: [], livestock: [] })).toEqual({});
+    expect(validateStep("holdings", { ...filled, lands: [{ ownership: "owner", area_hectare: "0" }] })).toEqual({ "lands.0.area_hectare": "Area must be a number above 0." });
+    expect(validateStep("household", { ...filled, household_size: "" })).toEqual({ household_size: "Household size is required when members are listed." });
+  });
+
+  it("needs the uploaded ID document", () => {
+    expect(validateStep("document", { ...filled, document: null })).toEqual({ document: "Upload the farmer's ID document." });
+  });
+});
+
+describe("a 400's details", () => {
+  it("land on the form's fields and steps", () => {
+    const errors = errorsFromDetails({ identity_document_id: "Unknown document", "household.size": "Must be at least 1", "lands[0].area_hectare": "Too large", kebele: "Kebele is required" });
+    expect(errors).toEqual({ document: "Unknown document", household_size: "Must be at least 1", "lands.0.area_hectare": "Too large", kebele: "Kebele is required" });
+    expect(Object.keys(errors).map(stepOfField)).toEqual(["document", "household", "holdings", "location"]);
   });
 });

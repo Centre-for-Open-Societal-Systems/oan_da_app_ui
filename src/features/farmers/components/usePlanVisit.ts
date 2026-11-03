@@ -25,7 +25,7 @@ export function usePlanVisit(farmer: Farmer | undefined, preset: VisitPreset | u
   const [apiFarmers, setApiFarmers] = useState<Farmer[] | null>(null);
   useEffect(() => {
     let current = true;
-    listFarmers({ limit: 500 })
+    listFarmers({ pageSize: 500 })
       .then(({ items }) => current && setApiFarmers(items.map(apiFarmerToFarmer)))
       .catch(() => {
         // Keep the sample farmers.

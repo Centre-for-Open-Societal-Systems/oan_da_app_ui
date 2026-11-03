@@ -80,8 +80,12 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: "Leave",
     items: [
-      { title: "My Leave", href: "/lifecycle/leave", roles: ALL, part: 1 },
-      { title: "Team Leave", href: "/team-leave", roles: ALL, part: 1 },
+      { title: "My Leave", href: "/lifecycle/leave", roles: ALL.filter((r) => r !== "Admin"), part: 1 },
+      { title: "Team Leave", href: "/team-leave", roles: ALL.filter((r) => r !== "Admin"), part: 1 },
+      // The Admin runs leave for the whole programme instead of having a leave record of their own.
+      { title: "Leave Overview", href: "/leave-overview", roles: ["Admin"], part: 1 },
+      { title: "Leave Configure", href: "/leave-configure", roles: ["Admin"], part: 1 },
+      { title: "Government Calendar", href: "/government-calendar", roles: ["Admin"], part: 1 },
     ],
   },
   {
@@ -143,6 +147,9 @@ export const PAGE_TITLES: { prefix: string; title: string }[] = [
   { prefix: "/approvals", title: "Approvals" },
   { prefix: "/lifecycle/leave", title: "My Leave" },
   { prefix: "/team-leave", title: "Team Leave" },
+  { prefix: "/leave-overview", title: "Leave Overview" },
+  { prefix: "/leave-configure", title: "Leave Configure" },
+  { prefix: "/government-calendar", title: "Government Calendar" },
   { prefix: "/lifecycle", title: "Lifecycle Management" },
   { prefix: "/registry-sync", title: "Agents" },
   { prefix: "/feedback", title: "Internal Feedback" },

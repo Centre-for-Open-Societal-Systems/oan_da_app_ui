@@ -3,251 +3,245 @@
 import { useEffect, useRef, useState } from "react";
 import { BackLink } from "@/components/ui/BackLink";
 import { Banner } from "@/components/ui/Banner";
-import { registerFarmer } from "@/features/farmers";
-import { readDraft, removeDraft, writeDraft } from "@/lib/drafts";
-import { REGISTRATION_STEPS, TOTAL_STEPS } from "../steps";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Stepper } from "./Stepper";
-import { EnumeratorStep } from "./EnumeratorStep";
+import { ApiError } from "@/lib/api";
+import { readDraft, removeDraft, writeDraft } from "@/lib/drafts";
+import { describeFarmerError, newClientOpId, registerFarmer, useFieldOptions } from "@/features/farmers";
+import { buildRegistrationBody, EMPTY_FORM, errorsFromDetails, farmerFullName, placeTrail, stepOfField, validateStep, type FormErrors, type RegistrationForm } from "../registration";
+import { WIZARD_STEPS } from "../registrySpec";
+import { TOTAL_STEPS } from "../steps";
+import { DocumentStep } from "./DocumentStep";
+import { FarmerStep, type StepProps } from "./FarmerStep";
+import { StepCard } from "./fields";
+import { HoldingsStep } from "./HoldingsStep";
 import { HouseholdStep } from "./HouseholdStep";
 import { LocationStep } from "./LocationStep";
-import { RegistryStep } from "./RegistryStep";
-import { REGISTRY_TABS } from "../registrySpec";
-import { registrationProblems, toRegistration } from "../registration";
-import { farmerFullName, ReviewStep, tabCompletion } from "./ReviewStep";
+import { ReviewStep } from "./ReviewStep";
+import { Stepper } from "./Stepper";
 import { SubmitConfirmModal } from "./SubmitConfirmModal";
 import { SubmittedHeader, SubmittedStep, type Submission } from "./SubmittedStep";
 import { WizardFooter } from "./WizardFooter";
 
-// Draft kept for this browser session only (see lib/drafts). Every step's named fields are captured.
+// Register a farmer through DA Services: every step fills part of one POST /farmers body (registration.ts), choices come
+// from the registry's field-options and places. The registration then waits for a supervisor; the farmer gets an FR- id
+// and appears in My Farmers only once approved.
+
+// Draft kept for this browser session only (see lib/drafts).
 const DRAFT_KEY = "farmer-registration";
 
 interface WizardDraft {
   step: number;
-  fields: Record<string, string>;
+  form: RegistrationForm;
   savedAt: string;
 }
 
-type FieldEl = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
-
-const fieldsIn = (root: HTMLElement | null) =>
-  Array.from(root?.querySelectorAll<FieldEl>("input[name], select[name], textarea[name]") ?? []).filter((el) => el.type !== "file" && el.type !== "checkbox");
+type Notice = { tone: "success" | "info" | "error"; text: string; restored?: boolean };
 
 const formatTime = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 
-const clearDraft = () => removeDraft(DRAFT_KEY);
-
-// One key per registration, kept in the draft: a retried or double-clicked submit returns the first
-// registration instead of creating a second record in the registry.
-const newOpId = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `op-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-
-const placeOf = (values: Record<string, string>, levels: string[]) => levels.map((level) => values[`${level}_name`] || values[level]).filter(Boolean);
+/** The first problem's step number, so the user lands where it can be fixed. */
+const firstStepWith = (errors: FormErrors) => {
+  const steps = Object.keys(errors).map(stepOfField).filter(Boolean);
+  const index = WIZARD_STEPS.findIndex((s) => steps.includes(s.key));
+  return index >= 0 ? index + 1 : null;
+};
 
 export function RegisterFarmerWizard() {
   const [currentStep, setCurrentStep] = useState(1);
-  const [submission, setSubmission] = useState<Submission | null>(null);
-  const [confirming, setConfirming] = useState(false);
-  const [sending, setSending] = useState(false);
+  const [form, setForm] = useState<RegistrationForm>(EMPTY_FORM);
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [notice, setNotice] = useState<Notice | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
-  const [notice, setNotice] = useState<{ tone: "success" | "info" | "error"; text: string; restored?: boolean } | null>(null);
-  // Restored/captured values keyed by field name; bumping `restoreKey` remounts the step so it re-reads them.
-  const fieldsRef = useRef<Record<string, string>>({});
-  const [restoreKey, setRestoreKey] = useState(0);
-  // Render-safe copy of fieldsRef for controlled steps (LocationStep) to start from.
-  const [fieldsSnapshot, setFieldsSnapshot] = useState<Record<string, string>>({});
-  const stepRef = useRef<HTMLDivElement>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submission, setSubmission] = useState<Submission | null>(null);
+  // One idempotency key per registration: sending the same registration again (a retry) returns DUPLICATE, not a second farmer.
+  const clientOpId = useRef<string | null>(null);
+  const touched = useRef(false);
+  const { options, error: optionsError, loading: optionsLoading } = useFieldOptions();
 
-  const stepLabel = REGISTRATION_STEPS[currentStep - 1].label;
+  const step = WIZARD_STEPS[currentStep - 1];
   const isLastStep = currentStep === TOTAL_STEPS;
 
-  // Reads the visible step's fields into the draft before it unmounts.
-  const captureStep = () => {
-    for (const el of fieldsIn(stepRef.current)) fieldsRef.current[el.name] = el.value;
-    setFieldsSnapshot({ ...fieldsRef.current });
-  };
-
-  // Puts saved values back into the step's uncontrolled fields (controlled ones read `initial`).
+  // Restore a saved draft on load (deferred a tick so the server render and first client render match).
   useEffect(() => {
-    for (const el of fieldsIn(stepRef.current)) {
-      const value = fieldsRef.current[el.name];
-      if (value !== undefined && el.value !== value) el.value = value;
-    }
-  }, [currentStep, restoreKey]);
+    const t = setTimeout(() => {
+      const draft = readDraft<WizardDraft>(DRAFT_KEY);
+      if (!draft?.form) return;
+      setForm({ ...EMPTY_FORM, ...draft.form });
+      setCurrentStep(Math.min(Math.max(draft.step, 1), TOTAL_STEPS));
+      setSavedAt(draft.savedAt);
+      setNotice({ tone: "info", text: `Draft restored from ${formatTime(draft.savedAt)}, you're back on step ${draft.step}.`, restored: true });
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
 
-  // Autosave: every few seconds, write the draft if the form changed since the last write. The first pass only records
-  // the untouched form, so opening the page does not create a draft by itself.
-  const lastSnapshot = useRef<string | null>(null);
+  // Autosave a moment after each change (not on opening the page).
   useEffect(() => {
-    const save = () => {
-      const fields = { ...fieldsRef.current };
-      for (const el of fieldsIn(stepRef.current)) fields[el.name] = el.value;
-      const snapshot = JSON.stringify([currentStep, fields]);
-      if (snapshot === lastSnapshot.current) return;
-      const baseline = lastSnapshot.current === null;
-      lastSnapshot.current = snapshot;
-      if (baseline) return;
-      const draft: WizardDraft = { step: currentStep, fields, savedAt: new Date().toISOString() };
+    if (!touched.current || submission) return;
+    const t = setTimeout(() => {
+      const draft: WizardDraft = { step: currentStep, form, savedAt: new Date().toISOString() };
       try {
         writeDraft(DRAFT_KEY, draft);
         setSavedAt(draft.savedAt);
       } catch {
         // Storage unavailable: the Save Draft button reports it when the agent asks.
       }
-    };
-    save();
-    const timer = setInterval(save, 4000);
-    return () => clearInterval(timer);
-  }, [currentStep]);
-
-  // Restore a saved draft on load (deferred a tick so the server render and first client render match).
-  useEffect(() => {
-    const t = setTimeout(() => {
-      const draft = readDraft<WizardDraft>(DRAFT_KEY);
-      if (!draft) return;
-      fieldsRef.current = draft.fields ?? {};
-      setFieldsSnapshot({ ...fieldsRef.current });
-      setCurrentStep(Math.min(Math.max(draft.step, 1), TOTAL_STEPS));
-      setSavedAt(draft.savedAt);
-      setRestoreKey((k) => k + 1);
-      setNotice({ tone: "info", text: `Draft restored from ${formatTime(draft.savedAt)} — you're back on step ${draft.step}.`, restored: true });
-    }, 0);
+    }, 1500);
     return () => clearTimeout(t);
-  }, []);
+  }, [form, currentStep, submission]);
 
-  const goNext = () => { captureStep(); setCurrentStep((s) => Math.min(s + 1, TOTAL_STEPS)); };
-  const goBack = () => { captureStep(); setCurrentStep((s) => Math.max(s - 1, 1)); };
-  const goToStep = (step: number) => { captureStep(); setCurrentStep(Math.min(Math.max(step, 1), TOTAL_STEPS)); };
-
-  const handleSaveDraft = () => {
-    captureStep();
-    const draft: WizardDraft = { step: currentStep, fields: fieldsRef.current, savedAt: new Date().toISOString() };
-    try {
-      writeDraft(DRAFT_KEY, draft);
-      setSavedAt(draft.savedAt);
-      setNotice({ tone: "success", text: `Draft saved for this session at ${formatTime(draft.savedAt)}. It will reopen on step ${currentStep} next time you start a registration.` });
-    } catch {
-      setNotice({ tone: "error", text: "Couldn't save the draft — browser storage is unavailable (private mode or storage full)." });
-    }
+  const update = (patch: Partial<RegistrationForm>) => {
+    touched.current = true;
+    setForm((prev) => ({ ...prev, ...patch }));
+    // A field the user changes is no longer reported as wrong (rows clear their own entries too).
+    const keys = Object.keys(patch);
+    const cleared = (k: string) => keys.some((key) => k === key || k.startsWith(`${key}.`) || (key === "places" && ["region", "zone", "woreda", "kebele"].includes(k)));
+    setErrors((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !cleared(k))));
   };
 
-  const discardDraft = () => {
-    clearDraft();
-    fieldsRef.current = {};
-    setFieldsSnapshot({});
-    setSavedAt(null);
-    setCurrentStep(1);
-    setRestoreKey((k) => k + 1);
-    setNotice({ tone: "success", text: "Draft discarded — starting a new registration." });
-  };
+  const goToStep = (n: number) => setCurrentStep(Math.min(Math.max(n, 1), TOTAL_STEPS));
 
-  // The submit button checks what the registry would refuse, then asks; confirming sends the registration.
-  const handleSubmit = () => {
-    captureStep();
-    const problems = registrationProblems(fieldsRef.current);
-    if (problems.length > 0) {
-      setNotice({ tone: "error", text: `Complete the registration first: ${problems.join(" ")}` });
+  const goNext = () => {
+    const found = validateStep(step.key, form);
+    setErrors(found);
+    if (Object.keys(found).length > 0) {
+      setNotice({ tone: "error", text: `${Object.keys(found).length} field${Object.keys(found).length === 1 ? "" : "s"} need attention on this step.` });
       return;
     }
     setNotice(null);
+    goToStep(currentStep + 1);
+  };
+
+  const handleSaveDraft = () => {
+    const draft: WizardDraft = { step: currentStep, form, savedAt: new Date().toISOString() };
+    try {
+      writeDraft(DRAFT_KEY, draft);
+      setSavedAt(draft.savedAt);
+      setNotice({ tone: "success", text: `Draft saved for this session at ${formatTime(draft.savedAt)}.` });
+    } catch {
+      setNotice({ tone: "error", text: "Couldn't save the draft: browser storage is unavailable (private mode or storage full)." });
+    }
+  };
+
+  const startOver = (text?: string) => {
+    removeDraft(DRAFT_KEY);
+    touched.current = false;
+    clientOpId.current = null;
+    setForm(EMPTY_FORM);
+    setErrors({});
+    setSavedAt(null);
+    setCurrentStep(1);
+    setSubmission(null);
+    setNotice(text ? { tone: "success", text } : null);
+  };
+
+  // The submit button checks every step first; the popup then sends the registration.
+  const handleSubmit = () => {
+    const found = validateStep("review", form);
+    setErrors(found);
+    if (Object.keys(found).length > 0) {
+      setNotice({ tone: "error", text: "Some details are missing or wrong. Fix them before submitting." });
+      return;
+    }
     setConfirming(true);
   };
 
   const confirmSubmit = async () => {
-    if (!fieldsRef.current.client_op_id) fieldsRef.current.client_op_id = newOpId();
-    setSending(true);
+    clientOpId.current ??= newClientOpId();
+    setSubmitting(true);
     try {
-      const result = await registerFarmer(toRegistration(fieldsRef.current));
-      clearDraft();
-      setFieldsSnapshot({ ...fieldsRef.current });
-      setSubmission({ submissionId: result.submission_id, status: result.status, submittedAt: new Date().toISOString() });
+      const result = await registerFarmer(buildRegistrationBody(form, clientOpId.current));
+      removeDraft(DRAFT_KEY);
+      setSubmission({ submissionId: result.submission_id, status: result.status, applicationReference: result.application_reference, submittedAt: new Date().toISOString() });
+      setNotice(null);
     } catch (err) {
-      // The draft stays (with its key), so fixing the problem and submitting again is safe.
-      const message = err instanceof Error ? err.message : "The registration could not be sent.";
-      setNotice({ tone: "error", text: `The Farmer Registry did not accept the registration: ${message}` });
+      // 400: the registry names the fields; show each where it belongs. 401 opens the session-expired dialog by itself.
+      if (err instanceof ApiError && err.status === 400 && err.details) {
+        const found = errorsFromDetails(err.details);
+        setErrors(found);
+        setNotice({ tone: "error", text: `The registry did not accept the registration: ${Object.values(err.details).join(" ")}` });
+        const at = firstStepWith(found);
+        if (at) goToStep(at);
+      } else {
+        setNotice({ tone: "error", text: describeFarmerError(err) });
+      }
     } finally {
-      setSending(false);
+      setSubmitting(false);
       setConfirming(false);
     }
   };
 
-  const registerAnother = () => {
-    fieldsRef.current = {};
-    lastSnapshot.current = null;
-    setFieldsSnapshot({});
-    setSavedAt(null);
-    setNotice(null);
-    setCurrentStep(1);
-    setRestoreKey((k) => k + 1);
-    setSubmission(null);
-  };
-
-  // Submitted state: header swaps to the confirmation banner, stepper is fully
-  // complete, and there's no footer / back link to navigate away with.
   if (submission) {
     return (
       <div className="flex w-full flex-col gap-4">
         <SubmittedHeader />
         <Stepper currentStep={TOTAL_STEPS + 1} />
-        <SubmittedStep
-          submission={submission}
-          farmerName={farmerFullName(fieldsSnapshot)}
-          location={placeOf(fieldsSnapshot, ["region", "zone", "woreda", "kebele"]).join(" › ")}
-          onRegisterAnother={registerAnother}
-        />
+        <SubmittedStep submission={submission} farmerName={farmerFullName(form)} location={placeTrail(form)} onRegisterAnother={() => startOver()} />
       </div>
     );
   }
 
-  const renderStep = () => {
-    const tab = REGISTRY_TABS[currentStep - 1];
-    if (!tab) {
-      return <ReviewStep values={fieldsSnapshot} onEditStep={goToStep} />;
-    }
-    if (tab.key === "household") return <HouseholdStep initial={fieldsSnapshot} />;
-    if (tab.key === "location") return <LocationStep initial={fieldsSnapshot} />;
-    if (tab.key === "enumerator") return <EnumeratorStep initial={fieldsSnapshot} />;
-    return <RegistryStep key={tab.key} tab={tab} initial={fieldsSnapshot} />;
-  };
+  const stepProps: StepProps = { form, update, errors, options, optionsLoading };
+  const body = {
+    farmer: <FarmerStep {...stepProps} />,
+    location: <LocationStep {...stepProps} />,
+    household: <HouseholdStep {...stepProps} />,
+    holdings: <HoldingsStep {...stepProps} />,
+    document: <DocumentStep {...stepProps} />,
+    review: <ReviewStep form={form} options={options} errors={errors} onEditStep={goToStep} />,
+  }[step.key];
+
+  const reviewProblems = Object.keys(validateStep("review", form)).map(stepOfField);
+  const completeSteps = WIZARD_STEPS.filter((s) => s.key !== "review" && !reviewProblems.includes(s.key)).length;
 
   return (
     <div className="flex w-full flex-col gap-4">
-      {/* Step 1 leaves the wizard for the farmers list; later steps go back one step */}
-      {currentStep > 1 ? <BackLink onClick={goBack} /> : <BackLink href="/farmers" />}
+      {currentStep > 1 ? <BackLink onClick={() => goToStep(currentStep - 1)} /> : <BackLink href="/farmers" />}
 
-      <PageHeader title="Register a farmer" description={`Step ${currentStep} of ${TOTAL_STEPS} - ${stepLabel}`} />
+      <PageHeader title="Register a farmer" description={`Step ${currentStep} of ${TOTAL_STEPS} - ${step.label}`} />
       <Stepper currentStep={currentStep} />
 
+      {optionsError !== null && (
+        <Banner tone="error" title="The registry's lists could not be loaded">
+          {describeFarmerError(optionsError)} The dropdowns stay empty until they load; reload the page to try again.
+        </Banner>
+      )}
       {notice && (
         <Banner tone={notice.tone} onDismiss={() => setNotice(null)}>
           {notice.text}
           {notice.restored && (
-            <button type="button" onClick={discardDraft} className="ml-2 font-semibold underline">Discard draft</button>
+            <button type="button" onClick={() => startOver("Draft discarded, starting a new registration.")} className="ml-2 font-semibold underline">
+              Discard draft
+            </button>
           )}
         </Banner>
       )}
 
-      <div ref={stepRef} key={restoreKey}>{renderStep()}</div>
+      <StepCard title={step.title} description={step.description}>
+        {body}
+      </StepCard>
 
       <WizardFooter
         onSaveDraft={handleSaveDraft}
         savedAt={savedAt ? formatTime(savedAt) : null}
         currentStep={currentStep}
         totalSteps={TOTAL_STEPS}
-        onBack={goBack}
+        onBack={() => goToStep(currentStep - 1)}
         onNext={isLastStep ? handleSubmit : goNext}
-        nextLabel={isLastStep ? "Submit registration" : "Next Step"}
+        nextDisabled={submitting}
+        nextLabel={isLastStep ? (submitting ? "Submitting…" : "Submit registration") : "Next Step"}
         nextIcon={isLastStep ? "check" : "arrow"}
       />
 
       {confirming && (
         <SubmitConfirmModal
-          farmerName={farmerFullName(fieldsSnapshot)}
-          place={placeOf(fieldsSnapshot, ["woreda", "kebele"]).join(", ")}
-          completeTabs={tabCompletion(fieldsSnapshot).complete}
-          totalTabs={tabCompletion(fieldsSnapshot).total}
+          farmerName={farmerFullName(form)}
+          place={placeTrail(form)}
+          completeTabs={completeSteps}
+          totalTabs={TOTAL_STEPS - 1}
           onCancel={() => setConfirming(false)}
           onConfirm={() => void confirmSubmit()}
-          busy={sending}
         />
       )}
     </div>

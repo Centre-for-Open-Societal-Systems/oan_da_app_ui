@@ -1,147 +1,124 @@
 import { authRequest } from "@/features/auth";
+import { ApiError } from "@/lib/api";
 
-// Farmer Registry data the registration wizard needs, read through DA Services:
-// dropdown options and places come from the registry itself, so nothing here is hard-coded.
+// Register a farmer through DA Services (farmer-frontend-integration.md, "Register a farmer"; Postman collection
+// OAN-DA-Farmers, "2. Registration form data" and "3. Register a farmer"). DA Services reads and writes the Farmer Registry.
 
-/** One choice of a registry dropdown: `value` is the code POST /farmers takes, `label` what people read. */
+const REGISTRY = "/da-services/registries/farmer";
+
+/** One choice of a registry code list: send `value`, show `label`. */
 export interface FieldOption {
   value: string;
   label: string;
 }
 
-/** Register mnemonic (Farmer, Land, Crop …) → registry field name → its options. */
+/** {register: {field: [{value, label}]}}, e.g. options.Farmer.gender. */
 export type FieldOptions = Record<string, Record<string, FieldOption[]>>;
 
-/** A Master Data place: region, zone, woreda or kebele. The kebele id (ET04080101) is what registration takes. */
+/** GET /registries/farmer/field-options: {registry, options}; only the options are kept. */
+export async function fetchFieldOptions(): Promise<FieldOptions> {
+  return (await authRequest<{ data: { options?: FieldOptions } }>(`${REGISTRY}/field-options`)).data?.options ?? {};
+}
+
+/** The choices for a field, from whichever register lists it; undefined when no register does. */
+export function optionsFor(options: FieldOptions | null | undefined, field: string): FieldOption[] | undefined {
+  for (const register of Object.values(options ?? {})) {
+    const list = register?.[field];
+    if (Array.isArray(list)) return list;
+  }
+  return undefined;
+}
+
+export type PlaceLevel = "region" | "zone" | "woreda" | "kebele";
+
+/** One place of a level; its `id` is the parent of the next level, and a kebele's `id` (e.g. ET04080101) goes in the body. */
 export interface Place {
   id: string;
   name: string;
 }
 
-export type PlaceLevel = "region" | "zone" | "woreda" | "kebele";
-
-let fieldOptionsRequest: Promise<FieldOptions> | null = null;
-
-/** GET /registries/farmer/field-options, once per page load (the backend caches it for an hour too). */
-export function fetchFieldOptions(): Promise<FieldOptions> {
-  if (!fieldOptionsRequest) {
-    fieldOptionsRequest = authRequest<{ data: { options: FieldOptions } }>("/da-services/registries/farmer/field-options")
-      .then((res) => res.data.options)
-      .catch((err: unknown) => {
-        fieldOptionsRequest = null; // let the next caller try again
-        throw err;
-      });
-  }
-  return fieldOptionsRequest;
+/** GET /registries/farmer/places?level=&parent=: the places of a level under the chosen parent (none for regions). */
+export async function fetchPlaces(level: PlaceLevel, parent?: string): Promise<Place[]> {
+  const query = new URLSearchParams({ level });
+  if (parent) query.set("parent", parent);
+  return (await authRequest<{ data: { places: Place[] } }>(`${REGISTRY}/places?${query}`)).data.places ?? [];
 }
 
-/** Label of a stored code, falling back to the code itself. */
-export const optionLabel = (options: FieldOption[] | undefined, value: string) => options?.find((o) => o.value === value)?.label ?? value;
-
-const placeRequests = new Map<string, Promise<Place[]>>();
-
-/** GET /registries/farmer/places: one level of the Master Data hierarchy under `parent`. */
-export function fetchPlaces(level: PlaceLevel, parent?: string): Promise<Place[]> {
-  const key = `${level}:${parent ?? ""}`;
-  let request = placeRequests.get(key);
-  if (!request) {
-    const query = new URLSearchParams({ level, ...(parent ? { parent } : {}) });
-    request = authRequest<{ data: { places: Place[] } }>(`/da-services/registries/farmer/places?${query}`)
-      .then((res) => res.data.places)
-      .catch((err: unknown) => {
-        placeRequests.delete(key);
-        throw err;
-      });
-    placeRequests.set(key, request);
-  }
-  return request;
+/** GET /registries/farmer/intake-form: the registry's form layout. Its shape is not documented yet, so it is passed through. */
+export async function fetchRegistrationLayout(): Promise<unknown> {
+  return (await authRequest<{ data: unknown }>(`${REGISTRY}/intake-form`)).data;
 }
 
-/** POST /farmers/registrations/documents: the file goes to the registry document store; keep the returned id. */
-export async function uploadRegistrationDocument(file: File): Promise<{ document_id: string; file_name: string; size: number }> {
-  const body = new FormData();
-  body.append("file", file);
-  const res = await authRequest<{ data: { document_id: string; file_name: string; size: number } }>("/da-services/farmers/registrations/documents", { method: "POST", body });
-  return res.data;
+/** What the ID document upload accepts. */
+export const DOCUMENT_TYPES = ["application/pdf", "image/jpeg", "image/png"] as const;
+export const DOCUMENT_MAX_BYTES = 5 * 1024 * 1024;
+
+/** Why a file cannot be uploaded as the ID document, or null when it can. */
+export function documentProblem(file: { type: string; size: number }): string | null {
+  if (!(DOCUMENT_TYPES as readonly string[]).includes(file.type)) return "The ID document must be a PDF, JPEG or PNG file.";
+  if (file.size > DOCUMENT_MAX_BYTES) return "The ID document must be 5 MB or smaller.";
+  return null;
 }
 
-/** Body of POST /farmers. Codes come from the field options; see the backend's FarmerRegistrationForm. */
-export interface FarmerRegistration {
+/** POST /farmers/registrations/documents (multipart "file"): the document_id the registration then names. */
+export async function uploadIdentityDocument(file: File): Promise<string> {
+  const problem = documentProblem(file);
+  if (problem) throw new ApiError(problem, 400);
+  const form = new FormData();
+  form.append("file", file);
+  const res = await authRequest<{ data: { document_id?: string } }>("/da-services/farmers/registrations/documents", { method: "POST", body: form });
+  if (!res.data?.document_id) throw new ApiError("The registry did not return a document id for the upload.", 502);
+  return res.data.document_id;
+}
+
+/** The body of POST /farmers, as in the collection's "Register farmer" request. Codes come from field-options and places. */
+export interface RegistrationBody {
+  client_op_id: string;
   first_name: string;
-  father_name?: string;
-  grandfather_name?: string;
-  first_name_local?: string;
-  middle_name_local?: string;
-  last_name_local?: string;
-  language_spoken?: string;
-  gender?: string;
-  date_of_birth?: string;
-  phone?: string;
-  kebele?: string;
+  father_name: string;
+  grandfather_name: string;
+  gender: string;
+  date_of_birth: string;
+  phone: string;
+  /** The kebele's place id, e.g. ET04080101. */
+  kebele: string;
+  national_id: string;
+  /** "latitude longitude altitude accuracy", e.g. "9.03 38.74 2350 5". */
   location?: string;
-  national_id?: string;
-  fayda_rid?: string;
   marital_status?: string;
   education_level?: string;
   income_sources?: string[];
-  income_source_other?: string;
-  is_psnp_user?: boolean;
-  disabled?: boolean;
-  disability_type?: string;
-  disability_severity?: string;
   household?: {
     size: number;
-    number_of_children?: number;
-    other_land_owner?: boolean;
-    father_included?: boolean;
-    mother_included?: boolean;
-    members: { first_name: string; father_name?: string; grandfather_name: string; gender: string; date_of_birth: string; relationship: string }[];
+    members: { first_name: string; grandfather_name?: string; gender?: string; date_of_birth?: string; relationship?: string }[];
   };
-  membership?: {
-    is_primary_cooperative_member: boolean;
-    primary_cooperative_name?: string;
-    is_cooperative_union_member: boolean;
-    cooperative_union_name?: string;
-    is_farmer_cluster_member: boolean;
-    farmer_cluster_role?: string;
-    primary_commodity?: string;
-  };
-  identity_document_id?: string;
-  identity_document_type?: string;
-  lands?: { ownership: string; area_hectare?: number; soil_fertility?: string; current_land_use?: string; means_of_acquisition?: string; year_of_acquisition?: number; remark?: string }[];
-  crops?: { name: string; planted_date?: string; season?: string; end_use?: string }[];
-  livestock?: { animal: string; count: number; system?: string; breed?: string; gender?: string; body_condition?: string; production_type?: string }[];
-  /** Idempotency key: the same key twice returns the first registration instead of a second one. */
-  client_op_id?: string;
+  identity_document_id: string;
+  lands?: { ownership: string; area_hectare: number }[];
+  crops?: { name: string; planted_date?: string; season?: string }[];
+  livestock?: { animal: string; count: number; system?: string }[];
 }
 
-/** What POST /farmers answers once the registry has the submission. */
+/** POST /farmers: PENDING_APPROVAL for a new registration; DUPLICATE when the client_op_id was used before. */
 export interface RegistrationResult {
-  submission_id: string | null;
-  event_id: string;
-  /** PENDING_APPROVAL once finalized; DUPLICATE when the same client_op_id was sent before. */
-  status: string;
-  duplicate: boolean;
-}
-
-export async function registerFarmer(body: FarmerRegistration): Promise<RegistrationResult> {
-  const res = await authRequest<{ data: RegistrationResult }>("/da-services/farmers", { method: "POST", body });
-  return res.data;
-}
-
-/** GET /farmers/registrations/{submission_id}: a registration as the registry holds it, before and after approval. */
-export interface RegistrationDetail {
   submission_id: string;
-  application_reference: string | null;
-  record_name: string | null;
-  /** DRAFT, PENDING_APPROVAL, APPROVED or REJECTED. */
   status: string;
-  finalized_at: string | null;
-  approved_by: string | null;
-  approved_at: string | null;
+  application_reference?: string;
 }
 
-export async function fetchRegistration(submissionId: string): Promise<RegistrationDetail> {
-  const res = await authRequest<{ data: RegistrationDetail }>(`/da-services/farmers/registrations/${encodeURIComponent(submissionId)}`);
-  return res.data;
+export async function registerFarmer(body: RegistrationBody): Promise<RegistrationResult> {
+  return (await authRequest<{ data: RegistrationResult }>("/da-services/farmers", { method: "POST", body })).data;
 }
+
+/** GET /farmers/registrations/{submission_id}: DRAFT / PENDING_APPROVAL / APPROVED / REJECTED and the application reference. */
+export interface RegistrationStatus {
+  submission_id?: string;
+  status: string;
+  application_reference?: string | null;
+}
+
+export async function fetchRegistrationStatus(submissionId: string): Promise<RegistrationStatus> {
+  return (await authRequest<{ data: RegistrationStatus }>(`/da-services/farmers/registrations/${encodeURIComponent(submissionId)}`)).data;
+}
+
+/** A new idempotency key for one registration: reused if the same registration is sent again, so it is not created twice. */
+export const newClientOpId = () => `reg-${Date.now()}-${globalThis.crypto.randomUUID().slice(0, 8)}`;

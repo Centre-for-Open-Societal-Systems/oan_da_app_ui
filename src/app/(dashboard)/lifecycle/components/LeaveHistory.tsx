@@ -21,6 +21,7 @@ import { LEAVE_YEAR, dateRange, leaveBalance, leaveRecords, type LeaveRecord, ty
 import { LIFECYCLE_DA, formatDate } from "./lifecycle";
 import { DetailRows, ICONS, Icon } from "./shared";
 import { useLifecycleHistory } from "./useLifecycleHistory";
+import { useAuthStore } from "@/store/useAuthStore";
 
 const STATUS_TONE: Record<LeaveStatus, PillTone> = { "Pending approval": "amber", Approved: "green", Completed: "slate", Rejected: "red", Withdrawn: "slate" };
 // The table says "Waiting" / "Taken" where the request record says "Pending approval" / "Completed".
@@ -94,6 +95,12 @@ function BalanceTile({ label, value, total, note, footnote, accent, icon }: Bala
 export function LeaveHistory() {
   const router = useRouter();
   const requests = Object.values(useLifecycleHistory((s) => s.requests));
+  const withdraw = useLifecycleHistory((s) => s.withdraw);
+  const role = useAuthStore((s) => s.role);
+  const canAct = role === "DA" || role === "Supervisor";
+  // Supervisors and DAs can cancel their own request while it is waiting for approval, or approved and not yet started.
+  const today = new Date().toLocaleDateString("en-CA");
+  const canCancel = (r: LeaveRecord) => canAct && !!r.hasPage && (r.status === "Pending approval" || (r.status === "Approved" && r.start > today));
   const records = leaveRecords(requests);
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState(EMPTY_FILTERS);
@@ -101,6 +108,7 @@ export function LeaveHistory() {
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [isRequesting, setIsRequesting] = useState(false);
   const [viewing, setViewing] = useState<LeaveRecord | null>(null);
+  const [cancelling, setCancelling] = useState<LeaveRecord | null>(null);
 
   const annual = leaveBalance("Annual leave", requests)!;
   const sick = leaveBalance("Sick leave", requests)!;
@@ -142,6 +150,30 @@ export function LeaveHistory() {
       cell: (r) => <Pill tone={STATUS_TONE[r.status]} className="px-2.5 py-0.5">{statusLabel(r.status)}</Pill>,
     },
     { key: "cover", header: "Cover", cell: (r) => <span className="whitespace-nowrap">{r.cover ?? "-"}</span> },
+    ...(canAct
+      ? [
+          {
+            key: "action",
+            header: "Action",
+            cell: (r) =>
+              canCancel(r) ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCancelling(r);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-danger-border bg-danger-wash px-3 py-1 text-[12.5px] font-semibold text-danger transition-colors hover:bg-danger-border/40"
+                >
+                  <Icon d={ICONS.close} className="h-3.5 w-3.5" />
+                  Cancel
+                </button>
+              ) : (
+                "-"
+              ),
+          } satisfies Column<LeaveRecord>,
+        ]
+      : []),
   ];
 
   return (
@@ -197,6 +229,43 @@ export function LeaveHistory() {
       </div>
 
       {isRequesting && <LeaveRequestModal onClose={() => setIsRequesting(false)} />}
+
+      {cancelling && (
+        <Modal
+          isOpen
+          onClose={() => setCancelling(null)}
+          title={`Cancel your ${cancelling.type.toLowerCase()} request?`}
+          subtitle={`${cancelling.approver} ${cancelling.status === "Approved" ? "has approved it" : "hasn't decided yet"}. They are told you no longer need it${cancelling.cover ? `, and ${cancelling.cover} is no longer asked to cover` : ""}.`}
+          size="md"
+          bodyClassName="p-4 sm:px-6 sm:py-5"
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setCancelling(null)}>Cancel</Button>
+              <Button
+                variant="brand"
+                onClick={() => {
+                  withdraw(cancelling.id);
+                  setCancelling(null);
+                }}
+              >
+                Send
+              </Button>
+            </>
+          }
+        >
+          <DetailRows
+            boxed
+            rows={[
+              { label: "Leave", value: `${cancelling.type.replace(/ leave$/, "")} · ${cancelling.days} working days` },
+              { label: "Dates", value: dateRange(cancelling.start, cancelling.end, true) },
+              ...(leaveBalance(cancelling.type, requests, { excludeId: cancelling.id })
+                ? [{ label: "Balance", value: `Stays at ${leaveBalance(cancelling.type, requests, { excludeId: cancelling.id })!.left} days` }]
+                : []),
+              { label: "Told", value: [cancelling.approver, cancelling.cover].filter(Boolean).join(" - ") },
+            ]}
+          />
+        </Modal>
+      )}
 
       {viewing && (
         <Modal

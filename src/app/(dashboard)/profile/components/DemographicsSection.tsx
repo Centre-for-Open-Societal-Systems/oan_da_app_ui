@@ -44,12 +44,12 @@ const EDITABLE = [
 
 type EditableKey = (typeof EDITABLE)[number]["key"];
 
-const formatDate = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+export const formatDate = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 
 // Identity fields are verified via Fayda and can't be edited here — shown greyed out.
-const LOCKED = "h-11 cursor-not-allowed border-zinc-200 bg-surface text-ink disabled:opacity-100";
+export const LOCKED = "h-11 cursor-not-allowed border-zinc-200 bg-surface text-ink disabled:opacity-100";
 
-function LockedField({ label, value, required }: { label: string; value: string; required?: boolean }) {
+export function LockedField({ label, value, required }: { label: string; value: string; required?: boolean }) {
   const id = `locked-${label.toLowerCase().replace(/\s+/g, "-")}`;
   return (
     <FormField label={label} htmlFor={id} required={required}>
@@ -59,7 +59,7 @@ function LockedField({ label, value, required }: { label: string; value: string;
 }
 
 // Read-only view: the same field boxes as the form, filled and greyed, per the profile mockup.
-const READ = "flex h-11 items-center gap-2 rounded-md border border-zinc-200 bg-surface px-3 text-[14px] text-ink";
+export const READ = "flex h-11 items-center gap-2 rounded-md border border-zinc-200 bg-surface px-3 text-[14px] text-ink";
 
 const Chevron = () => (
   <svg className="ml-auto h-4 w-4 shrink-0 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -67,7 +67,7 @@ const Chevron = () => (
   </svg>
 );
 
-function ReadOnlyField({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
+export function ReadOnlyField({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-2">
       <dt className="text-[14px] font-medium text-ink">

@@ -8,14 +8,18 @@ import { cn } from "@/lib/utils";
 const TABS = ["Overview", "Holdings", "Crop Sown Details", "Livestock Details", "Livestock history", "Visit history", "Documents", "Advisory"] as const;
 export type ProfileTab = (typeof TABS)[number];
 
+// Hidden for now: the Overview and Livestock history tabs (their panels are still passed in). Remove one from this list to bring it back.
+const HIDDEN_TABS: ProfileTab[] = ["Overview", "Livestock history"];
+const VISIBLE_TABS = TABS.filter((tab) => !HIDDEN_TABS.includes(tab));
+
 // Only the tab switch runs on the client; each panel is rendered by the page and passed in.
 export function ProfileTabs({ panels }: { panels: Record<ProfileTab, ReactNode> }) {
-  const [active, setActive] = useState<ProfileTab>("Overview");
+  const [active, setActive] = useState<ProfileTab>(VISIBLE_TABS[0]);
 
   return (
     <Card className="overflow-hidden border border-line p-0 shadow-card">
       <div className="flex w-full items-center overflow-x-auto border-b border-line bg-white no-scrollbar" role="tablist">
-        {TABS.map((tab) => {
+        {VISIBLE_TABS.map((tab) => {
           const isActive = active === tab;
           return (
             <button

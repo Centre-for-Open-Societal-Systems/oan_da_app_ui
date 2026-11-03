@@ -13,7 +13,7 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ExportButton } from "@/components/ui/ExportButton";
 import { cn } from "@/lib/utils";
-import { apiFarmerToFarmer, FARMERS, listFarmers } from "@/features/farmers";
+import { ALL_FARMERS_SEARCH, apiFarmerToFarmer, describeFarmerError, listFarmers } from "@/features/farmers";
 import { FarmerAvatar } from "@/features/farmers";
 import { StatusPill } from "@/features/farmers";
 import {
@@ -27,19 +27,16 @@ import type { FilterFieldConfig } from "@/components/ui/AdvancedFiltersDrawer";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { FilterDropdown } from "@/components/ui/FilterDropdown";
 import { AdvancedFiltersDrawer } from "@/components/ui/AdvancedFiltersDrawer";
-import { matchesQuery, searchPlaceholder } from "@/lib/search";
-import { TablePagination, usePagination } from "@/components/ui/TablePagination";
+
+import { PAGE_SIZES, TablePagination } from "@/components/ui/TablePagination";
+import { Spinner } from "@/components/ui/Spinner";
 import { RowAction } from "@/components/ui/RowAction";
 import { Banner } from "@/components/ui/Banner";
 import { fileDate, type CsvColumn } from "@/lib/download";
 import { downloadTable, formatLabel } from "@/lib/export";
 import type { Farmer } from "@/features/farmers";
 
-// Every farmer the caller may see in one request (the API maximum); filters and paging run here.
-const PAGE_LIMIT = 500;
-// The search box asks the Farmer Registry itself; an empty box lists every approved farmer ("FR-" matches all Farmer-IDs).
-const ALL_FARMERS = "FR-";
-const SEARCH_DELAY_MS = 400;
+const SEARCH_DEBOUNCE_MS = 400;
 
 const STATUS_ORDER = ["Verified", "Pending", "Flagged"];
 
@@ -47,7 +44,7 @@ const STATUS_ORDER = ["Verified", "Pending", "Flagged"];
 const optionsOf = (values: string[], order?: string[]): FilterOption[] =>
   (order ?? [...new Set(values)]).map((value) => ({ value, label: value, count: values.filter((v) => v === value).length }));
 
-const SEARCH_PLACEHOLDER = searchPlaceholder(["Farmer Details", "Kebele", "Crop", "Livestock", "Registered date", "Status"]);
+const SEARCH_PLACEHOLDER = "Search name, Farmer-ID or phone…";
 
 // The visible table columns (Farmer Details split into name / email / phone).
 const EXPORT_COLUMNS: CsvColumn<Farmer>[] = [
@@ -58,7 +55,7 @@ const EXPORT_COLUMNS: CsvColumn<Farmer>[] = [
   { header: "Kebele", value: (f) => f.kebele },
   { header: "Woreda", value: (f) => f.woreda },
   { header: "Crop", value: (f) => f.crop },
-  { header: "Land (ha)", value: (f) => f.landHa },
+  { header: "Land (ha)", value: (f) => (f.landUnknown ? "" : f.landHa) },
   { header: "Livestock", value: (f) => f.livestock },
   { header: "Livestock (heads)", value: (f) => f.livestockHeads },
   { header: "Registered date", value: (f) => `${f.registeredAt} ${f.registeredTime}` },
@@ -75,39 +72,41 @@ export function FarmersTable() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [segmentId, setSegmentId] = useState(SEGMENTS[0].id);
   const linkBeneficiaries = useBeneficiariesStore((s) => s.link);
-  // GET /farmers is scoped by the backend: a DA gets the farmers of their Kebeles, officers those in their scope.
-  const [loaded, setLoaded] = useState<{ rows: Farmer[]; total: number; error: string | null } | null>(null);
-  // The typed text, sent to the registry once typing pauses.
+  // GET /farmers is scoped by the backend: a DA gets farmers in their kebele, a supervisor in their woreda, Admin all.
+  // Search and paging run on the server; the column filters only narrow the page on screen.
+  const [loaded, setLoaded] = useState<{ key: string; rows: Farmer[]; total: number; error: string | null } | null>(null);
   const [searchText, setSearchText] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
 
+  // One request per pause in typing, not per key press.
   useEffect(() => {
-    const t = setTimeout(() => setSearchText(query.trim()), SEARCH_DELAY_MS);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => {
+      setSearchText(query);
+      setPage(1);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
   }, [query]);
 
   useEffect(() => {
     let current = true;
-    listFarmers({ search_text: searchText || ALL_FARMERS, page: 1, page_size: PAGE_LIMIT })
-      .then(({ items, total }) => current && setLoaded({ rows: items.map(apiFarmerToFarmer), total, error: null }))
-      .catch((err: unknown) => current && setLoaded({ rows: [], total: 0, error: err instanceof Error ? err.message : "Could not load farmers." }));
+    const key = `${searchText}|${page}|${pageSize}`;
+    listFarmers({ searchText, page, pageSize })
+      .then(({ items, total }) => current && setLoaded({ key, rows: items.map(apiFarmerToFarmer), total, error: null }))
+      .catch((err: unknown) => current && setLoaded({ key, rows: [], total: 0, error: describeFarmerError(err) }));
     return () => {
       current = false;
     };
-  }, [searchText]);
+  }, [searchText, page, pageSize]);
 
-  const loading = loaded === null;
-  // While the farmers API is unavailable the sample farmers keep the page usable; a banner says so.
-  const usingSample = !!loaded?.error;
-  const source = loading ? [] : usingSample ? FARMERS : loaded.rows;
+  // The first call after a while can take ~20 s, so the table shows a loading row until the page arrives.
+  const loading = loaded === null || loaded.key !== `${searchText}|${page}|${pageSize}`;
+  const source = loading ? [] : loaded.rows;
 
   const kebeleOptions = optionsOf(source.map((f) => f.kebele));
-  const cropOptions = optionsOf(source.map((f) => f.crop));
-  const livestockOptions = optionsOf(source.map((f) => f.livestock));
   const statusOptions = optionsOf(source.map((f) => f.status), STATUS_ORDER);
   const filterFields: FilterFieldConfig[] = [
     { key: "kebele", label: "Kebele", allLabel: "All kebeles", placeholder: "All", options: kebeleOptions },
-    { key: "crop", label: "Crop", allLabel: "All crops", placeholder: "All", options: cropOptions },
-    { key: "livestock", label: "Livestock", allLabel: "All livestock", placeholder: "All", options: livestockOptions },
     { key: "status", label: "Status", allLabel: "All Status", placeholder: "All Status", options: statusOptions },
   ];
 
@@ -129,9 +128,18 @@ export function FarmersTable() {
     setIsAddOpen(false);
   };
 
-  const rows = applyFilters(source, filters).filter((farmer) => !usingSample || matchesQuery(query, farmer));
+  const rows = applyFilters(source, filters);
   const activeFilterCount = countActiveFilters(filters);
-  const { pageRows, paginationProps } = usePagination(rows);
+  const paginationProps = {
+    page,
+    pageSize,
+    total: loaded?.total ?? 0,
+    onPageChange: setPage,
+    onPageSizeChange: (size: number) => {
+      setPageSize(size);
+      setPage(1);
+    },
+  };
   const allSelected = rows.length > 0 && rows.every((f) => selected.has(f.id));
 
   const setColumnFilter = (key: keyof FarmerFilters) => (next: Set<string>) =>
@@ -154,7 +162,7 @@ export function FarmersTable() {
       <div className="flex flex-col gap-3 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-2.5">
           <h2 className="text-[15px] font-semibold text-ink">My Farmers</h2>
-          {loaded && !usingSample && <span className="text-[13px] text-muted">{loaded.total.toLocaleString()} total</span>}
+          {loaded && !loaded.error && <span className="text-[13px] text-muted">{loaded.total.toLocaleString()} total</span>}
           <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-brand-green px-1.5 text-[12px] font-semibold text-white">
             {selected.size}
           </span>
@@ -181,9 +189,9 @@ export function FarmersTable() {
         </div>
       </div>
 
-      {usingSample && (
-        <Banner tone="warning" title="Farmers could not be loaded" className="mx-4 mb-3">
-          {loaded?.error} Showing sample farmers until the farmers service is available.
+      {loaded?.error && (
+        <Banner tone="error" title="Farmers could not be loaded" className="mx-4 mb-3">
+          {loaded.error}
         </Banner>
       )}
       {notice && <Banner tone="success" className="mx-4 mb-3" onDismiss={() => setNotice(null)}>{notice}</Banner>}
@@ -200,12 +208,8 @@ export function FarmersTable() {
               <th className="px-4 py-3 font-semibold">
                 <FilterDropdown label="Kebele" allLabel="All kebeles" options={kebeleOptions} selected={filters.kebele} onApply={setColumnFilter("kebele")} />
               </th>
-              <th className="px-4 py-3 font-semibold">
-                <FilterDropdown label="Crop" allLabel="All crops" options={cropOptions} selected={filters.crop} onApply={setColumnFilter("crop")} />
-              </th>
-              <th className="px-4 py-3 font-semibold">
-                <FilterDropdown label="Livestock" allLabel="All livestock" options={livestockOptions} selected={filters.livestock} onApply={setColumnFilter("livestock")} />
-              </th>
+              <th className="px-4 py-3 font-semibold">Land</th>
+              <th className="px-4 py-3 text-center font-semibold">Plots</th>
               <th className="px-4 py-3 text-center font-semibold">Registered date</th>
               <th className="px-4 py-3 text-center font-semibold">
                 <FilterDropdown label="Status" allLabel="All Status" options={statusOptions} selected={filters.status} onApply={setColumnFilter("status")} />
@@ -216,21 +220,24 @@ export function FarmersTable() {
           <tbody className="text-[14px] text-slate-700">
             {loading && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-[13.5px] text-muted">Loading farmers…</td>
+                <td colSpan={8} className="px-4 py-10 text-center text-[13.5px] text-muted">
+                  <Spinner className="mx-auto mb-2 h-5 w-5" />
+                  Loading farmers… the first load can take up to 20 seconds.
+                </td>
               </tr>
             )}
-            {!loading && rows.length === 0 && (
+            {!loading && rows.length === 0 && !loaded?.error && (
               <tr>
                 <td colSpan={8} className="px-4 py-6">
                   {source.length === 0 ? (
-                    <EmptyState title="No farmers linked to you yet" hint="Farmers appear here once they are linked to your DA-ID." />
+                    <EmptyState title={searchText && searchText !== ALL_FARMERS_SEARCH ? "No farmers match your search" : "No farmers in your area yet"} hint={searchText && searchText !== ALL_FARMERS_SEARCH ? "Try a name, a Farmer-ID or a phone number." : "Approved farmers in your scope appear here."} />
                   ) : (
                     <EmptyState title="No farmers match the selected filters" hint="Clear a filter or try a different search." />
                   )}
                 </td>
               </tr>
             )}
-            {pageRows.map((farmer) => {
+            {rows.map((farmer) => {
               const isSelected = selected.has(farmer.id);
               return (
                 <tr
@@ -252,17 +259,16 @@ export function FarmersTable() {
                       <FarmerAvatar name={farmer.name} avatar={farmer.avatar} />
                       <div className="leading-tight">
                         <p className="font-medium text-ink">{farmer.name}</p>
-                        {farmer.phone && <p className="mt-0.5 text-[13px] text-muted">{farmer.phone}</p>}
+                        <p className="mt-0.5 text-[13px] text-muted">{[farmer.regId, farmer.phone || "—"].filter(Boolean).join(" · ")}</p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3.5">{farmer.kebele}</td>
-                  <td className="px-4 py-3.5">
-                    {farmer.crop === "—" ? `${farmer.landHa} ha` : `${farmer.crop} ${farmer.landHa} ha`}
+                  <td className="px-4 py-3.5 leading-tight">
+                    {farmer.kebele}
+                    <p className="mt-0.5 text-[13px] text-muted">{[farmer.woreda, farmer.region].filter(Boolean).join(", ")}</p>
                   </td>
-                  <td className="px-4 py-3.5">
-                    {farmer.livestock === "—" ? "—" : `${farmer.livestock} ${farmer.livestockHeads} heads`}
-                  </td>
+                  <td className="px-4 py-3.5">{farmer.landUnknown ? "—" : `${farmer.landHa} ha`}</td>
+                  <td className="px-4 py-3.5 text-center">{farmer.plotsUnknown ? "—" : farmer.totalPlots}</td>
                   <td className="px-4 py-3.5 text-center leading-tight">
                     {farmer.registeredAt}
                     <br />
@@ -272,7 +278,7 @@ export function FarmersTable() {
                     <StatusPill status={farmer.status} reason={farmer.statusReason} />
                   </td>
                   <td className="px-4 py-3.5 text-center">
-                    <RowAction href={`/farmers/${farmer.id}`} icon="view">View</RowAction>
+                    <RowAction href={`/farmers/${farmer.regId ?? farmer.id}`} icon="view">View</RowAction>
                   </td>
                 </tr>
               );
@@ -290,9 +296,8 @@ export function FarmersTable() {
         filters={filters}
         onApply={(next) =>
           setFilters({
+            ...EMPTY_FILTERS,
             kebele: next.kebele ?? new Set(),
-            crop: next.crop ?? new Set(),
-            livestock: next.livestock ?? new Set(),
             status: next.status ?? new Set(),
           })
         }

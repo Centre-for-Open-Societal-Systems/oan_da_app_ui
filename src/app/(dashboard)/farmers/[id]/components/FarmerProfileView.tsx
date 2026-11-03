@@ -7,6 +7,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import {
   apiPlotToPlot,
   apiVisitToVisit,
+  describeFarmerError,
+  fetchFarmerPhoto,
   fetchFarmerPlots,
   fetchFarmerProfile,
   fetchFarmerUpdateStatus,
@@ -31,15 +33,14 @@ import { DocumentsSection } from "./DocumentsSection";
 import { AdvisorySection } from "./AdvisorySection";
 
 type Loaded =
-  | { source: "api"; farmer: Farmer; plots: Plot[]; visits: Visit[]; notes: string[]; pendingUpdates: number }
-  | { source: "sample"; farmer: Farmer; reason: string }
+  | { source: "api"; farmer: Farmer; plots: Plot[]; visits: Visit[]; notes: string[]; incomplete: string[]; pendingUpdates: number }
   | { source: "error"; reason: string };
 
 /**
  * Farmer profile from GET /farmers/{id}/profile, with Holdings from /plots and Visit history from /visits.
- * A sample farmer id (links across the demo pages) falls back to the sample record when the API has no such farmer.
+ * Errors read as the backend error table says: no access (403), not found (404), registry unavailable (502/504).
  */
-export function FarmerProfileView({ id, sample }: { id: string; sample?: Farmer }) {
+export function FarmerProfileView({ id }: { id: string }) {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
 
   useEffect(() => {
@@ -48,21 +49,20 @@ export function FarmerProfileView({ id, sample }: { id: string; sample?: Farmer 
       try {
         const profile = await fetchFarmerProfile(id);
         // Plots and visits are tabs; one failing still leaves a usable profile.
-        const [plots, visits, updates] = await Promise.allSettled([fetchFarmerPlots(id), fetchFarmerVisits(id), fetchFarmerUpdateStatus(id)]);
+        const [plots, visits, updates, photo] = await Promise.allSettled([fetchFarmerPlots(id), fetchFarmerVisits(id), fetchFarmerUpdateStatus(id), fetchFarmerPhoto(id)]);
         const plotRows = plots.status === "fulfilled" ? plots.value.map(apiPlotToPlot) : [];
         const visitRows = visits.status === "fulfilled" ? visits.value.items.map(apiVisitToVisit) : [];
         const notes = [plots.status === "rejected" && "plots", visits.status === "rejected" && "visit history"].filter((x): x is string => !!x);
-        const farmer = profileToFarmer(profile, { plots: plotRows.length, visits: visits.status === "fulfilled" ? visits.value.total : 0 });
-        if (current) setLoaded({ source: "api", farmer, plots: plotRows, visits: visitRows, notes, pendingUpdates: updates.status === "fulfilled" ? updates.value.total : 0 });
+        const farmer = { ...profileToFarmer(profile, { plots: plotRows.length, visits: visits.status === "fulfilled" ? visits.value.total : 0 }), avatar: (photo.status === "fulfilled" && photo.value) || undefined };
+        if (current) setLoaded({ source: "api", farmer, plots: plotRows, visits: visitRows, notes, incomplete: profile.incomplete_sections ?? [], pendingUpdates: updates.status === "fulfilled" ? updates.value.total : 0 });
       } catch (err) {
-        const reason = err instanceof Error ? err.message : "Could not load the farmer.";
-        if (current) setLoaded(sample ? { source: "sample", farmer: sample, reason } : { source: "error", reason });
+        if (current) setLoaded({ source: "error", reason: describeFarmerError(err) });
       }
     })();
     return () => {
       current = false;
     };
-  }, [id, sample]);
+  }, [id]);
 
   if (!loaded) {
     return (
@@ -83,15 +83,13 @@ export function FarmerProfileView({ id, sample }: { id: string; sample?: Farmer 
 
   return (
     <>
-      {loaded.source === "sample" && (
-        <Banner tone="warning" title="Showing sample data">
-          {loaded.reason} This sample farmer is shown until the farmers service has the record.
-        </Banner>
-      )}
       {fromApi && loaded.notes.length > 0 && (
         <Banner tone="warning">Could not load {loaded.notes.join(" and ")} for this farmer; the other tabs are up to date.</Banner>
       )}
 
+      {fromApi && loaded.incomplete.length > 0 && (
+        <Banner tone="warning" title="Partial data">The registry could not deliver: {loaded.incomplete.join(", ")}. Those parts are shown as partial.</Banner>
+      )}
       {fromApi && loaded.pendingUpdates > 0 && (
         <Banner tone="info">{loaded.pendingUpdates === 1 ? "1 edit is" : `${loaded.pendingUpdates} edits are`} queued for the Farmer Registry and will sync in the background.</Banner>
       )}
@@ -102,7 +100,7 @@ export function FarmerProfileView({ id, sample }: { id: string; sample?: Farmer 
         panels={{
           Overview: <ProfileOverview />,
           Holdings: fromApi ? <HoldingsSection plots={loaded.plots} /> : <HoldingsSection />,
-          "Crop Sown Details": <CropSownSection tabs={getCropSownDetails(farmer)} />,
+          "Crop Sown Details": <CropSownSection farmer={farmer} tabs={getCropSownDetails(farmer)} />,
           "Livestock Details": <LivestockDetailsSection tabs={getLivestockReportDetails(farmer)} />,
           "Livestock history": <LivestockHistorySection />,
           "Visit history": fromApi ? <VisitHistorySection visits={loaded.visits} /> : <VisitHistorySection />,

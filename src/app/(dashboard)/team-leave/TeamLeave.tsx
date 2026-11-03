@@ -16,6 +16,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { ACCENTS, type Accent } from "../lifecycle/components/LeaveHistory";
 import { KeyDates } from "../lifecycle/components/KeyDates";
 import { ICONS, Icon } from "../lifecycle/components/shared";
+import { HelpDot, PageIntro } from "../leave-admin/shared";
 import { returnDate } from "../lifecycle/components/leave";
 import { TEAM_SIZE, mockTeam, type TeamLeaveRow, type WaitingRequest } from "./data";
 import { ApproveDialog, CoverDialog, SuggestDatesDialog } from "./TeamLeaveDialogs";
@@ -86,6 +87,8 @@ type Dialog =
 export function TeamLeave() {
   const role = useAuthStore((s) => s.role);
   const canApprove = role === "Supervisor" || role === "Admin";
+  // The Waiting Requests section is part of the Team Leave layout for the DA as well as the Supervisor.
+  const showWaiting = role === "DA" || canApprove;
   const [today] = useState(() => new Date().toISOString().slice(0, 10));
   const [initial] = useState(() => mockTeam(today));
   const [rows, setRows] = useState<TeamLeaveRow[]>(initial.rows);
@@ -183,11 +186,7 @@ export function TeamLeave() {
 
   return (
     <div className="flex w-full flex-col gap-5">
-      <Card className="flex flex-col gap-3 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-[26px] font-bold tracking-tight text-ink">Team Leave</h2>
-          <p className="mt-1 text-[14px] text-ink-soft">View and manage team members&apos; leave requests, availability, and leave schedules in one place.</p>
-        </div>
+      <PageIntro title="Team Leave" help="Who in your team is on leave, who is returning, which kebeles have no cover, and the requests waiting for you. Pick a month to change the view." description="View and manage team members' leave requests, availability, and leave schedules in one place.">
         <Dropdown
           value={monthKey}
           onChange={setMonthKey}
@@ -202,17 +201,17 @@ export function TeamLeave() {
             </span>
           )}
         />
-      </Card>
+      </PageIntro>
 
-      <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${canApprove ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
+      <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${showWaiting ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
         <StatTile label={`On leave in ${monthName}`} value={inMonth.length} note={`of ${TEAM_SIZE} agents`} accent="emerald" icon={ICONS.calendar} />
-        {canApprove && <StatTile label="Waiting for you" value={waiting.length} note={waiting.length === 0 ? "Nothing waiting" : `Oldest ${oldest} day${oldest === 1 ? "" : "s"}`} accent="blue" icon="M6 2h12M6 22h12M7 2v4a5 5 0 002 4l3 2-3 2a5 5 0 00-2 4v4M17 2v4a5 5 0 01-2 4l-3 2 3 2a5 5 0 012 4v4" />}
+        {showWaiting && <StatTile label="Waiting for you" value={waiting.length} note={waiting.length === 0 ? "Nothing waiting" : `Oldest ${oldest} day${oldest === 1 ? "" : "s"}`} accent="blue" icon="M6 2h12M6 22h12M7 2v4a5 5 0 002 4l3 2-3 2a5 5 0 00-2 4v4M17 2v4a5 5 0 01-2 4l-3 2 3 2a5 5 0 012 4v4" />}
         <StatTile label={`Returning in ${monthName}`} value={returning.length} note={listNames(returning.map((r) => r.agent))} accent="amber" icon="M21 12a9 9 0 11-2.64-6.36L21 8M21 3v5h-5" />
         <StatTile label="Kebele without cover" value={uncovered.length} note={listNames(uncovered.map((r) => r.kebele))} accent="violet" icon="M12 2l9 5-9 5-9-5zM3 12l9 5 9-5M3 17l9 5 9-5" />
       </div>
 
-      <div className={`grid grid-cols-1 items-start gap-5 ${canApprove ? "lg:grid-cols-[minmax(0,1fr)_340px]" : ""}`}>
-        {canApprove ? (
+      <div className={`grid grid-cols-1 items-start gap-5 ${showWaiting ? "lg:grid-cols-[minmax(0,1fr)_340px]" : ""}`}>
+        {showWaiting ? (
           <Card className="overflow-hidden p-0">
             <h3 className="px-6 py-5 text-[17px] font-bold text-ink">Waiting Requests</h3>
             {waiting.length === 0 ? (
