@@ -19,6 +19,8 @@ export const dynamic = "force-dynamic";
 
 const CROP_SOWN = /^\/api\/v1\/da-services\/(crop-sown\/|farmers\/[^/]+\/crops$)/;
 const IAM_TOKEN_ROUTES = new Set(["/api/v1/auth/refresh", "/api/v1/auth/logout"]);
+/** Sign-in calls: a leftover (expired) session cookie must not ride along as Bearer, the backend would reject it. */
+const LOGIN_ROUTES = new Set(["/api/v1/da-services/auth/login", "/api/v1/auth/login"]);
 const DROP_REQUEST = new Set(["host", "connection", "content-length", "accept-encoding", "x-forwarded-host", "x-forwarded-for", "x-forwarded-proto", "x-forwarded-port", "transfer-encoding"]);
 const DROP_RESPONSE = new Set(["content-encoding", "content-length", "transfer-encoding", "connection", "keep-alive"]);
 /** Header names the backend matches by exact spelling; everything else goes out as the browser named it (lowercase). */
@@ -105,7 +107,7 @@ async function forward(request: NextRequest): Promise<Response> {
   });
 
   // The cookie session, when the caller did not send its own credentials.
-  const cookieToken = headers.authorization ? undefined : iamCookie(request, "X-Access-Token");
+  const cookieToken = headers.authorization || LOGIN_ROUTES.has(target.pathname) ? undefined : iamCookie(request, "X-Access-Token");
   if (cookieToken) headers.authorization = `Bearer ${cookieToken}`;
   const cookieCsrf = iamCookie(request, "X-CSRF-Token");
   if (!headers["X-CSRF-Token"] && cookieCsrf) headers["X-CSRF-Token"] = cookieCsrf;

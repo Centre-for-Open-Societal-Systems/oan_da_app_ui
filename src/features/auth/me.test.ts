@@ -17,7 +17,7 @@ class MemoryStorage implements Storage {
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
 const fetchMock = vi.fn<typeof fetch>();
 
-const loginOk = () => json(200, { data: { access_token: "a1", expires_in: 900, refresh_token: "r1", token_type: "Bearer", roles: ["Development Agent", "Administrator"], user: "Administrator" } });
+const loginOk = () => json(200, { data: { access_token: "a1", expires_in: 1800, csrf_token: "c1", token_type: "Bearer", roles: ["Development Agent", "OAN Administrator"], user: "admin@moa.gov.et", name: "Admin User" } });
 const me = (over: Partial<MeResponse["data"]> = {}): MeResponse => ({
   data: {
     user: { id: "Administrator", name: "Administrator", email: "Administrator" },
@@ -57,32 +57,44 @@ describe("toMeSession", () => {
 });
 
 describe("login", () => {
-  it("takes identity and role from /me, called with the new access token", async () => {
+  it("signs in through the backend's IAM login, then takes identity and role from /me with the IAM token", async () => {
     fetchMock.mockResolvedValueOnce(loginOk()).mockResolvedValueOnce(json(200, me({ role: "Supervisor", role_label: "Supervisor (Woreda)" })));
 
-    const result = await login("Administrator", "admin");
+    const result = await login(" admin@moa.gov.et ", "pw");
 
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/auth/login");
+    expect(JSON.parse(fetchMock.mock.calls[0][1]!.body as string)).toEqual({ usr: "admin@moa.gov.et", pwd: "pw" });
     expect(fetchMock.mock.calls[1][0]).toBe("/api/v1/da-services/me");
-    expect(new Headers(fetchMock.mock.calls[1][1]!.headers).get("Authorization")).toBe("Bearer a1");
+    const headers = new Headers(fetchMock.mock.calls[1][1]!.headers);
+    expect(headers.get("Authorization")).toBe("Bearer a1");
+    expect(headers.get("X-CSRF-Token")).toBe("c1");
     expect(result.role).toBe("Supervisor");
     expect(result.profile?.roleLabel).toBe("Supervisor (Woreda)");
-    expect(result.tokens.refreshToken).toBe("r1");
+    // An IAM cookie session: the token stays in IAM's cookies, the proxy sends and renews it.
+    expect(result.tokens).toMatchObject({ provider: "iam", accessToken: "" });
   });
 
-  it("refuses an account without an active assignment and revokes its refresh token", async () => {
+  it("passes on wrong credentials as a 401", async () => {
+    fetchMock.mockResolvedValueOnce(json(401, { message: "Invalid login credentials" }));
+
+    await expect(login("da@moa.gov.et", "bad")).rejects.toMatchObject({ status: 401 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses an account without an active assignment and ends its IAM session", async () => {
     fetchMock.mockResolvedValueOnce(loginOk()).mockResolvedValueOnce(json(401, { message: "Authentication failed" })).mockResolvedValueOnce(json(200, {}));
 
     await expect(login("da@moa.gov.et", "pw")).rejects.toMatchObject({ status: 403, message: NO_ASSIGNMENT_MESSAGE });
     expect(fetchMock.mock.calls[2][0]).toBe("/api/v1/auth/logout");
-    expect(JSON.parse(fetchMock.mock.calls[2][1]!.body as string)).toEqual({ refresh_token: "r1" });
   });
 
   it("falls back to the login response when /me cannot be reached", async () => {
     fetchMock.mockResolvedValueOnce(loginOk()).mockRejectedValueOnce(new TypeError("offline"));
 
-    const result = await login("Administrator", "admin");
+    const result = await login("admin@moa.gov.et", "pw");
 
     expect(result.role).toBe("Admin");
+    expect(result.user).toEqual({ id: "admin@moa.gov.et", name: "Admin User", email: "admin@moa.gov.et" });
     expect(result.profile).toBeUndefined();
   });
 });
