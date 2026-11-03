@@ -1,5 +1,6 @@
 import { ApiError, apiPost, apiRequest, type ApiRequest } from "@/lib/api";
 import { readCookie } from "@/lib/cookies";
+import { refreshOidcTokens, type OidcTokenResponse } from "@/lib/oidc";
 import { useAuthStore, type AuthTokens } from "@/store/useAuthStore";
 
 /** Successful POST /api/v1/auth/refresh; /auth/login answers in the same shape. */
@@ -22,6 +23,14 @@ export const toTokens = ({ data }: TokenResponse, now: number): AuthTokens => ({
   expiresAt: now + data.expires_in * 1000,
 });
 
+/** Keycloak's token response (direct OIDC sign-in) as the stored session. */
+export const toOidcTokens = (res: OidcTokenResponse, now: number): AuthTokens => ({
+  accessToken: res.access_token,
+  refreshToken: res.refresh_token,
+  expiresAt: now + res.expires_in * 1000,
+  provider: "oidc",
+});
+
 // Refresh this long before the access token's expiry, so a request never leaves with a token about to lapse.
 const EXPIRY_SKEW_MS = 30_000;
 
@@ -38,10 +47,12 @@ export function refreshSession(): Promise<string | null> {
   inflight ??= (async () => {
     // An IAM session lives in IAM's cookies; the /api/v1 proxy renews it on the way, so there is nothing to do here.
     if (useAuthStore.getState().tokens?.provider === "iam") return null;
-    const refreshToken = useAuthStore.getState().tokens?.refreshToken;
+    const current = useAuthStore.getState().tokens;
+    const refreshToken = current?.refreshToken;
     if (!refreshToken) return null;
     try {
-      const tokens = toTokens(await apiPost<TokenResponse>("/auth/refresh", { refresh_token: refreshToken }), Date.now());
+      // A direct Keycloak session renews at Keycloak's token endpoint (a 400 there means the refresh token is spent).
+      const tokens = current?.provider === "oidc" ? toOidcTokens(await refreshOidcTokens(refreshToken), Date.now()) : toTokens(await apiPost<TokenResponse>("/auth/refresh", { refresh_token: refreshToken }), Date.now());
       useAuthStore.getState().setTokens(tokens);
       return tokens.accessToken;
     } catch (err) {

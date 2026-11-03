@@ -2,7 +2,7 @@
 
 **Audience:** DevOps / platform team.
 **App:** `oan_da_app_ui` (Next.js), Helm release `registry-frontend`, chart `/home/ubuntu/da/helm/charts/da-app` on the DA node, deployed by `Jenkinsfile`.
-**Status:** the portal's login does not work on `https://da-registry-development.oanstaging.com`. Two infrastructure changes are needed, described below. No application code change is needed after them.
+**Status (updated):** login now works on `https://da-registry-development.oanstaging.com` without a host change. Hosts outside IAM's cookie domain (`NEXT_PUBLIC_IAM_COOKIE_DOMAIN`, default `.development.oanstaging.com`) sign in with direct Keycloak (authorization code + PKCE, public client `da_registry`, `src/lib/loginProvider.ts` + `src/lib/oidc.ts`); the token is sent as `Authorization: Bearer`. Hosts under that domain keep the IAM cookie flow described below. Keycloak client `da_registry` must keep `https://da-registry-development.oanstaging.com/auth/callback` as a Valid Redirect URI and `https://da-registry-development.oanstaging.com` as a Web Origin. The host move in section 3.1 remains optional (it switches the portal back to the IAM cookie flow).
 
 ---
 
@@ -37,6 +37,29 @@ In DevTools → Network, `/api/v1/da-services/me` has no `X-Access-Token` in its
 
 ### 3.1 Serve the portal on a host under `.development.oanstaging.com` (DevOps)
 
+**Where things are today** (checked 2026-11-03):
+
+| Name | DNS | What answers |
+|---|---|---|
+| `da-registry-development.oanstaging.com` (portal today) | A record → `65.0.132.192`, the DA node | Next.js pod of Helm release `registry-frontend`, namespace `develop`, chart `/home/ubuntu/da/helm/charts/da-app` |
+| `*.development.oanstaging.com` (wildcard) | → `13.201.58.55`, the shared dev cluster | nginx 1.24 + Istio (`istio-system/development` gateway). Crop registry, IAM and Keycloak are here. |
+
+A new name under `.development.oanstaging.com` therefore lands on the shared dev cluster by default, not on the DA node. Pick **one** option:
+
+**Option A: route on the shared dev gateway to the DA node (no DNS or Helm change)**
+On the shared dev cluster (`13.201.58.55`), add a route for `da-portal.development.oanstaging.com` that proxies to the DA portal:
+- nginx `server` block (or an Istio `ServiceEntry` + `VirtualService` on `istio-system/development`) for host `da-portal.development.oanstaging.com`;
+- upstream `https://da-registry-development.oanstaging.com` (or `65.0.132.192`), sending `Host: da-registry-development.oanstaging.com` upstream, with `X-Forwarded-Host` / `X-Forwarded-Proto` set to the public host;
+- TLS: the existing `*.development.oanstaging.com` certificate covers it;
+- pass `Set-Cookie` and `Cookie` headers through unchanged.
+
+**Option B: serve the new name directly from the DA node**
+1. DNS: an explicit A record `da-portal.development.oanstaging.com → 65.0.132.192`. It overrides the wildcard.
+2. TLS certificate for that host on the DA node's ingress.
+3. Helm: add the host to the ingress of release `registry-frontend` in namespace `develop` (see step 3 below).
+
+Either way:
+
 1. **Choose the host.** `da-registry.development.oanstaging.com` is already taken by another app (title "Development agent registry", redirects to `/en/login`). Suggested: **`da-portal.development.oanstaging.com`**. Any free `*.development.oanstaging.com` name works.
 2. **DNS and TLS** for the new host, the same way the other `*.development.oanstaging.com` hosts are set up (shared `istio-system/development` gateway or the existing ingress and its certificate).
 3. **Route the host to the portal**: the `registry-frontend` Service in namespace `develop`, port 3000. Change the host in the release's ingress / VirtualService values.
@@ -44,11 +67,12 @@ In DevTools → Network, `/api/v1/da-services/me` has no `X-Access-Token` in its
    - The old host can keep pointing at the same Service during the switch.
 4. Do the same for staging when it is set up: the staging portal host must be under **IAM's cookie domain for staging**. Confirm that domain with whoever runs IAM staging.
 
-### 3.2 Allow the new host in IAM (backend / IAM admin)
+### 3.2 Keycloak and IAM: no change needed
 
-In oan_auth_service on the DA Services backend (`da-backend-development.oanstaging.com`), the **OAN IAM Service** row with key `agent`: add the new origin to its `return_origins`, e.g. `https://da-portal.development.oanstaging.com`. The portal sends `return_url = https://<host>/auth/callback`.
+- **Keycloak:** none. The login uses the existing `staff` realm and the `staff-portal` client, whose redirect URI is IAM's own callback, not the portal.
+- **IAM / oan_auth_service:** none. The current code does not keep a list of allowed return origins. `iam_login` only checks that `return_url` is an absolute http(s) URL (`oan_auth_service/api/v1/auth.py`, `iam_tokens.start_login`: *"IAM does not check `return_url`; the gateway decides who may call this"*). The **OAN IAM Service** doctype has no such field. The portal's new host is accepted as is.
 
-> Security note for the backend team: in a test on 2026-11-03, `POST /api/v1/auth/iam/login` accepted **any** `return_url` (`https://evil.example.com/auth/callback` included). Please restrict `return_origins` of the `agent` option to the portal hosts.
+> Security note for the backend team: because of the above, `POST /api/v1/auth/iam/login` accepts any `return_url` (`https://evil.example.com/auth/callback` was accepted in a test on 2026-11-03). Per the code comment, restricting callers is the gateway's job.
 
 ### 3.3 Backend URL in the running container (fixed in this repo)
 
@@ -104,7 +128,7 @@ In a browser:
 | Symptom | Cause | Fix |
 |---|---|---|
 | "IAM's session cookie did not reach this portal", no `X-Access-Token` in the `Cookie` header | Portal host is not under IAM's cookie domain | 3.1 |
-| `/login` shows an IAM error, or IAM refuses `return_url` | New origin not in the `agent` option's `return_origins` | 3.2 |
+| `/login` shows "return_url is not allowed" | `return_url` is not an absolute https URL (the portal must be opened on its https host) | 3.1 |
 | `/api/v1/...` answers `502 {"message":"Could not reach the server."}` | `API_BASE_URL` missing in the running pod | 3.3 (rebuild with the fixed Dockerfile, or set the pod env) |
 | `/api/v1/...` answers `401` **with** `X-Access-Token` in the `Cookie` header | The user has no DA Services role or no active DA RBAC assignment (the backend's `check_da_assignment`) | Assign the role in Keycloak / the DA RBAC Assignment |
 | Jenkins `Verify` stage fails after the switch | `verifyUrl` still points at the old host | 3.4 |

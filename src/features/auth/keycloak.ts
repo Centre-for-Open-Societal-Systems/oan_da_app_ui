@@ -1,9 +1,12 @@
 import { ApiError, apiRequest } from "@/lib/api";
 import { fetchIamMe, iamReturnUrl, startIamLogin } from "@/lib/iam";
+import { loginProviderFor } from "@/lib/loginProvider";
+import { buildOidcLoginUrl, endOidcSession, exchangeOidcCode, hasOidcResult, hasPendingOidcLogin } from "@/lib/oidc";
 import type { Role } from "@/lib/rbac";
 import type { AuthTokens } from "@/store/useAuthStore";
 import { toMeSession, type MeResponse } from "./me";
 import type { LoginResult } from "./login";
+import { toOidcTokens } from "./session";
 
 // Sign-in through the OAN auth service (IAM) and the staff Keycloak realm, the OAN standard (the grievance and registry
 // portals do the same). No client, redirect URI or token exchange of our own: IAM owns the authorization-code flow and
@@ -17,8 +20,10 @@ import type { LoginResult } from "./login";
 //  4. /auth/callback here asks GET /api/v1/da-services/me who is signed in. The browser sends IAM's cookies with it and
 //     the /api/v1 proxy turns them into the Bearer token and X-CSRF-Token the backend reads, renewing an expired token.
 //
-// The portal must therefore be served on a host under IAM's cookie domain (*.development.oanstaging.com on dev); on any
-// other host the browser never sends IAM's cookies and step 4 answers 401.
+// That needs the portal on a host under IAM's cookie domain (*.development.oanstaging.com on dev); on any other host the
+// browser never sends IAM's cookies and step 4 answers 401. Such hosts (da-registry-development.oanstaging.com,
+// localhost) sign in with direct Keycloak instead (lib/loginProvider): authorization code + PKCE against the public
+// client da_registry, the token pair kept in the auth store as provider "oidc" and sent as Bearer.
 
 const STATE_KEY = "oan-iam-login-state";
 
@@ -28,8 +33,12 @@ const forceLogin = () => process.env.NEXT_PUBLIC_IAM_PROMPT !== "none-forced";
 /** The stored session of an IAM sign-in: IAM's cookies hold the token, so there is nothing to keep but the marker. */
 export const IAM_SESSION: AuthTokens = { accessToken: "", refreshToken: "", expiresAt: 0, provider: "iam" };
 
-/** Steps 1-2: asks IAM for the authorize URL and opens it. The page is left behind, so this never resolves in practice. */
+/** Steps 1-2: opens the Keycloak sign-in for this host. The page is left behind, so this never resolves in practice. */
 export async function beginKeycloakLogin(): Promise<void> {
+  if (loginProviderFor(window.location.hostname) === "oidc") {
+    window.location.assign(await buildOidcLoginUrl(window.location.origin, { forceLogin: forceLogin() }));
+    return;
+  }
   const url = new URL(await startIamLogin(iamReturnUrl(window.location.origin)));
   const state = url.searchParams.get("state");
   if (url.searchParams.get("response_type") !== "code" || !state) throw new ApiError("IAM returned an unexpected sign-in address.", 502);
@@ -80,8 +89,45 @@ export function roleFromClaims(claims: Record<string, unknown> | null): Role {
   return roleFromNames(access?.["da-client"]?.roles ?? []);
 }
 
-/** Step 4: reads who IAM's cookies belong to and turns that into a session. `search` is the callback URL's query. */
+/** An OIDC sign-in that did not finish; its message is shown as is (never the IAM-cookie hint). */
+export class OidcLoginError extends ApiError {}
+
+/** Whether a callback URL is the return of a direct Keycloak (OIDC) sign-in rather than of IAM's flow. */
+export const isOidcCallback = (search: URLSearchParams, hostname = typeof window === "undefined" ? "" : window.location.hostname) =>
+  hasOidcResult(search) && (hasPendingOidcLogin() || loginProviderFor(hostname) === "oidc");
+
+const claimText = (claims: Record<string, unknown> | null, key: string) => (typeof claims?.[key] === "string" ? (claims[key] as string) : "");
+
+/** Direct Keycloak: trades the code for tokens, then asks /da-services/me with the access token as Bearer. */
+async function completeOidcLogin(search: URLSearchParams): Promise<LoginResult> {
+  let tokens: AuthTokens;
+  try {
+    tokens = toOidcTokens(await exchangeOidcCode(search, window.location.origin), Date.now());
+  } catch (err) {
+    throw new OidcLoginError(err instanceof Error ? err.message : "Keycloak did not issue a session.", err instanceof ApiError ? err.status : 400);
+  }
+  try {
+    const session = toMeSession(await apiRequest<MeResponse>("/da-services/me", { accessToken: tokens.accessToken }));
+    if (!session) throw new ApiError("Your account holds a role this portal does not know. Contact your administrator.", 403);
+    return { ...session, tokens };
+  } catch (err) {
+    if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+      // Signed in at Keycloak but not let into the portal: end that Keycloak session so nothing is left behind.
+      void endOidcSession(tokens.refreshToken);
+      const message = err.status === 401 ? "Keycloak signed you in, but the DA Services API did not accept the token. Contact your administrator." : err.message;
+      throw new OidcLoginError(message, err.status);
+    }
+    // API unreachable or failing: sign in on the token's claims; ProfileSync reads /me again on the next load.
+    const claims = tokenClaims(tokens.accessToken);
+    const email = claimText(claims, "email");
+    const name = claimText(claims, "name") || claimText(claims, "preferred_username") || email;
+    return { user: { id: claimText(claims, "sub") || email, name, email }, role: roleFromClaims(claims), tokens };
+  }
+}
+
+/** Step 4: turns the callback into a session. `search` is the callback URL's query. */
 export async function completeKeycloakLogin(search: URLSearchParams = new URLSearchParams()): Promise<LoginResult> {
+  if (isOidcCallback(search)) return completeOidcLogin(search);
   verifyLoginState(search);
   try {
     const session = toMeSession(await apiRequest<MeResponse>("/da-services/me"));
