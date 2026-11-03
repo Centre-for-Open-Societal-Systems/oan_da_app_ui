@@ -20,9 +20,12 @@ const FALLBACK_ROLE: Role = "DA";
 
 export const NO_ASSIGNMENT_MESSAGE = "Your account has no active role assignment yet. Contact your administrator.";
 
-/** POST /api/v1/da-services/auth/login: the backend signs the user in at IAM / Keycloak with these credentials. */
-export interface IamPasswordLoginResponse {
-  data: {
+/** POST /api/v1/da-services/sso/login: the backend signs the user in at IAM / Keycloak with these credentials. */
+export const SSO_LOGIN_PATH = "/da-services/sso/login";
+/** IAM login option the backend signs in through (the `OAN IAM Service` row). */
+const SSO_LOGIN_KEY = process.env.NEXT_PUBLIC_IAM_LOGIN_KEY || "agent";
+
+interface IamLoginData {
     /** IAM access token; also set as IAM's X-Access-Token cookie on this app's host. */
     access_token: string;
     token_type: string;
@@ -32,11 +35,16 @@ export interface IamPasswordLoginResponse {
     user: string;
     name: string | null;
     roles: string[];
-  };
+}
+
+/** The login data sits under `data` or, Frappe style, under `message`. */
+export interface IamPasswordLoginResponse {
+  data?: IamLoginData;
+  message?: IamLoginData;
 }
 
 /**
- * Username and password sign-in through IAM / Keycloak, run by the backend (POST /api/v1/da-services/auth/login), then
+ * Username and password sign-in through IAM / Keycloak, run by the backend (POST /api/v1/da-services/sso/login), then
  * GET /da-services/me for the name, role and scope the portal shows. The backend answers with IAM's session cookies,
  * which the /api/v1 proxy relays to this app's host: from then on the session is an IAM cookie session (the proxy sends
  * the token as Bearer and renews it), exactly as after the Keycloak redirect.
@@ -44,7 +52,9 @@ export interface IamPasswordLoginResponse {
  * out again and comes back as ApiError 403.
  */
 export async function login(usr: string, pwd: string): Promise<LoginResult> {
-  const { data } = await apiPost<IamPasswordLoginResponse>("/da-services/auth/login", { usr: usr.trim(), pwd });
+  const res = await apiPost<IamPasswordLoginResponse>(SSO_LOGIN_PATH, { username: usr.trim(), password: pwd, key: SSO_LOGIN_KEY });
+  const data = res.data ?? res.message;
+  if (!data?.access_token) throw new ApiError("Sign-in failed: the server sent no session.", 502);
   try {
     const session = toMeSession(await fetchMe(data.access_token, data.csrf_token ?? undefined));
     if (!session) throw new ApiError(NO_ASSIGNMENT_MESSAGE, 403);

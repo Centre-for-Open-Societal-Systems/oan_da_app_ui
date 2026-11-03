@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
 const CROP_SOWN = /^\/api\/v1\/da-services\/(crop-sown\/|farmers\/[^/]+\/crops$)/;
 const IAM_TOKEN_ROUTES = new Set(["/api/v1/auth/refresh", "/api/v1/auth/logout"]);
 /** Sign-in calls: a leftover (expired) session cookie must not ride along as Bearer, the backend would reject it. */
-const LOGIN_ROUTES = new Set(["/api/v1/da-services/auth/login", "/api/v1/auth/login"]);
+const LOGIN_ROUTES = new Set(["/api/v1/da-services/sso/login", "/api/v1/da-services/auth/login", "/api/v1/auth/login"]);
 const DROP_REQUEST = new Set(["host", "connection", "content-length", "accept-encoding", "x-forwarded-host", "x-forwarded-for", "x-forwarded-proto", "x-forwarded-port", "transfer-encoding"]);
 const DROP_RESPONSE = new Set(["content-encoding", "content-length", "transfer-encoding", "connection", "keep-alive"]);
 /** Header names the backend matches by exact spelling; everything else goes out as the browser named it (lowercase). */

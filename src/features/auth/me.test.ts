@@ -62,8 +62,8 @@ describe("login", () => {
 
     const result = await login(" admin@moa.gov.et ", "pw");
 
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/auth/login");
-    expect(JSON.parse(fetchMock.mock.calls[0][1]!.body as string)).toEqual({ usr: "admin@moa.gov.et", pwd: "pw" });
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/sso/login");
+    expect(JSON.parse(fetchMock.mock.calls[0][1]!.body as string)).toEqual({ username: "admin@moa.gov.et", password: "pw", key: "agent" });
     expect(fetchMock.mock.calls[1][0]).toBe("/api/v1/da-services/me");
     const headers = new Headers(fetchMock.mock.calls[1][1]!.headers);
     expect(headers.get("Authorization")).toBe("Bearer a1");
