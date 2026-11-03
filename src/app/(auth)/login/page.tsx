@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import { AutoKeycloakLogin } from "./components/AutoKeycloakLogin";
+import { LoginCard } from "./components/LoginCard";
 
 export const metadata: Metadata = {
   title: "Login | OpenAgriNet",
@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function LoginPage() {
-  return <AutoKeycloakLogin />;
+  return <LoginCard />;
 }

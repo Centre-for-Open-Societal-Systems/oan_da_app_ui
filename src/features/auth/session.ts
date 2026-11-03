@@ -49,7 +49,11 @@ export function refreshSession(): Promise<string | null> {
     if (useAuthStore.getState().tokens?.provider === "iam") return null;
     const current = useAuthStore.getState().tokens;
     const refreshToken = current?.refreshToken;
-    if (!refreshToken) return null;
+    if (!refreshToken) {
+      // A session without a refresh token (sso/login) cannot be renewed: once its token lapses, the user signs in again.
+      if (current) useAuthStore.getState().expireSession();
+      return null;
+    }
     try {
       // A direct Keycloak session renews at Keycloak's token endpoint (a 400 there means the refresh token is spent).
       const tokens = current?.provider === "oidc" ? toOidcTokens(await refreshOidcTokens(refreshToken), Date.now()) : toTokens(await apiPost<TokenResponse>("/auth/refresh", { refresh_token: refreshToken }), Date.now());
