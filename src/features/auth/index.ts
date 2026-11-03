@@ -7,4 +7,3 @@ export * from "./keycloak";
 export * from "./me";
 export * from "./components/ProfileSync";
 export * from "./components/SessionExpiredDialog";
-export * from "./components/SessionExpiryWatcher";

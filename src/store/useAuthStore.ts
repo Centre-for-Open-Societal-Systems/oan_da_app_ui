@@ -3,7 +3,8 @@ import { persist } from "zustand/middleware";
 import type { Role } from "@/lib/rbac";
 import { clearAllDrafts } from "@/lib/drafts";
 import { setCsrfProvider } from "@/lib/api";
-import { revokeIamSession, revokeRefreshToken } from "@/lib/authApi";
+import { revokeRefreshToken } from "@/lib/authApi";
+import { endIamSession } from "@/lib/iam";
 
 export interface AuthUser {
   id: string;
@@ -17,12 +18,13 @@ export interface AuthTokens {
   refreshToken: string;
   /** Epoch ms after which the access token is rejected. */
   expiresAt: number;
-  /** IAM-issued sessions only: sent as the X-CSRF-Token header on every call (see lib/iam's IamSession). */
+  /** Sent as the X-CSRF-Token header on every call when set. */
   csrfToken?: string;
   /**
-   * Where the tokens come from. "keycloak": issued through the IAM sign-in, no refresh token, so it ends at expiresAt.
+   * Where the session comes from. "iam": the IAM / Keycloak sign-in; the token stays in IAM's cookies (the fields above
+   * are empty) and the /api/v1 proxy sends and renews it.
    */
-  provider?: "keycloak";
+  provider?: "iam";
 }
 
 /** What GET /da-services/me says about the signed-in user beyond identity and role (see features/auth/me). */
@@ -87,7 +89,7 @@ export const useAuthStore = create<AuthState>()(
         clearAllDrafts();
         // Revoke server-side too, so a copied refresh token is useless once the user has logged out.
         const tokens = get().tokens;
-        if (tokens?.provider === "keycloak") void revokeIamSession(tokens.accessToken);
+        if (tokens?.provider === "iam") void endIamSession();
         else if (tokens?.refreshToken) void revokeRefreshToken(tokens.refreshToken);
         set({ user: null, isAuthenticated: false, tokens: null, profile: null, role: DEFAULT_ROLE, sessionExpired: false });
       },

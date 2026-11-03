@@ -1,27 +1,32 @@
-import { ApiError } from "@/lib/api";
-import { fetchIamMe, fetchIamSession, iamReturnUrl, startIamLogin } from "@/lib/iam";
+import { ApiError, apiRequest } from "@/lib/api";
+import { fetchIamMe, iamReturnUrl, startIamLogin } from "@/lib/iam";
 import type { Role } from "@/lib/rbac";
 import type { AuthTokens } from "@/store/useAuthStore";
-import { fetchMe, toMeSession } from "./me";
+import { toMeSession, type MeResponse } from "./me";
 import type { LoginResult } from "./login";
 
-// Sign-in through the OAN auth service (IAM) and the staff Keycloak realm. No client, redirect URI or token exchange
-// of our own: IAM owns the authorization-code flow.
+// Sign-in through the OAN auth service (IAM) and the staff Keycloak realm, the OAN standard (the grievance and registry
+// portals do the same). No client, redirect URI or token exchange of our own: IAM owns the authorization-code flow and
+// the session, and this app never holds the access token.
 //
-//  1. POST /api/v1/auth/iam/login (through the /iam-api proxy) returns redirect_url, the staff-realm authorize URL.
+//  1. POST /api/v1/auth/iam/login returns redirect_url, the staff-realm authorize URL.
 //  2. The browser leaves for that URL as a top-level navigation (+ prompt=login). Keycloak renders its own login form
 //     and posts it itself; this app never sees or sends the credentials.
-//  3. Keycloak returns to IAM's /auth/callback, which exchanges the code and sets X-Access-Token and X-CSRF-Token
-//     cookies for *.development.oanstaging.com, then sends the browser on to return_url (/api/auth/iam/complete).
-//  4. /auth/callback here reads both cookies via /api/auth/iam/session and stores the pair in the auth store.
+//  3. Keycloak returns to IAM's /auth/callback, which exchanges the code, sets its session cookies (X-Access-Token,
+//     X-Session-Id, X-CSRF-Token…) on the shared parent domain and sends the browser on to return_url (/auth/callback).
+//  4. /auth/callback here asks GET /api/v1/da-services/me who is signed in. The browser sends IAM's cookies with it and
+//     the /api/v1 proxy turns them into the Bearer token and X-CSRF-Token the backend reads, renewing an expired token.
 //
-// Every DA Services call then carries Authorization: Bearer <access token> and X-CSRF-Token (see session.authRequest).
-// A 401 or CSRF rejection clears the pair and starts this flow again with a fresh state; nothing is reused.
+// The portal must therefore be served on a host under IAM's cookie domain (*.development.oanstaging.com on dev); on any
+// other host the browser never sends IAM's cookies and step 4 answers 401.
 
 const STATE_KEY = "oan-iam-login-state";
 
 /** Whether the login form asks for credentials even when Keycloak still has a session for this browser. */
 const forceLogin = () => process.env.NEXT_PUBLIC_IAM_PROMPT !== "none-forced";
+
+/** The stored session of an IAM sign-in: IAM's cookies hold the token, so there is nothing to keep but the marker. */
+export const IAM_SESSION: AuthTokens = { accessToken: "", refreshToken: "", expiresAt: 0, provider: "iam" };
 
 /** Steps 1-2: asks IAM for the authorize URL and opens it. The page is left behind, so this never resolves in practice. */
 export async function beginKeycloakLogin(): Promise<void> {
@@ -66,36 +71,28 @@ const ROLE_PATTERNS: [Role, RegExp][] = [
   ["DA", /\bda\b|development[_ ]agent/i],
 ];
 
-/** The portal role for the roles in a token; the most senior match wins, a Development Agent otherwise. */
+/** The portal role for a list of role names; the most senior match wins, a Development Agent otherwise. */
+export const roleFromNames = (roles: string[]): Role => ROLE_PATTERNS.find(([, pattern]) => roles.some((r) => pattern.test(r)))?.[0] ?? "DA";
+
+/** The portal role for the roles in a token. */
 export function roleFromClaims(claims: Record<string, unknown> | null): Role {
   const access = claims?.resource_access as Record<string, { roles?: string[] }> | undefined;
-  const roles = access?.["da-client"]?.roles ?? [];
-  return ROLE_PATTERNS.find(([, pattern]) => roles.some((r) => pattern.test(r)))?.[0] ?? "DA";
+  return roleFromNames(access?.["da-client"]?.roles ?? []);
 }
 
-/**
- * Who a token belongs to. GET /da-services/me gives the role, scope and menu when the API accepts the token; else
- * the identity comes from the token's own claims (and, for an IAM token, IAM's /auth/me).
- */
-async function sessionFor(tokens: AuthTokens): Promise<LoginResult> {
-  try {
-    const session = toMeSession(await fetchMe(tokens.accessToken, tokens.csrfToken));
-    if (session) return { ...session, tokens };
-  } catch {
-    // The API does not know this account (yet) or is unreachable: fall back to what the token says.
-  }
-
-  const claims = tokenClaims(tokens.accessToken);
-  const me = await fetchIamMe(tokens.accessToken).catch(() => null);
-  if (!me && !claims) throw new ApiError("Could not read your account after signing in.", 0);
-  const name = [me?.first_name, me?.last_name].filter(Boolean).join(" ") || String(claims?.name ?? "");
-  const email = me?.login_email ?? String(claims?.email ?? "");
-  return { user: { id: me?.user ?? String(claims?.sub ?? email), name: name || email, email }, role: roleFromClaims(claims), tokens };
-}
-
-/** Step 4: turns the cookies IAM left for this page into a session. `search` is the callback URL's query. */
+/** Step 4: reads who IAM's cookies belong to and turns that into a session. `search` is the callback URL's query. */
 export async function completeKeycloakLogin(search: URLSearchParams = new URLSearchParams()): Promise<LoginResult> {
   verifyLoginState(search);
-  const { access_token: accessToken, csrf_token: csrfToken, expires_at: expiresAt } = await fetchIamSession();
-  return sessionFor({ accessToken, refreshToken: "", expiresAt, provider: "keycloak", csrfToken: csrfToken ?? undefined });
+  try {
+    const session = toMeSession(await apiRequest<MeResponse>("/da-services/me"));
+    if (session) return { ...session, tokens: IAM_SESSION };
+  } catch (err) {
+    // No IAM cookie reached this app: the sign-in did not produce a session here.
+    if (err instanceof ApiError && err.status === 401) throw err;
+    // Otherwise the API does not know this account (yet) or is unreachable: fall back to IAM's own record.
+  }
+  const me = await fetchIamMe();
+  const email = me.login_email ?? "";
+  const name = [me.first_name, me.last_name].filter(Boolean).join(" ") || email;
+  return { user: { id: me.user, name, email }, role: roleFromNames(me.roles ?? []), tokens: IAM_SESSION };
 }
