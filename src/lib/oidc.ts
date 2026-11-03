@@ -5,7 +5,7 @@
 import { ApiError } from "@/lib/api";
 
 /** Client id of the public Keycloak client. Leave unset to sign in through IAM instead. */
-export const OIDC_CLIENT_ID = process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID ?? "";
+export const OIDC_CLIENT_ID = process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID ?? "da_registry";
 const ISSUER = (process.env.NEXT_PUBLIC_KEYCLOAK_URL ?? "https://keycloak.development.oanstaging.com/realms/staff").replace(/\/$/, "");
 const ENDPOINT = `${ISSUER}/protocol/openid-connect`;
 
