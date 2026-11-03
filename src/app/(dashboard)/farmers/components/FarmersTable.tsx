@@ -55,7 +55,7 @@ const EXPORT_COLUMNS: CsvColumn<Farmer>[] = [
   { header: "Kebele", value: (f) => f.kebele },
   { header: "Woreda", value: (f) => f.woreda },
   { header: "Crop", value: (f) => f.crop },
-  { header: "Land (ha)", value: (f) => f.landHa },
+  { header: "Land (ha)", value: (f) => (f.landUnknown ? "" : f.landHa) },
   { header: "Livestock", value: (f) => f.livestock },
   { header: "Livestock (heads)", value: (f) => f.livestockHeads },
   { header: "Registered date", value: (f) => `${f.registeredAt} ${f.registeredTime}` },
@@ -259,7 +259,7 @@ export function FarmersTable() {
                       <FarmerAvatar name={farmer.name} avatar={farmer.avatar} />
                       <div className="leading-tight">
                         <p className="font-medium text-ink">{farmer.name}</p>
-                        <p className="mt-0.5 text-[13px] text-muted">{[farmer.regId, farmer.phone].filter(Boolean).join(" · ")}</p>
+                        <p className="mt-0.5 text-[13px] text-muted">{[farmer.regId, farmer.phone || "—"].filter(Boolean).join(" · ")}</p>
                       </div>
                     </div>
                   </td>
@@ -267,8 +267,8 @@ export function FarmersTable() {
                     {farmer.kebele}
                     <p className="mt-0.5 text-[13px] text-muted">{[farmer.woreda, farmer.region].filter(Boolean).join(", ")}</p>
                   </td>
-                  <td className="px-4 py-3.5">{farmer.landHa} ha</td>
-                  <td className="px-4 py-3.5 text-center">{farmer.totalPlots}</td>
+                  <td className="px-4 py-3.5">{farmer.landUnknown ? "—" : `${farmer.landHa} ha`}</td>
+                  <td className="px-4 py-3.5 text-center">{farmer.plotsUnknown ? "—" : farmer.totalPlots}</td>
                   <td className="px-4 py-3.5 text-center leading-tight">
                     {farmer.registeredAt}
                     <br />

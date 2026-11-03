@@ -7,6 +7,10 @@ export class ApiError extends Error {
     message: string,
     /** HTTP status; 0 when the request never reached the server. */
     readonly status: number,
+    /** A 400's `details`: field name → what is wrong with it. */
+    readonly details?: Record<string, string>,
+    /** The error `code` the backend sent, e.g. VALIDATION_ERROR or PERMISSION_DENIED. */
+    readonly code?: string,
   ) {
     super(message);
     this.name = "ApiError";
@@ -55,11 +59,24 @@ export async function apiRequest<T>(path: string, { method = "GET", body, access
   }
 
   const data = await res.json().catch(() => null);
-  if (!res.ok) throw new ApiError(errorMessage(data) ?? `Request failed (${res.status}).`, res.status);
+  if (!res.ok) throw new ApiError(errorMessage(data) ?? `Request failed (${res.status}).`, res.status, errorDetails(data), errorCode(data));
   return data as T;
 }
 
 export const apiPost = <T>(path: string, body: unknown) => apiRequest<T>(path, { method: "POST", body });
+
+/** A 400's `details` as field → text; undefined when the body has none. */
+export function errorDetails(data: unknown): Record<string, string> | undefined {
+  const raw = data && typeof data === "object" ? (data as Record<string, unknown>).details : undefined;
+  if (!raw || typeof raw !== "object") return undefined;
+  const entries = Object.entries(raw).filter((e): e is [string, string] => typeof e[1] === "string" && !!e[1].trim());
+  return entries.length ? Object.fromEntries(entries) : undefined;
+}
+
+function errorCode(data: unknown): string | undefined {
+  const code = data && typeof data === "object" ? (data as Record<string, unknown>).code : undefined;
+  return typeof code === "string" ? code : undefined;
+}
 
 // Error bodies carry their text under `message` (Frappe), `error` or `detail`; take the first readable one.
 // A generic "Validation failed" names the broken fields under `details`, which say more than it does.

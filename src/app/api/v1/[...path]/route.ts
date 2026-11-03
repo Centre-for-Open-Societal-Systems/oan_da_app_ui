@@ -49,6 +49,18 @@ async function forward(request: NextRequest): Promise<Response> {
       }
       // Dev only: visible in the browser's Network tab, response headers.
       if (process.env.NODE_ENV !== "production") out.set("x-debug-csrf-header-to-backend", sentCsrfAs ?? "(none)");
+      // Dev only: a failed call's status and the start of its body go to the dev server log. Error bodies are small, so
+      // the whole body is read once and handed on unchanged.
+      if (process.env.NODE_ENV !== "production" && (res.statusCode ?? 0) >= 400) {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => {
+          const buffer = Buffer.concat(chunks);
+          console.log(`[api] ${request.method} ${target.pathname} <- ${res.statusCode} ${buffer.toString("utf8").slice(0, 400)}`);
+          resolve(new Response(buffer, { status: res.statusCode ?? 502, headers: out }));
+        });
+        return;
+      }
       const noBody = request.method === "HEAD" || res.statusCode === 204 || res.statusCode === 304;
       resolve(new Response(noBody ? null : (Readable.toWeb(res) as ReadableStream), { status: res.statusCode ?? 502, headers: out }));
     });
