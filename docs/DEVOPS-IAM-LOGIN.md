@@ -2,7 +2,7 @@
 
 **Audience:** DevOps / platform team.
 **App:** `oan_da_app_ui` (Next.js), Helm release `registry-frontend`, chart `/home/ubuntu/da/helm/charts/da-app` on the DA node, deployed by `Jenkinsfile`.
-**Status:** the portal's login does not work on `https://da-registry-development.oanstaging.com`. One infrastructure change is needed: a new host for the portal (DNS + gateway / ingress, section 3.1). Keycloak and IAM need no change. No application code change is needed after it.
+**Status (updated):** login now works on `https://da-registry-development.oanstaging.com` without a host change. Hosts outside IAM's cookie domain (`NEXT_PUBLIC_IAM_COOKIE_DOMAIN`, default `.development.oanstaging.com`) sign in with direct Keycloak (authorization code + PKCE, public client `da_registry`, `src/lib/loginProvider.ts` + `src/lib/oidc.ts`); the token is sent as `Authorization: Bearer`. Hosts under that domain keep the IAM cookie flow described below. Keycloak client `da_registry` must keep `https://da-registry-development.oanstaging.com/auth/callback` as a Valid Redirect URI and `https://da-registry-development.oanstaging.com` as a Web Origin. The host move in section 3.1 remains optional (it switches the portal back to the IAM cookie flow).
 
 ---
 

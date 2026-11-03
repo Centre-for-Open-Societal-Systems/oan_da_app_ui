@@ -5,6 +5,7 @@ import { clearAllDrafts } from "@/lib/drafts";
 import { setCsrfProvider } from "@/lib/api";
 import { revokeRefreshToken } from "@/lib/authApi";
 import { endIamSession } from "@/lib/iam";
+import { endOidcSession } from "@/lib/oidc";
 
 export interface AuthUser {
   id: string;
@@ -22,9 +23,11 @@ export interface AuthTokens {
   csrfToken?: string;
   /**
    * Where the session comes from. "iam": the IAM / Keycloak sign-in; the token stays in IAM's cookies (the fields above
-   * are empty) and the /api/v1 proxy sends and renews it.
+   * are empty) and the /api/v1 proxy sends and renews it. "oidc": direct Keycloak sign-in (lib/oidc) on hosts outside
+   * IAM's cookie domain; the fields above hold Keycloak's pair, renewed and ended at Keycloak. Unset: the backend's
+   * own /auth/login pair.
    */
-  provider?: "iam";
+  provider?: "iam" | "oidc";
 }
 
 /** What GET /da-services/me says about the signed-in user beyond identity and role (see features/auth/me). */
@@ -90,6 +93,9 @@ export const useAuthStore = create<AuthState>()(
         // Revoke server-side too, so a copied refresh token is useless once the user has logged out.
         const tokens = get().tokens;
         if (tokens?.provider === "iam") void endIamSession();
+        else if (tokens?.provider === "oidc") {
+          if (tokens.refreshToken) void endOidcSession(tokens.refreshToken);
+        }
         else if (tokens?.refreshToken) void revokeRefreshToken(tokens.refreshToken);
         set({ user: null, isAuthenticated: false, tokens: null, profile: null, role: DEFAULT_ROLE, sessionExpired: false });
       },

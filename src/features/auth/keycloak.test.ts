@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuthStore } from "@/store/useAuthStore";
 import { authRequest } from "./session";
-import { IAM_SESSION, completeKeycloakLogin, roleFromClaims, roleFromNames, tokenClaims } from "./keycloak";
+import { IAM_SESSION, OidcLoginError, beginKeycloakLogin, completeKeycloakLogin, roleFromClaims, roleFromNames, tokenClaims } from "./keycloak";
 
 // Minimal in-memory Storage so the persisted auth store runs under Node.
 class MemoryStorage implements Storage {
@@ -106,5 +106,94 @@ describe("an IAM session", () => {
     fetchMock.mockResolvedValueOnce(json({ message: "Registry unavailable" }, 503));
     await expect(authRequest("/da-services/farmers")).rejects.toMatchObject({ status: 503 });
     expect(useAuthStore.getState().isAuthenticated).toBe(true);
+  });
+});
+
+describe("direct Keycloak (OIDC) on hosts outside IAM's cookie domain", () => {
+  const ORIGIN = "https://da-registry-development.oanstaging.com";
+  const location = { hostname: "da-registry-development.oanstaging.com", origin: ORIGIN, assign: vi.fn() };
+  const KC = "https://keycloak.development.oanstaging.com/realms/staff/protocol/openid-connect";
+
+  beforeEach(() => {
+    location.assign.mockReset();
+    vi.stubGlobal("window", { location });
+  });
+
+  /** Runs beginKeycloakLogin and returns the authorize URL it opened. */
+  const begin = async () => {
+    await beginKeycloakLogin();
+    return new URL(location.assign.mock.calls[0][0] as string);
+  };
+
+  it("sends the deployed host straight to Keycloak with client da_registry and its own callback (no IAM call)", async () => {
+    const url = await begin();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(url.origin + url.pathname).toBe(`${KC}/auth`);
+    expect(url.searchParams.get("client_id")).toBe("da_registry");
+    expect(url.searchParams.get("redirect_uri")).toBe(`${ORIGIN}/auth/callback`);
+    expect(url.searchParams.get("code_challenge_method")).toBe("S256");
+  });
+
+  it("keeps IAM's flow on a host under .development.oanstaging.com", async () => {
+    location.hostname = "da-portal.development.oanstaging.com";
+    fetchMock.mockResolvedValueOnce(json({ data: { redirect_url: `${KC}/auth?response_type=code&state=s1&client_id=staff-portal` } }));
+    try {
+      const url = await begin();
+      expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/auth/iam/login");
+      expect(url.searchParams.get("client_id")).toBe("staff-portal");
+    } finally {
+      location.hostname = "da-registry-development.oanstaging.com";
+    }
+  });
+
+  it("exchanges the code, reads /me with the Bearer token and stores the pair as provider oidc", async () => {
+    const state = (await begin()).searchParams.get("state")!;
+    fetchMock.mockResolvedValueOnce(json({ access_token: TOKEN, refresh_token: "kc-refresh", expires_in: 300 })).mockResolvedValueOnce(json(ME));
+
+    const result = await completeKeycloakLogin(new URLSearchParams({ code: "c1", state }));
+    expect(fetchMock.mock.calls[0][0]).toBe(`${KC}/token`);
+    expect(Object.fromEntries(new URLSearchParams(String(fetchMock.mock.calls[0][1]?.body)))).toMatchObject({ grant_type: "authorization_code", client_id: "da_registry", code: "c1", redirect_uri: `${ORIGIN}/auth/callback` });
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/v1/da-services/me");
+    expect(headersOf(1).Authorization).toBe(`Bearer ${TOKEN}`);
+    expect(result).toMatchObject({ role: "DA", tokens: { accessToken: TOKEN, refreshToken: "kc-refresh", provider: "oidc" } });
+  });
+
+  it("reports an API refusal as an OIDC error (not the IAM-cookie one) and ends the Keycloak session", async () => {
+    const state = (await begin()).searchParams.get("state")!;
+    fetchMock
+      .mockResolvedValueOnce(json({ access_token: TOKEN, refresh_token: "kc-refresh", expires_in: 300 }))
+      .mockResolvedValueOnce(json({ message: "Authentication failed" }, 401))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    const err = await completeKeycloakLogin(new URLSearchParams({ code: "c1", state })).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(OidcLoginError);
+    expect((err as OidcLoginError).message).toMatch(/did not accept the token/);
+    expect(fetchMock.mock.calls[2][0]).toBe(`${KC}/logout`);
+  });
+
+  it("reports a failed code exchange as an OIDC error", async () => {
+    const state = (await begin()).searchParams.get("state")!;
+    fetchMock.mockResolvedValueOnce(json({ error: "invalid_grant", error_description: "Code not valid" }, 400));
+    await expect(completeKeycloakLogin(new URLSearchParams({ code: "c1", state }))).rejects.toBeInstanceOf(OidcLoginError);
+  });
+
+  it("sends the Bearer token, renews at Keycloak after a 401 and ends the Keycloak session on logout", async () => {
+    useAuthStore.getState().signIn({ id: "u", name: "u", email: "u" }, "DA", { accessToken: "old", refreshToken: "kc-r0", expiresAt: Date.now() + 600_000, provider: "oidc" });
+    fetchMock
+      .mockResolvedValueOnce(json({ message: "expired" }, 401))
+      .mockResolvedValueOnce(json({ access_token: "new", refresh_token: "kc-r1", expires_in: 300 }))
+      .mockResolvedValueOnce(json({ ok: true }));
+
+    await expect(authRequest("/da-services/me")).resolves.toEqual({ ok: true });
+    expect(headersOf(0).Authorization).toBe("Bearer old");
+    expect(fetchMock.mock.calls[1][0]).toBe(`${KC}/token`);
+    expect(Object.fromEntries(new URLSearchParams(String(fetchMock.mock.calls[1][1]?.body)))).toMatchObject({ grant_type: "refresh_token", refresh_token: "kc-r0", client_id: "da_registry" });
+    expect(headersOf(2).Authorization).toBe("Bearer new");
+    expect(useAuthStore.getState().tokens).toMatchObject({ accessToken: "new", refreshToken: "kc-r1", provider: "oidc" });
+
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    useAuthStore.getState().logout();
+    expect(fetchMock.mock.calls[3][0]).toBe(`${KC}/logout`);
+    expect(String(fetchMock.mock.calls[3][1]?.body)).toContain("refresh_token=kc-r1");
   });
 });
