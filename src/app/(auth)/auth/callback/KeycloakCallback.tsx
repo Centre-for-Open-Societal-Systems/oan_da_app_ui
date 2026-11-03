@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ErrorAlert } from "@/components/ui/ErrorAlert";
 import { Spinner } from "@/components/ui/Spinner";
-import { completeKeycloakLogin } from "@/features/auth";
+import { OidcLoginError, completeKeycloakLogin } from "@/features/auth";
 import { ApiError } from "@/lib/api";
 import { useAuthStore } from "@/store/useAuthStore";
 import { AuthCard } from "../../components/AuthCard";
@@ -17,7 +17,9 @@ const NO_COOKIE_MESSAGE =
 class ReportedError extends Error {}
 
 function callbackErrorMessage(err: unknown): string {
-  if (err instanceof ReportedError) return err.message;
+  // Keycloak/IAM errors from the URL and direct Keycloak (OIDC) failures say what went wrong themselves; the cookie
+  // hint below is only about IAM's cookie flow.
+  if (err instanceof ReportedError || err instanceof OidcLoginError) return err.message;
   if (err instanceof ApiError) {
     if (err.status === 401) return NO_COOKIE_MESSAGE;
     return err.message;
@@ -25,8 +27,8 @@ function callbackErrorMessage(err: unknown): string {
   return "Something went wrong while signing in. Please try again.";
 }
 
-// /auth/callback: where IAM returns the browser after the Keycloak sign-in (the login's return_url). Reads who IAM's
-// cookies belong to, stores the session in the browser (the auth store persists to localStorage) and opens the dashboard.
+// /auth/callback: where Keycloak (direct OIDC: code + state) or IAM (its return_url) sends the browser back. Finishes the
+// sign-in for that flow, stores the session in the browser (the auth store persists to localStorage) and opens the dashboard.
 export function KeycloakCallback() {
   const router = useRouter();
   const signIn = useAuthStore((s) => s.signIn);
