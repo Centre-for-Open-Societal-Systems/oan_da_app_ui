@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { ApiIntakeForm } from "./cropSownApi";
-import { apiSectionIds, loadIntakeForm, optionLabel, STAGE_PLANS } from "./cropSownSubmit";
+import { apiSectionIds, loadIntakeForm, optionLabel, stagePlanOf } from "./cropSownSubmit";
 
 /**
  * The live field list of the registry form behind a tab (GET /crop-sown/intake-form): the choices of its catalog
@@ -10,7 +10,7 @@ import { apiSectionIds, loadIntakeForm, optionLabel, STAGE_PLANS } from "./cropS
  * keeps its built-in options.
  */
 export function useIntakeFields(tab: string) {
-  const form = STAGE_PLANS[tab]?.form;
+  const form = stagePlanOf(tab)?.form;
   const [loaded, setLoaded] = useState<{ form: string; intake: ApiIntakeForm } | null>(null);
 
   useEffect(() => {
