@@ -11,7 +11,17 @@ import { EDUCATION_TIERS, SAMPLE_CERTIFICATES, SPECIALIZATIONS, type Certificate
 import { LEARNING_SUMMARY } from "@/features/farmers";
 import { UploadCertificateModal } from "./UploadCertificateModal";
 
-export function QualificationsSection() {
+interface Props {
+  /** From the DA Registry profile (GET /profile/me); the sample defaults when absent. */
+  educationTier?: string;
+  specialisation?: string;
+}
+
+// Education tier and specialisation show the registry's values; a change to them goes through "Edit profile"
+// (a Qualifications change request). Certificates and the Agrilearn summary stay samples until their APIs exist.
+export function QualificationsSection({ educationTier, specialisation }: Props = {}) {
+  const tierOptions = educationTier && !EDUCATION_TIERS.includes(educationTier) ? [educationTier, ...EDUCATION_TIERS] : EDUCATION_TIERS;
+  const specialisationOptions = specialisation && !SPECIALIZATIONS.includes(specialisation) ? [specialisation, ...SPECIALIZATIONS] : SPECIALIZATIONS;
   const [certificates, setCertificates] = useState<Certificate[]>(SAMPLE_CERTIFICATES);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -36,15 +46,15 @@ export function QualificationsSection() {
       <form className="flex flex-col gap-5 px-5 py-5" onSubmit={(e) => e.preventDefault()}>
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <FormField label="Education tier" htmlFor="educationTier" required>
-            <Select id="educationTier" name="educationTier" defaultValue="Diploma">
-              {EDUCATION_TIERS.map((tier) => (
+            <Select id="educationTier" name="educationTier" key={educationTier ?? "sample"} defaultValue={educationTier ?? "Diploma"}>
+              {tierOptions.map((tier) => (
                 <option key={tier} value={tier}>{tier}</option>
               ))}
             </Select>
           </FormField>
           <FormField label="Specialization" htmlFor="specialization" required>
-            <Select id="specialization" name="specialization" defaultValue={SPECIALIZATIONS[0]}>
-              {SPECIALIZATIONS.map((s) => (
+            <Select id="specialization" name="specialization" key={specialisation ?? "sample"} defaultValue={specialisation ?? SPECIALIZATIONS[0]}>
+              {specialisationOptions.map((s) => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </Select>

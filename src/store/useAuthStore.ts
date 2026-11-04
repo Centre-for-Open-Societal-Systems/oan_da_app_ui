@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Role } from "@/lib/rbac";
 import { clearAllDrafts } from "@/lib/drafts";
-import { revokeRefreshToken } from "@/lib/authApi";
+import { endIamSession, revokeRefreshToken } from "@/lib/authApi";
 
 export interface AuthUser {
   id: string;
@@ -10,12 +10,22 @@ export interface AuthUser {
   email: string;
 }
 
+/** "local": a DA Services password session. "iam": a staff IAM (Keycloak) session, see features/auth/iam. */
+export type AuthSessionKind = "local" | "iam";
+
 /** Bearer tokens from POST /api/v1/auth/login, rotated by /auth/refresh (see features/auth/session). */
 export interface AuthTokens {
   accessToken: string;
-  refreshToken: string;
+  /** Rotating refresh token of a local session; a staff IAM session has none (the IAM refreshes from its cookies). */
+  refreshToken?: string;
   /** Epoch ms after which the access token is rejected. */
   expiresAt: number;
+  /** Missing on sessions stored before IAM sign-in existed, which were all local. */
+  kind?: AuthSessionKind;
+  /** The IAM's double-submit CSRF value, sent as X-CSRF-Token with every call of an IAM session. */
+  csrfToken?: string;
+  /** The login option (e.g. "agent") an IAM session came from. */
+  loginOption?: string;
 }
 
 /** What GET /da-services/me says about the signed-in user beyond identity and role (see features/auth/me). */
@@ -73,9 +83,10 @@ export const useAuthStore = create<AuthState>()(
       logout: () => {
         // Drafts hold farmer and visit personal data; none of it may outlive the session.
         clearAllDrafts();
-        // Revoke server-side too, so a copied refresh token is useless once the user has logged out.
-        const refreshToken = get().tokens?.refreshToken;
-        if (refreshToken) void revokeRefreshToken(refreshToken);
+        // End the session server-side too, so a copied token is useless once the user has logged out.
+        const tokens = get().tokens;
+        if (tokens?.kind === "iam") void endIamSession(tokens.accessToken);
+        else if (tokens?.refreshToken) void revokeRefreshToken(tokens.refreshToken);
         set({ user: null, isAuthenticated: false, tokens: null, profile: null, role: DEFAULT_ROLE });
       },
       setHasHydrated: (value) => set({ hasHydrated: value }),

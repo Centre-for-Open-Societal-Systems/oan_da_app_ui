@@ -32,7 +32,7 @@ export async function login(usr: string, pwd: string): Promise<LoginResult> {
     return { ...session, tokens: result.tokens };
   } catch (err) {
     if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
-      void revokeRefreshToken(result.tokens.refreshToken);
+      if (result.tokens.refreshToken) void revokeRefreshToken(result.tokens.refreshToken);
       throw new ApiError(NO_ASSIGNMENT_MESSAGE, 403);
     }
     // /me unreachable: sign in on the login response alone; AuthHydration reads /me again on the next load.

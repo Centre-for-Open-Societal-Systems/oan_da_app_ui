@@ -3,28 +3,42 @@
 import { Card } from "@/components/ui/Card";
 import { Banner } from "@/components/ui/Banner";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PageLoader } from "@/components/ui/PageLoader";
 import { ApprovalDetail } from "./ApprovalDetail";
 import { ApprovalQueue } from "./ApprovalQueue";
-import { PublishedModal } from "./PublishedModal";
+import { ApprovedModal } from "./ApprovedModal";
 import { ReviewDecisionModal } from "./ReviewDecisionModal";
 import { useApprovals } from "./useApprovals";
 
-// Woreda review of DA self-initiated changes: verify → approve & publish to the master DA Registry.
-// Reject and Request changes need a reviewer note; every decision appends to the audit trail.
+// Woreda review of DA self-initiated profile changes (GET /profile/change-requests?status=Pending): verify →
+// approve sends the change on to the DA Registry; reject and request changes need a reviewer note. Every decision
+// is POST /profile/change-requests/{id}/decide and lands in the audit trail.
 export function ApprovalsWorkspace() {
   const a = useApprovals();
   const { selected } = a;
 
+  if (a.loading) return <PageLoader label="Loading the approval queue…" />;
+  if (a.loadError) {
+    return (
+      <Card className="shadow-card">
+        <EmptyState tone="error" title="The approval queue could not be loaded" hint={a.loadError} actionLabel="Try again" onAction={a.reload} />
+      </Card>
+    );
+  }
+
   return (
     <>
+      {a.error && <Banner tone="error" onDismiss={a.dismissError}>{a.error}</Banner>}
       {a.outcome && <Banner tone={a.outcome.tone} onDismiss={a.dismissOutcome}>{a.outcome.text}</Banner>}
+      {!a.canDecide && <Banner tone="info">You can review this queue, but only the Woreda supervisor or an administrator can decide a request.</Banner>}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[350px_1fr]">
         <ApprovalQueue
           tab={a.tab}
           onTabChange={a.setTab}
-          kebele={a.kebele}
-          onKebeleChange={a.setKebele}
+          woreda={a.woreda}
+          onWoredaChange={a.setWoreda}
+          woredas={a.woredas}
           list={a.list}
           selectedId={selected?.id}
           onSelect={a.setSelectedId}
@@ -34,7 +48,8 @@ export function ApprovalsWorkspace() {
           allChecked={a.allChecked}
           checkableCount={a.checkable.length}
           checkedInView={a.checkedInView}
-          onApprove={(ids) => a.decide(ids, "approve", "")}
+          canDecide={a.canDecide && !a.deciding}
+          onApprove={(ids) => void a.decide(ids, "approve", "")}
           onReject={(ids) => a.openReview(ids)}
         />
 
@@ -44,12 +59,13 @@ export function ApprovalsWorkspace() {
             request={selected}
             note={a.notes[selected.id] ?? ""}
             onNoteChange={(value) => a.setNote(selected.id, value)}
+            canDecide={a.canDecide && !a.deciding}
             onReview={() => a.openReview([selected.id], a.notes[selected.id] ?? "")}
-            onApprove={() => a.decide([selected.id], "approve", "")}
+            onApprove={() => void a.decide([selected.id], "approve", a.notes[selected.id]?.trim() ?? "")}
           />
         ) : (
           <Card className="shadow-card">
-            <EmptyState title="Select a request" hint="Choose a request from the queue to verify its data and audit trail." />
+            <EmptyState title={a.list.length === 0 ? "Queue is clear" : "Select a request"} hint={a.list.length === 0 ? "No profile change requests are waiting for your review." : "Choose a request from the queue to verify its data and audit trail."} />
           </Card>
         )}
       </div>
@@ -63,7 +79,7 @@ export function ApprovalsWorkspace() {
         onSubmit={a.submitReview}
       />
 
-      <PublishedModal count={a.publishedCount} onClose={a.closePublished} />
+      <ApprovedModal result={a.approved} onClose={a.closeApproved} />
     </>
   );
 }

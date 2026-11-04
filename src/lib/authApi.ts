@@ -19,3 +19,21 @@ export async function revokeRefreshToken(refreshToken: string): Promise<void> {
     // Offline or backend down: the token simply expires on its own.
   }
 }
+
+/**
+ * POST /api/v1/auth/logout for a staff IAM session: the backend ends the IAM session from the IAM cookies the
+ * browser sends along (shared parent domain) and relays the clearing cookies. Best effort, like the local one.
+ */
+export async function endIamSession(accessToken: string): Promise<void> {
+  try {
+    await fetch("/api/v1/auth/logout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ access_token: accessToken }),
+      credentials: "same-origin",
+      keepalive: true,
+    });
+  } catch {
+    // Offline or backend down: the IAM session expires on its own (5 minutes on dev).
+  }
+}

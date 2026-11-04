@@ -8,6 +8,9 @@ const nextConfig: NextConfig = {
   devIndicators: {
     position: "bottom-right",
   },
+  // The staff IAM sets its sign-in cookies on development.oanstaging.com, so locally the app is opened as
+  // https://da-local.development.oanstaging.com:3000 (README, "Staff sign-in"); the dev server must allow that host.
+  allowedDevOrigins: ["da-local.development.oanstaging.com"],
   // Knowledge Base video covers are YouTube thumbnails.
   images: {
     remotePatterns: [{ protocol: "https", hostname: "i.ytimg.com", pathname: "/vi/**" }],

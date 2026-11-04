@@ -8,7 +8,7 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { AdvancedFiltersButton } from "@/components/ui/AdvancedFiltersButton";
 import { FilterDropdown, type FilterOption } from "@/components/ui/FilterDropdown";
 import { AdvancedFiltersDrawer, type FilterFieldConfig, type FilterSelection } from "@/components/ui/AdvancedFiltersDrawer";
-import { ACTIVE_TONE, type Agent } from "@/features/agents";
+import { ACTIVE_TONE, type TeamMember } from "@/features/agents";
 import { matchesQuery, searchPlaceholder } from "@/lib/search";
 
 const SEARCH_PLACEHOLDER = searchPlaceholder(["Name", "DA-ID", "Kebele", "Specialisation", "Phone"]);
@@ -22,8 +22,9 @@ interface TeamFilters extends FilterSelection {
 }
 const EMPTY: TeamFilters = { specialisation: new Set(), status: new Set() };
 
-// The DA's Woreda team. Read-only: DAs see their colleagues' work contacts, not registry records (no row links).
-export function TeamTable({ team, myDaId }: { team: Agent[]; myDaId: string }) {
+// The DA's Woreda team (GET /da-services/experts). Read-only: DAs see their colleagues' work contacts, not
+// registry records (no row links). Farmer counts and joining dates are known for the DA's own record only.
+export function TeamTable({ team, myDaId, loading = false }: { team: TeamMember[]; myDaId: string; loading?: boolean }) {
   const [filters, setFilters] = useState<TeamFilters>(EMPTY);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -43,10 +44,10 @@ export function TeamTable({ team, myDaId }: { team: Agent[]; myDaId: string }) {
     (a) =>
       has(filters.specialisation, a.specialisation) &&
       has(filters.status, a.activeStatus) &&
-      matchesQuery(query, a.fullName, a.daId, a.kebele, a.specialisation, a.activeStatus, a.phone, a.joinedAt),
+      matchesQuery(query, a.fullName, a.daId, a.kebele, a.specialisation, a.activeStatus, a.phone, a.email, a.joinedAt),
   );
 
-  const columns: Column<Agent>[] = [
+  const columns: Column<TeamMember>[] = [
     {
       key: "name",
       header: "Name",
@@ -70,14 +71,18 @@ export function TeamTable({ team, myDaId }: { team: Agent[]; myDaId: string }) {
       header: <FilterDropdown label="Specialisation" allLabel="All specialisations" options={specialisationOptions} selected={filters.specialisation} onApply={setFilter("specialisation")} />,
       cell: (a) => a.specialisation,
     },
-    { key: "farmers", header: "Farmers", align: "right", cell: (a) => a.farmerCount.toLocaleString() },
+    { key: "farmers", header: "Farmers", align: "right", cell: (a) => (a.farmerCount != null ? a.farmerCount.toLocaleString() : <span className="text-subtle">—</span>) },
     {
       key: "status",
       header: <FilterDropdown label="Status" allLabel="All Status" options={statusOptions} selected={filters.status} onApply={setFilter("status")} />,
       cell: (a) => <Pill tone={ACTIVE_TONE[a.activeStatus]} dot>{a.activeStatus}</Pill>,
     },
-    { key: "phone", header: "Phone", cell: (a) => <a href={`tel:${a.phone.replace(/\s/g, "")}`} className="whitespace-nowrap text-ink-soft hover:text-brand-green">{a.phone}</a> },
-    { key: "joined", header: "Joined", cell: (a) => <span className="whitespace-nowrap text-[13px] text-muted">{a.joinedAt}</span> },
+    {
+      key: "phone",
+      header: "Phone",
+      cell: (a) => (a.phone === "—" ? <span className="text-subtle">—</span> : <a href={`tel:${a.phone.replace(/\s/g, "")}`} className="whitespace-nowrap text-ink-soft hover:text-brand-green">{a.phone}</a>),
+    },
+    { key: "joined", header: "Joined", cell: (a) => <span className="whitespace-nowrap text-[13px] text-muted">{a.joinedAt ?? "—"}</span> },
   ];
 
   return (
@@ -86,7 +91,7 @@ export function TeamTable({ team, myDaId }: { team: Agent[]; myDaId: string }) {
       <div className="flex flex-col gap-3 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-2.5">
           <h2 className="text-[15px] font-semibold text-ink">Team members</h2>
-          <span className="text-[13px] text-muted">{rows.length === team.length ? `${team.length} agents` : `${rows.length} of ${team.length} agents`}</span>
+          {!loading && <span className="text-[13px] text-muted">{rows.length === team.length ? `${team.length} agents` : `${rows.length} of ${team.length} agents`}</span>}
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end">
           <SearchInput value={query} onChange={setQuery} placeholder={SEARCH_PLACEHOLDER} />
@@ -100,8 +105,9 @@ export function TeamTable({ team, myDaId }: { team: Agent[]; myDaId: string }) {
         rows={rows}
         rowKey={(a) => a.daId}
         minWidth="960px"
+        state={loading ? "loading" : "ready"}
         emptyTitle={team.length === 0 ? "No team members yet" : "No team members match the selected filters"}
-        emptyHint={team.length === 0 ? "You will see your Woreda colleagues here once your assignment is published." : "Clear a filter or try a different search."}
+        emptyHint={team.length === 0 ? "You will see your Woreda colleagues here once the DA Registry lists them in your Woreda." : "Clear a filter or try a different search."}
       />
 
       <AdvancedFiltersDrawer

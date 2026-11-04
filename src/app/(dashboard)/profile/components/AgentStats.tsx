@@ -12,23 +12,43 @@ const icon = (paths: ReactNode) => (
   </svg>
 );
 
-export function AgentStats() {
+/** "4.2" years and "Since Jul 2022" from an ISO joining date; the sample values when there is none. */
+function serviceFrom(joinedAt: string | null | undefined): { years: string; since: string } {
+  if (!joinedAt) return { years: "—", since: "Joining date not in the registry" };
+  const d = new Date(joinedAt);
+  if (Number.isNaN(d.getTime())) return { years: "—", since: joinedAt };
+  const years = Math.max(0, (Date.now() - d.getTime()) / (365.25 * 24 * 3600 * 1000));
+  return { years: years.toFixed(1), since: `Since ${d.toLocaleDateString("en-GB", { month: "short", year: "numeric" })}` };
+}
+
+interface AgentStatsProps {
+  /** ISO joining date from the registry profile; null when the registry has none, undefined for the sample profile. */
+  joinedAt?: string | null;
+  /** The assigned kebele's name from the registry profile; null when unassigned, undefined for the sample profile. */
+  kebele?: string | null;
+}
+
+// Years of service and the kebele come from the DA Registry profile; certifications stay the Agrilearn sample
+// until that API exists.
+export function AgentStats({ joinedAt, kebele }: AgentStatsProps) {
   const s = AGENT_STATS;
+  const service = joinedAt === undefined ? { years: s.yearsOfService, since: s.serviceSince } : serviceFrom(joinedAt);
+  const kebeles = kebele === undefined ? { count: String(s.kebelesAssigned), hint: s.kebeles } : { count: kebele ? "1" : "0", hint: kebele ?? "Not assigned yet" };
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
       <StatCard
         label="Years of service"
-        value={s.yearsOfService}
-        hint={s.serviceSince}
+        value={service.years}
+        hint={service.since}
         accent="border-l-blue-600"
         tile={`${TILE} bg-info-tint text-blue-600`}
         icon={icon(<><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M8 3v4M16 3v4M3 10h18" /></>)}
       />
       <StatCard
         label="Kebeles assigned"
-        value={String(s.kebelesAssigned)}
-        hint={s.kebeles}
+        value={kebeles.count}
+        hint={kebeles.hint}
         accent="border-l-orange-500"
         tile={`${TILE} bg-orange-50 text-orange-500`}
         icon={icon(<><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" /><circle cx="12" cy="10" r="3" /></>)}

@@ -81,3 +81,56 @@ describe("authRequest", () => {
     expect(new Headers(fetchMock.mock.calls[2][1]!.headers).get("Authorization")).toBe("Bearer access-1");
   });
 });
+
+describe("staff IAM sessions", () => {
+  const iamJwt = (exp: number) => `h.${Buffer.from(JSON.stringify({ exp })).toString("base64url")}.s`;
+  const signInIam = (expiresAt: number) =>
+    useAuthStore.getState().signIn({ id: "u", name: "u", email: "u" }, "Supervisor", { kind: "iam", accessToken: "iam-0", csrfToken: "csrf-0", loginOption: "agent", expiresAt });
+  const sessionJson = (n: number) =>
+    json(200, { data: { access_token: iamJwt(Math.floor(Date.now() / 1000) + 300), csrf_token: `csrf-${n}`, cookie_prefix: "", login_option: "agent" } });
+
+  it("sends the CSRF value with the token while it is fresh", async () => {
+    signInIam(Date.now() + 600_000);
+    fetchMock.mockResolvedValueOnce(json(200, { ok: true }));
+
+    await authRequest("/things");
+
+    const headers = new Headers(fetchMock.mock.calls[0][1]!.headers);
+    expect(headers.get("Authorization")).toBe("Bearer iam-0");
+    expect(headers.get("X-CSRF-Token")).toBe("csrf-0");
+  });
+
+  it("refreshes through the IAM and reads the rotated token back from the UI server", async () => {
+    signInIam(0);
+    fetchMock
+      .mockResolvedValueOnce(json(200, { data: { refreshed: true } }))
+      .mockResolvedValueOnce(sessionJson(1))
+      .mockResolvedValueOnce(json(200, { ok: true }));
+
+    await expect(authRequest("/things")).resolves.toEqual({ ok: true });
+
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/auth/refresh");
+    expect(JSON.parse(fetchMock.mock.calls[0][1]!.body as string)).toEqual({ access_token: "iam-0" });
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/auth/iam/session");
+    const headers = new Headers(fetchMock.mock.calls[2][1]!.headers);
+    expect(headers.get("Authorization")).toMatch(/^Bearer h\./);
+    expect(headers.get("X-CSRF-Token")).toBe("csrf-1");
+    expect(useAuthStore.getState().tokens?.kind).toBe("iam");
+  });
+
+  it("ends the session when no IAM cookie reaches the UI server after a refresh", async () => {
+    signInIam(0);
+    fetchMock.mockResolvedValueOnce(json(200, { data: { refreshed: false } })).mockResolvedValueOnce(json(401, { message: "none" }));
+
+    await expect(authRequest("/things")).rejects.toMatchObject({ status: 401 });
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+  });
+
+  it("ends the session when the IAM rejects the refresh", async () => {
+    signInIam(0);
+    fetchMock.mockResolvedValueOnce(json(401, { message: "Session over" }));
+
+    await expect(refreshSession()).resolves.toBeNull();
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+  });
+});

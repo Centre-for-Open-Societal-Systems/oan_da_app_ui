@@ -9,7 +9,7 @@ describe("toLoginResult", () => {
     expect(toLoginResult(res, 1000)).toEqual({
       user: { id: "da@moa.et", name: "da@moa.et", email: "da@moa.et" },
       role: "DA",
-      tokens: { accessToken: "a", refreshToken: "r", expiresAt: 901_000 },
+      tokens: { kind: "local", accessToken: "a", refreshToken: "r", expiresAt: 901_000 },
     });
   });
 });

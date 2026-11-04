@@ -171,3 +171,47 @@ export function toAgentAssignment(r: ApiAssignmentRow, woredaNames: Record<strin
 
 /** Id for one device operation (client_op_id). randomUUID needs https or localhost; plain http falls back to time + random. */
 export const newClientOpId = () => (typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`);
+
+// ---- Scope pickers (Users & Roles) ------------------------------------------------------------------------------
+
+/** The Regions and Woredas of the area master, each sorted by English name, for the RBAC scope dropdowns. */
+export interface ScopeAreas {
+  regions: AdminArea[];
+  woredas: AdminArea[];
+}
+
+const byName = (a: AdminArea, b: AdminArea) => a.name_en.localeCompare(b.name_en);
+
+let scopeAreasCache: Promise<ScopeAreas> | null = null;
+
+/**
+ * Regions and Woredas in one go, loaded once per page load and shared by the Users table and its form. The
+ * tree rarely changes (synced daily from Master Data), and a dropdown over ~1,400 Woredas is fine.
+ */
+export function loadScopeAreas(): Promise<ScopeAreas> {
+  scopeAreasCache ??= Promise.all([listAreas({ level: "Region" }), listAreas({ level: "Woreda" })])
+    .then(([regions, woredas]) => ({ regions: [...regions].sort(byName), woredas: [...woredas].sort(byName) }))
+    .catch((err: unknown) => {
+      scopeAreasCache = null;
+      throw err;
+    });
+  return scopeAreasCache;
+}
+
+/**
+ * The Woredas of one Region. P-codes nest by prefix (Region ET01 → Zone ET0101 → Woreda ET010101), and the
+ * master only links a Woreda to its Zone, so the prefix is the way to go from a Region straight to its Woredas.
+ */
+export const woredasInRegion = (woredas: AdminArea[], regionCode: string): AdminArea[] =>
+  regionCode ? woredas.filter((w) => w.code.startsWith(regionCode)) : [];
+
+/** "Oromia (ET04)" for a known code; the value itself otherwise (older rows hold names); "—" for none. */
+export function areaLabel(names: Record<string, string>, code: string | null | undefined): string {
+  if (!code) return "—";
+  const name = names[code];
+  return name ? `${name} (${code})` : code;
+}
+
+/** code → English name, for showing stored scopes. */
+export const areaNameMap = ({ regions, woredas }: ScopeAreas): Record<string, string> =>
+  Object.fromEntries([...regions, ...woredas].map((a) => [a.code, a.name_en]));
