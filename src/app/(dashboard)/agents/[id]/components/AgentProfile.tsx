@@ -103,6 +103,13 @@ export function AgentProfile({ agent }: { agent: Agent }) {
       <Card className="overflow-hidden p-0 shadow-card">
         <SegmentTabs<Tab> tabs={[{ key: "overview", label: "Overview" }, { key: "activity", label: "Activity" }, { key: "documents", label: "Documents", count: DOCUMENTS.length }, { key: "history", label: "History" }]} active={tab} onChange={setTab} />
 
+        {/* The registry record feeds the header, stats and Overview; the other tabs have no registry API yet. */}
+        {tab !== "overview" && (
+          <p className="border-b border-line bg-blue-50 px-5 py-2.5 text-[12.5px] text-blue-900">
+            Sample data: the DA Registry does not provide {tab === "activity" ? "activity" : tab === "documents" ? "documents" : "history"} yet. The header, stats and Overview tab are live from the registry.
+          </p>
+        )}
+
         {tab === "overview" && (
           <div className="grid grid-cols-1 gap-6 p-5 md:grid-cols-2">
             <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">

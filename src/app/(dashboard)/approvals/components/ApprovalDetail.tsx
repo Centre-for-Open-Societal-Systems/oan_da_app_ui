@@ -14,13 +14,15 @@ interface ApprovalDetailProps {
   request: ApprovalRequest;
   note: string;
   onNoteChange: (value: string) => void;
+  /** False while a decision is being saved or for a role that may only read the queue. */
+  canDecide: boolean;
   /** Opens the review dialog (reject / request changes) prefilled with the note. */
   onReview: () => void;
   onApprove: () => void;
 }
 
-export function ApprovalDetail({ request: selected, note, onNoteChange, onReview, onApprove }: ApprovalDetailProps) {
-  const open = isOpen(selected);
+export function ApprovalDetail({ request: selected, note, onNoteChange, canDecide, onReview, onApprove }: ApprovalDetailProps) {
+  const open = isOpen(selected) && canDecide;
   return (
     <Card className="flex animate-fade-in flex-col p-0 shadow-card">
       <div className="border-b border-line px-5 py-4">
@@ -84,7 +86,7 @@ export function ApprovalDetail({ request: selected, note, onNoteChange, onReview
           <svg className="h-4 w-4 shrink-0 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden="true">
             <circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" />
           </svg>
-          On approve → Published to the master DA Registry (MoA)
+          Approve sends the change to the DA Registry for its own two-stage approval
         </p>
         <div className="flex flex-wrap gap-3">
           <Button variant="dangerOutline" disabled={!open} onClick={onReview}>
