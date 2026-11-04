@@ -80,8 +80,8 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
         ...(subcategory && { subcategory }),
         priority,
         raised_for: forWhom === "farmer" ? "Farmer" : "Self",
-        // Sample farmers carry no registry id yet; their mock registry code stands in until the farmers API is wired.
-        ...(forWhom === "farmer" && selectedFarmer && { farmer_id: registryCode(selectedFarmer) }),
+        // A sample farmer's mock registry code stands in for the id; a farmer from the API arrives with it already.
+        ...(forWhom === "farmer" && { farmer_id: selectedFarmer ? registryCode(selectedFarmer) : farmer }),
         client_op_id: clientOpId,
       });
       setResult({ kind: "sent", result: sent });

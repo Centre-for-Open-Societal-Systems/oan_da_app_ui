@@ -4,7 +4,6 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { cn } from "@/lib/utils";
-import { PLANNER_WEEK, TODAYS_VISITS } from "@/features/visits";
 import type { TodaysVisit } from "@/features/visits";
 import { ARRIVAL_STYLES } from "./arrivalStyles";
 
@@ -15,7 +14,7 @@ const mapsUrl = (v: TodaysVisit) => {
 };
 
 // "View locations" link in the Today's visits header, and the modal listing each visit with a Maps link.
-export function VisitLocationsButton() {
+export function VisitLocationsButton({ visits, todayLabel }: { visits: TodaysVisit[]; todayLabel: string }) {
   const [locationsOpen, setLocationsOpen] = useState(false);
 
   return (
@@ -31,7 +30,7 @@ export function VisitLocationsButton() {
         isOpen={locationsOpen}
         onClose={() => setLocationsOpen(false)}
         title="Today's Visit Locations"
-        subtitle={`${TODAYS_VISITS.length} visits · ${PLANNER_WEEK.todayLabel} · in the order you arranged them`}
+        subtitle={`${visits.length} visits · ${todayLabel} · in the order you arranged them`}
         size="lg"
         footer={
           <Button type="button" variant="outline" onClick={() => setLocationsOpen(false)}>
@@ -40,10 +39,10 @@ export function VisitLocationsButton() {
         }
       >
         <ol className="flex flex-col gap-2.5">
-          {TODAYS_VISITS.map((v, index) => {
+          {visits.map((v, index) => {
             const style = ARRIVAL_STYLES[v.state];
             return (
-              <li key={v.farmerName} className="flex flex-wrap items-center gap-3 rounded-lg border border-line px-4 py-3">
+              <li key={v.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-line px-4 py-3">
                 <span className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold", style.step)}>
                   {index + 1}
                 </span>

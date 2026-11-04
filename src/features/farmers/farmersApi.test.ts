@@ -139,8 +139,9 @@ describe("mapping", () => {
       .toEqual({ title: "Advisory · Physical Visit Complete", summary: "Rust found", date: "15 Oct 2026", time: "16:30" });
   });
 
-  it("sends the registry id for API farmers and the mock code for sample ones", () => {
-    expect(registryCode(apiFarmerToFarmer(row))).toBe("FRM-000103");
+  it("sends the Farmer ID for API farmers and the mock code for sample ones", () => {
+    expect(registryCode(apiFarmerToFarmer(row))).toBe("FR-88341");
+    expect(registryCode(apiFarmerToFarmer({ ...row, reg_id: null }))).toBe("FRM-000103");
     expect(registryCode(FARMERS[0])).toMatch(/^FR-\d{5}$/);
   });
 });

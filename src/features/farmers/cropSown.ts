@@ -667,9 +667,8 @@ export interface CropSownTab {
   sections: CropSownSection[];
 }
 
-/** The farmer's record laid out tab → section → field, ready to display. */
-export function getCropSownDetails(farmer: Farmer): CropSownTab[] {
-  const record = getCropSownRecord(farmer);
+/** Crop Sown values laid out tab → section → field, ready to display. */
+export function cropSownTabs(record: CropSownValues): CropSownTab[] {
   return CROP_SOWN_FORM.map((tab) => ({
     key: tab.key,
     label: tab.label,
