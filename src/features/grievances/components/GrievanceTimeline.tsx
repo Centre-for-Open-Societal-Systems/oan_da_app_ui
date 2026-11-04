@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Pill, type PillTone } from "@/components/ui/Pill";
-import type { GrievanceStatus, ThreadMessage } from "../types";
+import type { ThreadMessage } from "../types";
 import { GrievanceStatusPill } from "./GrievancePills";
 
-const CLOSED: GrievanceStatus[] = ["Resolved", "Closed"];
+/** The case is complete once its status reads as resolved/closed (the service's own wording varies). */
+const isClosedStatus = (status: string) => /resolv|close|complete|done/i.test(status);
 
 interface Step {
   id: string;
@@ -79,9 +80,9 @@ function toStep(m: ThreadMessage): Step {
 }
 
 /** Numbered audit trail of a grievance; the last step turns into a green tick once the case is resolved or closed. */
-export function GrievanceTimeline({ messages, status }: { messages: ThreadMessage[]; status: GrievanceStatus }) {
+export function GrievanceTimeline({ messages, status }: { messages: ThreadMessage[]; status: string }) {
   const steps = messages.map(toStep);
-  const done = CLOSED.includes(status);
+  const done = isClosedStatus(status);
 
   return (
     <ol className="relative flex flex-col gap-3">
