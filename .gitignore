@@ -50,5 +50,5 @@ API_CURLS.sh
 API_LIST.txt
 API_LIST.xlsx
 
-# local HTTPS certificates written by `next dev --experimental-https` (npm run dev:sso)
+# local https certs (npm run dev:sso)
 /certificates

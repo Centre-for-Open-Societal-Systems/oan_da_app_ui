@@ -175,7 +175,7 @@ export function describeProfileError(err: unknown): string {
   if (!(err instanceof ApiError)) return err instanceof Error ? err.message : "Could not load your profile.";
   switch (err.status) {
     case 401:
-      return "Your session has ended, or the DA Registry needs your staff (SSO) sign-in.";
+      return "Your session has ended, or the DA Registry did not accept it. Sign in again.";
     case 403:
       return "Your account is not bound to a DA-ID, so there is no registry profile to show.";
     case 404:

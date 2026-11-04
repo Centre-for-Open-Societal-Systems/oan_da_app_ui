@@ -346,7 +346,7 @@ export function describeAgentError(err: unknown): string {
   if (!(err instanceof ApiError)) return err instanceof Error ? err.message : "Could not load agents.";
   switch (err.status) {
     case 401:
-      return "The DA Registry needs your staff (SSO) sign-in. Sign out and sign in again with the staff account option.";
+      return "The DA Registry did not accept your session. Sign out and sign in again.";
     case 403:
       return "This record is outside your Region or Woreda.";
     case 404:

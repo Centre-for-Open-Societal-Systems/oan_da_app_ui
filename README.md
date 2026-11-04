@@ -40,7 +40,6 @@ npm run dev        # http://localhost:3000
 | Script | What it does |
 | --- | --- |
 | `npm run dev` | Dev server |
-| `npm run dev:sso` | Dev server over HTTPS, for the staff sign-in (see below) |
 | `npm run build` | Production build |
 | `npm run lint` | ESLint, including the folder rules |
 | `npm run typecheck` | `tsc --noEmit` |
@@ -48,36 +47,3 @@ npm run dev        # http://localhost:3000
 | `npm run check` | lint + typecheck + tests; CI runs this plus `build` on every PR |
 
 Where code belongs, the import rules, styling tokens and the open state-management decision are described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
-## Staff sign-in (Keycloak through the staff IAM)
-
-`/login` sends the browser to Keycloak. The backend starts the sign-in (`POST /api/v1/auth/iam/login`), Keycloak
-returns to the staff IAM, and the IAM lands the browser back on this app with its token cookies set on the shared
-parent domain `development.oanstaging.com`. The app therefore has to be served under that domain, in development too.
-
-Routes in this app: `/api/auth/iam/login` (starts the sign-in, redirects to Keycloak), `/api/auth/iam/complete`
-(where the IAM lands the browser), `/api/auth/iam/session` (reads the IAM cookies on the server) and `/login/iam`
-(loads `/da-services/me` and stores the session). Every API call of an IAM session carries the Bearer token and the
-`X-CSRF-Token` header; the token lives 5 minutes on dev and is refreshed through `POST /api/v1/auth/refresh`.
-
-### Locally
-
-1. `npm run dev:sso` (HTTPS on port 3000; the first run downloads mkcert and writes `certificates/`, gitignored).
-2. Open Chrome with the hostname mapped to this machine and the self-signed certificate accepted:
-
-   ```powershell
-   & "C:\Program Files\Google\Chrome\Application\chrome.exe" `
-     --user-data-dir="$env:TEMP\oan-sso-profile" `
-     --host-resolver-rules="MAP da-local.development.oanstaging.com 127.0.0.1" `
-     --ignore-certificate-errors `
-     https://da-local.development.oanstaging.com:3000/login
-   ```
-
-3. Sign in on Keycloak. You land on `/dashboard`; the DA Registry screens (Agents, My Teams, Profile, Assignments,
-   bulk import) work because the backend forwards your own staff token to the registry.
-
-- The password form is still there at `/login?local=1`.
-- `NEXT_PUBLIC_IAM_LOGIN_KEY` picks the backend login option (default `agent`).
-- The backend must list this app's origin in that option's `return_origins`; the dev backends already allow
-  `https://da-local.development.oanstaging.com:3000`.
-- Opened as plain `localhost`, the sign-in ends with "did not complete": the IAM's cookies never reach localhost.

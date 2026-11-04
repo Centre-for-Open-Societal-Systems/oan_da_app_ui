@@ -1,5 +1,6 @@
 import { authRequest } from "@/features/auth";
 import { ApiError } from "@/lib/api";
+import { labelOfCode } from "./cropSownSpecApply";
 import type { Farmer, FarmerStatus, Plot, Visit } from "./types";
 
 /** One row of GET /api/v1/da-services/farmers. */
@@ -52,8 +53,10 @@ export function describeFarmerError(err: unknown): string {
     case 403: return "You don't have access to this farmer.";
     case 404: return "Farmer not found.";
     case 502:
+    case 503:
     case 504: return "Registry unavailable, try again.";
-    default: return err.message; // 400 carries the field details already
+    // 400: the details texts, else the message.
+    default: return err.details ? Object.values(err.details).join(" ") : err.message;
   }
 }
 
@@ -72,13 +75,15 @@ export interface ApiFarmerProfile {
   education_level?: string | null;
   /** Parts the registry could not deliver, e.g. ["household"]; the UI says "partial data" for them. */
   incomplete_sections?: string[];
-  verification_state: string | null;
+  /** Not in the collection's example response; older backends send it. */
+  verification_state?: string | null;
   /** Open follow-up tasks for this farmer. */
-  pending_actions: number;
+  pending_actions?: number;
   household_size: number | null;
   total_land_area: number | null;
   land_ownership: string | null;
-  primary_crop: string | null;
+  /** Not in the collection's example response. */
+  primary_crop?: string | null;
   registration_date: string | null;
   last_visit_date: string | null;
   last_visit_outcome: string | null;
@@ -225,6 +230,15 @@ function splitDateTime(iso: string | null): { date: string; time: string } {
   return { date: day.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }), time: iso.length > 10 ? iso.slice(11, 16) : "" };
 }
 
+/** The profile sends the phone without +251 ("964815374"), the list with it ("+251964815374"): shown one way. */
+export function withCountryCode(phone: string | null | undefined): string {
+  const digits = (phone ?? "").replace(/[^\d+]/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("+")) return digits;
+  if (digits.startsWith("251")) return `+${digits}`;
+  return `+251${digits.replace(/^0/, "")}`;
+}
+
 /** Registry state → the three-way status pill; the state itself is the hover reason when not approved. */
 export function toFarmerStatus(state: string | null): { status: FarmerStatus; reason?: string } {
   if (!state || state === "APPROVED") return { status: "Verified" };
@@ -242,7 +256,9 @@ export function apiFarmerToFarmer(f: ApiFarmer): Farmer {
     avatar: f.photo_url ?? undefined,
     name: f.farmer_name,
     email: "",
-    phone: f.phone ?? "",
+    phone: withCountryCode(f.phone),
+    landUnknown: f.total_land_hectares === null || f.total_land_hectares === undefined,
+    plotsUnknown: f.total_plots === null || f.total_plots === undefined,
     kebele: f.kebele ?? "—",
     woreda: f.woreda ?? "",
     region: f.region ?? "",
@@ -263,13 +279,14 @@ export function apiFarmerToFarmer(f: ApiFarmer): Farmer {
 /** The profile header and stats as a Farmer; plot and visit counts come from their own calls. */
 export function profileToFarmer(p: ApiFarmerProfile, counts: { plots: number; visits: number }): Farmer {
   const registered = splitDateTime(p.registration_date);
-  const { status, reason } = toFarmerStatus(p.verification_state);
+  const { status, reason } = toFarmerStatus(p.verification_state ?? null);
   return {
     id: p.farmer_id,
     regId: p.reg_id ?? undefined,
     name: p.name,
     email: p.email ?? "",
-    phone: p.phone ?? "",
+    phone: withCountryCode(p.phone),
+    landUnknown: p.total_land_area === null || p.total_land_area === undefined,
     kebele: p.kebele ?? "—",
     woreda: p.woreda ?? "",
     region: p.region ?? "",
@@ -293,11 +310,12 @@ export function apiPlotToPlot(p: ApiPlot): Plot {
     code: p.plot_id,
     crop: humanize(p.current_land_use) || "—",
     areaHa: p.area_in_hectare ?? 0,
-    soil: p.soil_fertility ?? "—",
+    // Registry codes (SF_HIGH, OWNER, CROP_SHARING) are shown by their labels.
+    soil: (p.soil_fertility && (labelOfCode("SOIL_FERTILITY", p.soil_fertility) ?? humanize(p.soil_fertility))) || "—",
     zone: p.land_kebele ?? "—",
     lat: Number.NaN,
     lng: Number.NaN,
-    tenure: humanize(p.land_ownership_type) || "—",
+    tenure: (p.land_ownership_type && (labelOfCode("OWNERSHIP_TYPE", p.land_ownership_type) ?? humanize(p.land_ownership_type))) || "—",
   };
 }
 

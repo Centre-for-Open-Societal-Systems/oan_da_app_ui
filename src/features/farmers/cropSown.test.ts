@@ -5,11 +5,10 @@ import { FARMERS } from "./data";
 describe("Crop Sown form", () => {
   it("follows the Crop Sown Registry tab, section and field list", () => {
     expect(CROP_SOWN_FORM.map((t) => [t.label, t.sections.map((s) => [s.title, s.fields.length])])).toEqual([
-      ["Crop Sown", [["Farmer Identity", 5], ["Address / Location", 3]]],
-      ["Planning", [["Crop Planning Details", 43], ["Cluster Information Details", 42]]],
-      ["Cultivation / Land Preparation", [["Cultivation / Land Preparation Details", 36], ["Cultivation Cluster Information Details", 42]]],
-      ["Sowing", [["Sowing Details", 21], ["Infestation Incident Details", 41]]],
-      ["Harvesting", [["Harvest Details", 27]]],
+      ["Planning", [["Farmer Identity", 5], ["Address / Location", 3], ["Crop Planning Details", 42], ["Cluster Information Details", 42]]],
+      ["Cultivation / Land Preparation", [["Farmer Identity", 4], ["Cultivation / Land Preparation Details", 35], ["Cultivation Cluster Information Details", 42]]],
+      ["Sowing", [["Farmer Identity", 4], ["Sowing Details", 21], ["Infestation Incident Details", 41]]],
+      ["Harvesting", [["Farmer Identity", 4], ["Harvest Details", 27]]],
     ]);
   });
 
@@ -38,7 +37,7 @@ describe("sample record", () => {
   });
 
   it("formats GC and EC dates for display", () => {
-    const planning = getCropSownDetails(FARMERS[0]).find((t) => t.key === "planning")!.sections[0].fields;
+    const planning = getCropSownDetails(FARMERS[0]).find((t) => t.key === "planning")!.sections.find((s) => s.title === "Crop Planning Details")!.fields;
     expect(planning.find((f) => f.key === "planned_date")?.value).toBe("18 Jun 2025");
     expect(planning.find((f) => f.key === "planned_date_ec")?.value).toBe("11 Sene 2017");
   });

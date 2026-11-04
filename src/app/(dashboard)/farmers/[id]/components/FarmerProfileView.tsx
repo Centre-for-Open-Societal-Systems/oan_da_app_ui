@@ -100,7 +100,7 @@ export function FarmerProfileView({ id }: { id: string }) {
         panels={{
           Overview: <ProfileOverview />,
           Holdings: fromApi ? <HoldingsSection plots={loaded.plots} /> : <HoldingsSection />,
-          "Crop Sown Details": <CropSownSection tabs={getCropSownDetails(farmer)} />,
+          "Crop Sown Details": <CropSownSection farmer={farmer} tabs={getCropSownDetails(farmer)} />,
           "Livestock Details": <LivestockDetailsSection tabs={getLivestockReportDetails(farmer)} />,
           "Livestock history": <LivestockHistorySection />,
           "Visit history": fromApi ? <VisitHistorySection visits={loaded.visits} /> : <VisitHistorySection />,

@@ -10,7 +10,8 @@ import { ErrorAlert } from "@/components/ui/ErrorAlert";
 import { cn } from "@/lib/utils";
 import { loadScopeAreas, woredasInRegion, type ScopeAreas } from "@/features/assignments";
 import { ASSIGNABLE_ROLES } from "@/features/users";
-import { DEFAULT_IAM_KEY, delegatedUserId } from "@/lib/iam";
+import { delegatedUserId } from "@/lib/delegatedUser";
+import { IAM_LOGIN_KEY } from "@/lib/iam";
 import { ROLE_LABELS, ROLES, type Role } from "@/lib/rbac";
 
 /** Everything the Add and Edit user forms capture (dates are display strings, e.g. "12 Mar 2019"; "—" = open-ended). */
@@ -38,7 +39,6 @@ export interface UserFormValues {
 const WIDE_SCOPE: Record<Role, string | null> = { DA: null, Supervisor: null, Executive: "All (read)", Admin: "All", CommsOfficer: null, SuperAdmin: "All" };
 
 // The backend's login option for staff sign-in; part of how it names the accounts it creates for them.
-const IAM_KEY = process.env.NEXT_PUBLIC_IAM_LOGIN_KEY || DEFAULT_IAM_KEY;
 
 type AccountKind = "new" | "existing";
 
@@ -154,7 +154,7 @@ export function UserFormModal({ mode, initial, subtitle, onClose, onSave }: User
         email: email.trim(),
         role,
         daId: role === "DA" ? daId.trim() : "",
-        ...(isExisting && { existingUserId: await delegatedUserId(staffUserId, IAM_KEY) }),
+        ...(isExisting && { existingUserId: await delegatedUserId(staffUserId, IAM_LOGIN_KEY) }),
         active,
         regionScope: needsScope ? regionCode : "",
         woredaScope: needsWoreda ? woredaCode : "",

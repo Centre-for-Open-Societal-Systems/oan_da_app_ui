@@ -5,10 +5,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ErrorAlert } from "@/components/ui/ErrorAlert";
-import { fetchIamProviders, login, mockLogin } from "@/features/auth";
+import { login, mockLogin } from "@/features/auth";
 import { ApiError } from "@/lib/api";
-import { DEFAULT_IAM_KEY, iamLoginHref } from "@/lib/iam";
-import { Spinner } from "@/components/ui/Spinner";
 import { useAuthStore } from "@/store/useAuthStore";
 import { AUTH_INPUT, AUTH_LABEL, AuthCard, PasswordInput } from "../../components/AuthCard";
 import { ForgotPasswordModal } from "./ForgotPasswordModal";
@@ -21,22 +19,10 @@ function loginErrorMessage(err: unknown): string {
   return err.message;
 }
 
-// The backend's login option for staff sign-in (Keycloak through the staff IAM).
-const IAM_KEY = process.env.NEXT_PUBLIC_IAM_LOGIN_KEY || DEFAULT_IAM_KEY;
-
-interface LoginCardProps {
-  /** Message for a sign-in that failed before this page (the page reads ?error= and translates it). */
-  initialError?: string | null;
-  /** Show the password form instead of going straight to the staff sign-in. */
-  showFormFirst?: boolean;
-}
-
-export function LoginCard({ initialError = null, showFormFirst = false }: LoginCardProps) {
+export function LoginCard() {
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
-  // Does the backend offer the staff sign-in option? Until that is known a plain visit shows the redirect card.
-  const [sso, setSso] = useState<{ checked: boolean; available: boolean }>({ checked: false, available: false });
   const [isContactOpen, setIsContactOpen] = useState(false);
-  const [error, setError] = useState<string | null>(initialError);
+  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
   const signIn = useAuthStore((s) => s.signIn);
@@ -72,41 +58,12 @@ export function LoginCard({ initialError = null, showFormFirst = false }: LoginC
     }
   };
 
-  // The page has read ?error= and ?local=; clear the query so a refresh does not repeat it.
+  // Automatically clear URL query parameters if they exist
   useEffect(() => {
-    if (window.location.search) window.history.replaceState({}, document.title, window.location.pathname);
+    if (window.location.search) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
   }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchIamProviders()
-      .then((providers) => !cancelled && setSso({ checked: true, available: providers.some((p) => p.key === IAM_KEY) }))
-      .catch(() => !cancelled && setSso({ checked: true, available: false }));
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Plain visit: once the stored session (if any) is known, send the browser to Keycloak through this app's
-  // /api/auth/iam/login (a page navigation, so the identity provider's redirects can be followed).
-  const goToSso = !showFormFirst && sso.checked && sso.available && hasHydrated && !isAuthenticated;
-  useEffect(() => {
-    if (goToSso) window.location.assign(iamLoginHref(IAM_KEY, "/dashboard"));
-  }, [goToSso]);
-
-  // The password form is the fallback: asked for, or the backend has no staff sign-in option.
-  const showForm = showFormFirst || (sso.checked && !sso.available);
-
-  if (!showForm) {
-    return (
-      <AuthCard tab="Agent Sign-In" title="Sign in to your account" subtitle="Taking you to the staff sign-in.">
-        <div className="flex items-center justify-center gap-3 py-6 text-[14px] text-zinc-600">
-          <Spinner className="h-5 w-5 text-brand-green" />
-          Redirecting to staff sign-in…
-        </div>
-      </AuthCard>
-    );
-  }
 
   return (
     <>

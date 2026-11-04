@@ -2,7 +2,10 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Role } from "@/lib/rbac";
 import { clearAllDrafts } from "@/lib/drafts";
-import { endIamSession, revokeRefreshToken } from "@/lib/authApi";
+import { setCsrfProvider } from "@/lib/api";
+import { revokeRefreshToken } from "@/lib/authApi";
+import { endIamSession } from "@/lib/iam";
+import { endOidcSession } from "@/lib/oidc";
 
 export interface AuthUser {
   id: string;
@@ -10,22 +13,21 @@ export interface AuthUser {
   email: string;
 }
 
-/** "local": a DA Services password session. "iam": a staff IAM (Keycloak) session, see features/auth/iam. */
-export type AuthSessionKind = "local" | "iam";
-
 /** Bearer tokens from POST /api/v1/auth/login, rotated by /auth/refresh (see features/auth/session). */
 export interface AuthTokens {
   accessToken: string;
-  /** Rotating refresh token of a local session; a staff IAM session has none (the IAM refreshes from its cookies). */
-  refreshToken?: string;
+  refreshToken: string;
   /** Epoch ms after which the access token is rejected. */
   expiresAt: number;
-  /** Missing on sessions stored before IAM sign-in existed, which were all local. */
-  kind?: AuthSessionKind;
-  /** The IAM's double-submit CSRF value, sent as X-CSRF-Token with every call of an IAM session. */
+  /** Sent as the X-CSRF-Token header on every call when set. */
   csrfToken?: string;
-  /** The login option (e.g. "agent") an IAM session came from. */
-  loginOption?: string;
+  /**
+   * Where the session comes from. "iam": the IAM / Keycloak sign-in; the token stays in IAM's cookies (the fields above
+   * are empty) and the /api/v1 proxy sends and renews it. "oidc": direct Keycloak sign-in (lib/oidc) on hosts outside
+   * IAM's cookie domain; the fields above hold Keycloak's pair, renewed and ended at Keycloak. Unset: the backend's
+   * own /auth/login pair.
+   */
+  provider?: "iam" | "oidc";
 }
 
 /** What GET /da-services/me says about the signed-in user beyond identity and role (see features/auth/me). */
@@ -62,6 +64,10 @@ interface AuthState {
   /** Swaps in a refreshed token pair without touching identity or role. */
   setTokens: (tokens: AuthTokens) => void;
   logout: () => void;
+  /** The session ended without the user asking (token lapsed, refresh refused): signs out and raises the re-login popup. */
+  expireSession: () => void;
+  /** True from expireSession until the user signs in again. Not persisted. */
+  sessionExpired: boolean;
   setHasHydrated: (value: boolean) => void;
 }
 
@@ -76,6 +82,7 @@ export const useAuthStore = create<AuthState>()(
       profile: null,
       role: DEFAULT_ROLE,
       hasHydrated: false,
+      sessionExpired: false,
       setUser: (user) => set({ user, isAuthenticated: true }),
       signIn: (user, role, tokens, profile) => set({ user, role, tokens: tokens ?? null, profile: profile ?? null, isAuthenticated: true }),
       setSession: (user, role, profile) => set({ user, role, profile }),
@@ -83,11 +90,18 @@ export const useAuthStore = create<AuthState>()(
       logout: () => {
         // Drafts hold farmer and visit personal data; none of it may outlive the session.
         clearAllDrafts();
-        // End the session server-side too, so a copied token is useless once the user has logged out.
+        // Revoke server-side too, so a copied refresh token is useless once the user has logged out.
         const tokens = get().tokens;
-        if (tokens?.kind === "iam") void endIamSession(tokens.accessToken);
+        if (tokens?.provider === "iam") void endIamSession();
+        else if (tokens?.provider === "oidc") {
+          if (tokens.refreshToken) void endOidcSession(tokens.refreshToken);
+        }
         else if (tokens?.refreshToken) void revokeRefreshToken(tokens.refreshToken);
-        set({ user: null, isAuthenticated: false, tokens: null, profile: null, role: DEFAULT_ROLE });
+        set({ user: null, isAuthenticated: false, tokens: null, profile: null, role: DEFAULT_ROLE, sessionExpired: false });
+      },
+      expireSession: () => {
+        get().logout();
+        set({ sessionExpired: true });
       },
       setHasHydrated: (value) => set({ hasHydrated: value }),
     }),
@@ -102,3 +116,6 @@ export const useAuthStore = create<AuthState>()(
     },
   ),
 );
+
+// Every API call sends the session CSRF token as X-CSRF-Token (see lib/api).
+setCsrfProvider(() => useAuthStore.getState().tokens?.csrfToken);

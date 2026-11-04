@@ -20,10 +20,8 @@ export interface MeResponse {
     /** Routes the backend allows this user to open. */
     menu: string[];
     da_id: string | null;
-    /** The DA's registry record; only for a Development Agent. Null when the registry refused or was down. */
-    agent?: Record<string, unknown> | null;
-    /** Why `agent` is null, e.g. "registry refused the token (401)". */
-    agent_error?: string;
+    /** The DA's registry record; only for a Development Agent. */
+    agent?: Record<string, unknown>;
   };
 }
 
@@ -58,7 +56,6 @@ export function toMeSession({ data }: MeResponse): MeSession | null {
  * token as is; without it the stored session is used and refreshed when needed.
  */
 export function fetchMe(accessToken?: string, csrfToken?: string): Promise<MeResponse> {
-  // With a token in hand (right after sign-in) call as is, plus the IAM's CSRF value for a staff sign-in.
   return accessToken ? apiRequest<MeResponse>("/da-services/me", { accessToken, csrfToken }) : authRequest<MeResponse>("/da-services/me");
 }
 

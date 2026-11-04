@@ -1,179 +1,101 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import { Card } from "@/components/ui/Card";
-import { cn } from "@/lib/utils";
-import { isFieldVisible, LOCATION_HIERARCHY_FIELDS, REGISTRY_TABS } from "../registrySpec";
+import type { ReactNode } from "react";
+import type { FieldOptions } from "@/features/farmers";
+import { farmerFullName, placeTrail, stepOfField, type FormErrors, type RegistrationForm } from "../registration";
+import { WIZARD_STEPS, type StepKey } from "../registrySpec";
+import { labelOf } from "./fields";
 
 interface ReviewStepProps {
-  /** Everything entered so far, keyed by registry field name */
-  values: Record<string, string>;
-  /** Jump back to a step so the agent can edit it */
+  form: RegistrationForm;
+  options: FieldOptions | null;
+  /** Problems found by the checks (and a 400's details), by field. */
+  errors: FormErrors;
   onEditStep: (step: number) => void;
 }
 
-const icon = (paths: string[]) => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    {paths.map((d) => (
-      <path key={d} d={d} />
-    ))}
-  </svg>
-);
+const stepNumber = (key: StepKey) => WIZARD_STEPS.findIndex((s) => s.key === key) + 1;
 
-const TAB_ICONS: Record<string, ReactNode> = {
-  farmer: icon(["M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2", "M12 11a4 4 0 100-8 4 4 0 000 8z"]),
-  household: icon(["M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2", "M9 11a4 4 0 100-8 4 4 0 000 8z", "M23 21v-2a4 4 0 00-3-3.87", "M16 3.13a4 4 0 010 7.75"]),
-  location: icon(["M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z", "M12 13a3 3 0 100-6 3 3 0 000 6z"]),
-  lands: icon(["M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z", "M8 2v16", "M16 6v16"]),
-  crops: icon(["M7 20h10", "M10 20c5.5-2.5.8-6.4 3-10", "M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z", "M14.1 6a7 7 0 00-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z"]),
-  livestocks: icon(["M11 4a2 2 0 11-4 0 2 2 0 014 0z", "M18 8a2 2 0 11-4 0 2 2 0 014 0z", "M20 16a2 2 0 11-4 0 2 2 0 014 0z", "M9 10a5 5 0 015 5v3.5a3.5 3.5 0 01-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 015.5 10z"]),
-  ids: icon(["M3 5h18a1 1 0 011 1v12a1 1 0 01-1 1H3a1 1 0 01-1-1V6a1 1 0 011-1z", "M7 9h.01", "M11 9h6", "M11 13h6", "M5 16c0-1.1.9-2 2-2s2 .9 2 2"]),
-  enumerator: icon(["M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2", "M9 2h6a1 1 0 011 1v2a1 1 0 01-1 1H9a1 1 0 01-1-1V3a1 1 0 011-1z"]),
-};
-
-const EDIT_ICON = "M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z";
-
-interface ReviewRow {
-  label: string;
-  value: string;
-  required?: boolean;
-}
-
-function rowsFor(tabKey: string, values: Record<string, string>): ReviewRow[] {
-  const tab = REGISTRY_TABS.find((item) => item.key === tabKey)!;
-  const rows: ReviewRow[] = [];
-  if (tabKey === "location") {
-    // Kebele is the leaf of the hierarchy, so it is the one the registry needs
-    for (const field of LOCATION_HIERARCHY_FIELDS) {
-      rows.push({ label: field.label, value: values[field.name] ?? "", required: field.name === "kebele" });
-    }
-  }
-  for (const section of tab.sections) {
-    for (const field of section.fields) {
-      if (field.type !== "capture" && isFieldVisible(field, values)) rows.push({ label: field.label, value: values[field.name] ?? "", required: field.required });
-    }
-  }
-  return rows;
-}
-
-/** The handful of facts an agent checks at a glance on the Farmer tab. */
-function farmerSummary(values: Record<string, string>): ReviewRow[] {
-  const v = (name: string) => values[name]?.trim() ?? "";
-  const phone = [v("country_code"), v("phone_number")].filter(Boolean).join(" ");
-  return [
-    { label: "Name", value: [v("first_name"), v("middle_name"), v("last_name")].filter(Boolean).join(" ") },
-    { label: "Gender · Age", value: [v("gender"), v("estimated_age") && `${v("estimated_age")} years`].filter(Boolean).join(" · ") },
-    { label: "Primary phone", value: phone },
-    { label: "Household income", value: v("source_of_income") },
-    { label: "Education level", value: v("education_level") },
-    { label: "Marital status", value: v("marital_status") },
-  ];
-}
-
-/** "Abebe Bekele Tadesse", or a stand-in until a name is entered. */
-export const farmerFullName = (values: Record<string, string>) =>
-  [values.first_name, values.middle_name, values.last_name].map((part) => part?.trim()).filter(Boolean).join(" ") || "The farmer";
-
-/** How many of the registry tabs have every required field filled. */
-export function tabCompletion(values: Record<string, string>) {
-  const complete = REGISTRY_TABS.filter((tab) => rowsFor(tab.key, values).every((row) => !row.required || row.value)).length;
-  return { complete, total: REGISTRY_TABS.length };
-}
-
-function Rows({ rows }: { rows: ReviewRow[] }) {
+function Block({ title, step, onEdit, problems, children }: { title: string; step: StepKey; onEdit: (step: number) => void; problems: number; children: ReactNode }) {
   return (
-    <dl className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2 xl:grid-cols-3">
-      {rows.map((row) => (
-        <div key={row.label}>
-          <dt className="text-[12.5px] text-ink-soft">{row.label}</dt>
-          <dd className={cn("mt-1 text-[14.5px]", row.value ? "font-medium text-ink" : "text-gray-400")}>{row.value || "Not provided"}</dd>
-        </div>
-      ))}
-    </dl>
+    <section className="rounded-xl border border-line">
+      <header className="flex items-center justify-between border-b border-line-soft px-4 py-3">
+        <h3 className="text-[14.5px] font-semibold text-ink">
+          {title}
+          {problems > 0 && <span className="ml-2 text-[12.5px] font-semibold text-danger">{problems} to fix</span>}
+        </h3>
+        <button type="button" onClick={() => onEdit(stepNumber(step))} className="text-[13px] font-semibold text-brand-green hover:underline">
+          Edit
+        </button>
+      </header>
+      <dl className="grid grid-cols-1 gap-x-6 gap-y-3 px-4 py-3 text-[13.5px] sm:grid-cols-2 lg:grid-cols-3">{children}</dl>
+    </section>
   );
 }
 
-export function ReviewStep({ values, onEditStep }: ReviewStepProps) {
-  const [openStep, setOpenStep] = useState<number | null>(1);
-  const tabs = REGISTRY_TABS.map((tab) => {
-    const rows = rowsFor(tab.key, values);
-    return { tab, rows, missing: rows.filter((row) => row.required && !row.value).length };
-  });
-  const totalMissing = tabs.reduce((sum, t) => sum + t.missing, 0);
+function Item({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-muted">{label}</dt>
+      <dd className="mt-0.5 truncate font-medium text-ink">{value || "—"}</dd>
+    </div>
+  );
+}
+
+/** Counts of the problems per step, for the review and the submit popup. */
+export function problemsByStep(errors: FormErrors, stepOf: (field: string) => StepKey | null): Partial<Record<StepKey, number>> {
+  const out: Partial<Record<StepKey, number>> = {};
+  for (const field of Object.keys(errors)) {
+    const step = stepOf(field);
+    if (step) out[step] = (out[step] ?? 0) + 1;
+  }
+  return out;
+}
+
+export function ReviewStep({ form, options, errors, onEditStep }: ReviewStepProps) {
+  const label = labelOf.bind(null, options);
+  const problems = problemsByStep(errors, stepOfField);
+  const rows = <T,>(list: T[], show: (row: T) => string) => list.map(show).filter(Boolean).join("; ");
 
   return (
-    <Card className="p-0 shadow-card">
-      <div className="border-b border-line px-5 py-4 sm:px-6">
-        <h2 className="text-[18px] font-bold text-ink">Review and submit</h2>
-        <p className="mt-0.5 text-[12.5px] text-ink-soft">Check every tab before submitting. Open a tab to review it, or use Edit to jump back.</p>
-      </div>
-
-      <div className="flex flex-col gap-3 px-4 py-5 sm:px-5">
-        <p
-          className={cn(
-            "flex items-start gap-2.5 rounded-lg border px-4 py-3 text-[13px]",
-            totalMissing === 0 ? "border-brand-border bg-brand-mint text-brand-green" : "border-warning-border bg-warning-wash text-orange-700"
-          )}
-        >
-          <svg className="mt-0.5 h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="10" />
-            <path d="M12 16v-4M12 8h.01" />
-          </svg>
-          {totalMissing === 0
-            ? "All required fields are complete. The farmer will be sent to your supervisor for approval after you submit."
-            : `${totalMissing} required ${totalMissing === 1 ? "field is" : "fields are"} still empty. Open a tab and use Edit to complete ${totalMissing === 1 ? "it" : "them"} before you submit.`}
-        </p>
-
-        {tabs.map(({ tab, rows, missing }, index) => {
-          const step = index + 1;
-          const isOpen = openStep === step;
-          return (
-            <div key={tab.key} className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
-              <button
-                type="button"
-                onClick={() => setOpenStep(isOpen ? null : step)}
-                aria-expanded={isOpen}
-                className="flex w-full items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-gray-100"
-              >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-tint text-brand-green">{TAB_ICONS[tab.key]}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[16px] font-semibold text-ink">{tab.label}</span>
-                  <span className="mt-0.5 block text-[12.5px] text-ink-soft">Review the {tab.label.toLowerCase()} details</span>
-                </span>
-                {missing > 0 ? (
-                  <span className="shrink-0 rounded-md bg-warning-wash px-2.5 py-1 text-[12.5px] font-semibold text-orange-700">{missing} required missing</span>
-                ) : (
-                  <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-brand-mint px-2.5 py-1 text-[12.5px] font-semibold text-brand-green">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M20 6L9 17l-5-5" />
-                    </svg>
-                    Complete
-                  </span>
-                )}
-                <svg className={cn("h-5 w-5 shrink-0 text-ink-soft transition-transform", isOpen && "rotate-180")} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-
-              {isOpen && (
-                <div className="border-t border-line bg-white px-6 py-5">
-                  <Rows rows={tab.key === "farmer" ? farmerSummary(values) : rows} />
-                  <button
-                    type="button"
-                    onClick={() => onEditStep(step)}
-                    className="mt-5 inline-flex h-9 items-center gap-2 rounded-lg border border-line bg-white px-3.5 text-[13.5px] font-medium text-ink shadow-sm transition-colors hover:bg-surface"
-                  >
-                    <svg className="h-4 w-4 text-brand-green" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d={EDIT_ICON} />
-                    </svg>
-                    Edit {tab.label}
-                  </button>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </Card>
+    <div className="flex flex-col gap-4">
+      <Block title="Farmer" step="farmer" onEdit={onEditStep} problems={problems.farmer ?? 0}>
+        <Item label="Name" value={farmerFullName(form)} />
+        <Item label="Gender" value={label("gender", form.gender)} />
+        <Item label="Date of birth" value={form.date_of_birth} />
+        <Item label="Phone" value={form.phone} />
+        <Item label="National ID" value={form.national_id} />
+        <Item label="Marital status" value={label("marital_status", form.marital_status)} />
+        <Item label="Education" value={label("education_level", form.education_level)} />
+        <Item label="Income sources" value={form.income_sources.map((v) => label("income_sources", v)).join(", ")} />
+      </Block>
+      <Block title="Location" step="location" onEdit={onEditStep} problems={problems.location ?? 0}>
+        <Item label="Place" value={placeTrail(form)} />
+        <Item label="Kebele id" value={form.places.kebele} />
+        <Item label="GPS" value={form.location} />
+      </Block>
+      <Block title="Household" step="household" onEdit={onEditStep} problems={problems.household ?? 0}>
+        <Item label="Size" value={form.household_size} />
+        <Item label="Members" value={rows(form.members, (m) => [m.first_name, label("relationship", m.relationship)].filter(Boolean).join(", "))} />
+      </Block>
+      <Block title="Land, crops and livestock" step="holdings" onEdit={onEditStep} problems={problems.holdings ?? 0}>
+        <Item label="Land" value={rows(form.lands, (l) => (l.area_hectare ? `${l.area_hectare} ha ${label("ownership", l.ownership)}`.trim() : ""))} />
+        <Item label="Crops" value={rows(form.crops, (c) => [label("crop", c.name), label("season", c.season)].filter(Boolean).join(", "))} />
+        <Item label="Livestock" value={rows(form.livestock, (a) => (a.animal ? `${a.count} ${label("animal", a.animal)}` : ""))} />
+      </Block>
+      <Block title="Identity document" step="document" onEdit={onEditStep} problems={problems.document ?? 0}>
+        <Item label="File" value={form.document?.name} />
+        <Item label="Document id" value={form.document?.id} />
+      </Block>
+      {Object.keys(errors).length > 0 && (
+        <ul className="rounded-xl border border-danger/30 bg-danger-wash px-4 py-3 text-[13px] text-danger">
+          {Object.entries(errors).map(([field, message]) => (
+            <li key={field}>
+              <span className="font-semibold">{field}</span>: {message}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
