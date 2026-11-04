@@ -11,9 +11,7 @@ RUN npm ci
 FROM node:${NODE_VERSION}-alpine AS build
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
-# The /api/v1 proxy target (next.config rewrites) is written into .next/routes-manifest.json by `next build`,
-# and `next start` reads it from there, so the backend URL has to be known here, not at runtime.
-# .env.local is not copied into the image (.dockerignore).
+# The backend URL of the /api/v1 proxy. .env.local is not copied into the image (.dockerignore).
 ARG API_BASE_URL
 ENV API_BASE_URL=${API_BASE_URL}
 COPY --from=deps /app/node_modules ./node_modules
@@ -23,6 +21,10 @@ RUN npm run build
 # ---- runtime ----
 FROM node:${NODE_VERSION}-alpine AS runtime
 WORKDIR /app
+# The /api/v1 proxy (src/app/api/v1/[...path]/route.ts) is a route handler and reads API_BASE_URL (and the optional
+# CROP_SOWN_BASE_URL) when it runs, so the value has to be in the runtime image too. A Helm/pod env var overrides it.
+ARG API_BASE_URL
+ENV API_BASE_URL=${API_BASE_URL}
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \

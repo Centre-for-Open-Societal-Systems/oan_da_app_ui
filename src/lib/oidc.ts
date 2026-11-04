@@ -5,7 +5,7 @@
 import { ApiError } from "@/lib/api";
 
 /** Client id of the public Keycloak client. Leave unset to sign in through IAM instead. */
-export const OIDC_CLIENT_ID = process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID ?? "";
+export const OIDC_CLIENT_ID = process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID ?? "da_registry";
 const ISSUER = (process.env.NEXT_PUBLIC_KEYCLOAK_URL ?? "https://keycloak.development.oanstaging.com/realms/staff").replace(/\/$/, "");
 const ENDPOINT = `${ISSUER}/protocol/openid-connect`;
 
@@ -66,6 +66,9 @@ async function tokenRequest(body: Record<string, string>): Promise<OidcTokenResp
 
 /** Whether the URL the browser came back on carries a Keycloak authorization result. */
 export const hasOidcResult = (search: URLSearchParams) => search.has("code") && search.has("state");
+
+/** Whether this tab left for Keycloak through buildOidcLoginUrl and has not come back yet. */
+export const hasPendingOidcLogin = () => typeof sessionStorage !== "undefined" && sessionStorage.getItem(PENDING_KEY) !== null;
 
 /** Trades the code in the callback URL for tokens, after checking the state against the one sent out. */
 export async function exchangeOidcCode(search: URLSearchParams, origin: string): Promise<OidcTokenResponse> {
