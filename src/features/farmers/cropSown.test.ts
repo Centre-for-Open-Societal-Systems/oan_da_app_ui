@@ -1,8 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { CROP_SOWN_FORM, findFarmersById, getCropSownDetails, getCropSownPrefill, getCropSownRecord, registryCode, valueKey } from "./cropSown";
+import { CROP_SOWN_FORM, CROP_SOWN_TABS, findFarmersById, getCropSownDetails, getCropSownPrefill, getCropSownRecord, registryCode, valueKey } from "./cropSown";
 import { FARMERS } from "./data";
 
 describe("Crop Sown form", () => {
+  it("shows the identity and address once, on an opening Crop Sown tab", () => {
+    expect(CROP_SOWN_TABS.map((t) => [t.label, t.sections.map((s) => s.id)])).toEqual([
+      ["Crop Sown", ["identity", "address"]],
+      ["Planning", ["planning", "planning-cluster"]],
+      ["Cultivation / Land Preparation", ["cultivation", "cultivation-cluster"]],
+      ["Sowing", ["sowing", "infestation"]],
+      ["Harvesting", ["harvest"]],
+    ]);
+  });
+
   it("follows the Crop Sown Registry tab, section and field list", () => {
     expect(CROP_SOWN_FORM.map((t) => [t.label, t.sections.map((s) => [s.title, s.fields.length])])).toEqual([
       ["Planning", [["Farmer Identity", 5], ["Address / Location", 3], ["Crop Planning Details", 42], ["Cluster Information Details", 42]]],
