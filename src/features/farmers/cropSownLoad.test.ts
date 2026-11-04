@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./cropSownApi", () => ({ fetchIntakeForm: vi.fn(), saveFarmerCrop: vi.fn(), listFarmerCrops: vi.fn(), fetchFarmerCrop: vi.fn() }));
 
-import { loadCropDetails, sectionRows, stageValues, submissionsOf, summaryOf, summaryValues, toFormValue } from "./cropSownLoad";
+import { loadCropDetails, sectionRows, stageValues, submissionsOf, summaryOf, summaryDisplay, summaryValues, toFormValue } from "./cropSownLoad";
 import { clearIntakeFormCache } from "./cropSownSubmit";
 import { fetchFarmerCrop, fetchIntakeForm, listFarmerCrops } from "./cropSownApi";
 import { CROP_SOWN_FORM } from "./cropSown";
@@ -102,6 +102,22 @@ describe("loadCropDetails", () => {
     expect(result.total).toBe(3);
     expect(result.stages).toEqual(["planning"]);
     expect(result.values).toMatchObject({ "identity.fayda_fan_id": "5837291046283715", "address.region": "Tigray", "address.zone": "North Western", "identity.production_season": "Meher" });
+  });
+
+  it("keeps read-only fields, coordinates and past crop years for display only", async () => {
+    const sections = [
+      { section_id: "cropsown_cropsown_location_section_03", records: [{ latitude: "9.1", geo_code_hierarchy_json: { region: "x" } }] },
+      { section_id: "cropsown_planning_details_section_01", records: [{ planned_date_ec: "2017-10-11" }] },
+    ];
+    vi.mocked(fetchFarmerCrop).mockResolvedValue({ sections, tabs: [] } as never);
+    const shown = await loadCropDetails("FR-9", LIST, { display: true });
+    expect(shown.values).toMatchObject({ "address.latitude": "9.1", "planning.planned_date_ec": "2017-10-11" });
+    expect(summaryDisplay({ crop_year: "2019" })).toEqual({ "identity.crop_year": "2019" });
+    expect(shown.values["address.geo_code_hierarchy_json"]).toContain("Tigray");
+
+    const form = await loadCropDetails("FR-9", LIST);
+    expect(form.values["address.latitude"]).toBeUndefined();
+    expect(form.values["planning.planned_date_ec"]).toBeUndefined();
   });
 
   it("still gives the summary when a submission cannot be read", async () => {

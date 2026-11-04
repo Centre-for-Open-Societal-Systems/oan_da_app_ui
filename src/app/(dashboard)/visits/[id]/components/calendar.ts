@@ -1,5 +1,4 @@
-import { PLANNER_DAYS, PLANNER_WEEK } from "@/features/visits";
-import type { PlannerStatus, PlannerVisit } from "@/features/visits";
+import type { PlannerStatus } from "@/features/visits";
 
 export const LEGEND: { status: PlannerStatus; label: string; dot: string }[] = [
   { status: "scheduled", label: "Scheduled", dot: "bg-blue-600" },
@@ -15,20 +14,21 @@ export const VISIT_STYLES: Record<PlannerStatus, { card: string; time: string; d
 
 export const VIEWS = ["Week", "Day", "Month"];
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-export const DAY_LABELS = PLANNER_DAYS.map((d) => d.label);
+export const DAY_LABELS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 const DAY_MS = 86_400_000;
 
-// Days are counted from the planner's first column (the "today" week's Monday = 0), so any week can be derived from it.
-const [anchorMonth, anchorYear] = PLANNER_WEEK.month.split(" ");
-const ANCHOR = Date.UTC(Number(anchorYear), MONTHS.indexOf(anchorMonth), PLANNER_DAYS[0].dayOfMonth);
+// Days are counted from the Monday of the current week (= 0), so any week can be derived from it.
+const now = new Date();
+export const TODAY = (now.getDay() + 6) % 7;
+const ANCHOR = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() - TODAY);
 
 export const dateOf = (day: number) => new Date(ANCHOR + day * DAY_MS);
 export const dayOfDate = (d: Date) => Math.round((d.getTime() - ANCHOR) / DAY_MS);
 export const weekStartOf = (day: number) => Math.floor(day / 7) * 7;
 export const weekdayLabel = (day: number) => DAY_LABELS[((day % 7) + 7) % 7];
-// Sample data only covers the current week; other weeks have no visits yet.
-export const visitsOn = (day: number): PlannerVisit[] => (day >= 0 && day < PLANNER_DAYS.length ? PLANNER_DAYS[day].visits : []);
-export const isToday = (day: number) => day >= 0 && day < PLANNER_DAYS.length && !!PLANNER_DAYS[day].isToday;
+export const isoOf = (day: number) => dateOf(day).toISOString().slice(0, 10);
+export const todayIso = isoOf(TODAY);
+export const isToday = (day: number) => day === TODAY;
 
 export const monthYear = (d: Date) => `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 export const longDate = (day: number) => {

@@ -108,6 +108,7 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
         description: description.trim(),
         priority,
         raised_for: forWhom === "farmer" ? "Farmer" : "Self",
+
         submitter_type: submitterType,
         submitter_name: submitterName.trim(),
         contact_mobile: contactMobile.trim(),
@@ -118,6 +119,7 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
         desired_outcome: desiredOutcome.trim(),
         consent_given: consent ? 1 : 0,
         is_anonymous: anonymous ? 1 : 0,
+
         client_op_id: clientOpId,
       });
       setResult({ kind: "sent", result: sent });

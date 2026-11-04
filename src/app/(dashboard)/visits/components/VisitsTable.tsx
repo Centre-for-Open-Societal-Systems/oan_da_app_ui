@@ -16,7 +16,7 @@ import { FarmerAvatar } from "@/features/farmers";
 import { VisitStatusPill } from "@/features/visits";
 import { VisitDetailsModal } from "@/features/visits";
 import { RescheduleVisitModal } from "@/features/visits";
-import { CancelVisitModal, canCancel, canLogOutcome, canReschedule, canStartVisit, listVisits, LogOutcomeModal, StartVisitModal, toVisitRecord } from "@/features/visits";
+import { CancelVisitModal, canActOnVisit, canCancel, canLogOutcome, canReschedule, canStartVisit, listVisits, LogOutcomeModal, StartVisitModal, toVisitRecord } from "@/features/visits";
 import { Banner } from "@/components/ui/Banner";
 import type { VisitRecord } from "@/features/visits";
 import type { FilterFieldConfig } from "@/components/ui/AdvancedFiltersDrawer";
@@ -48,8 +48,11 @@ const isoToday = () => {
 const ALL_DATES_LIMIT = 500;
 
 export function VisitsTable() {
-  // GET /visits is scoped by the backend: a DA gets their own visits, officers those in their scope.
+  // GET /visits is scoped by the backend: a DA gets every visit in their Kebeles, officers those in their scope.
+  // A DA's list is narrowed to their own with da_id from /me.
   const isDA = useAuthStore((s) => s.role === "DA");
+  const ownDaId = useAuthStore((s) => s.profile?.daId ?? null);
+  const daFilter = (isDA ? ownDaId : null) ?? undefined;
   const [date, setDate] = useState(isoToday);
   // Rows and the day they were loaded for; a mismatch means a newer day is loading.
   // Bumped after a reschedule: the new visit may be on another day, so the list is read again.
@@ -59,13 +62,13 @@ export function VisitsTable() {
 
   useEffect(() => {
     let current = true;
-    listVisits(date ? { date } : { limit: ALL_DATES_LIMIT })
+    listVisits(date ? { date, da_id: daFilter } : { da_id: daFilter, limit: ALL_DATES_LIMIT })
       .then(({ items, total }) => current && setLoaded({ key, rows: items.map(toVisitRecord), total, error: null }))
       .catch((err: unknown) => current && setLoaded({ key, rows: [], total: 0, error: err instanceof Error ? err.message : "Could not load visits." }));
     return () => {
       current = false;
     };
-  }, [date, key]);
+  }, [date, key, daFilter]);
 
   // Swap in the backend's copy of a visit after an action on it, and close the dialog.
   const replaceRow = (visit: Parameters<typeof toVisitRecord>[0]) => {
@@ -203,14 +206,14 @@ export function VisitsTable() {
                     {canLogOutcome(v) && (
                       <RowAction tone="solid" icon="edit" onClick={() => setModal({ type: "outcome", visit: v })}>Log outcome</RowAction>
                     )}
-                    {canStartVisit(v) && (
+                    {canStartVisit(v) && canActOnVisit(v, isDA, ownDaId) && (
                       <RowAction tone="solid" icon="check" onClick={() => setModal({ type: "start", visit: v })}>Start</RowAction>
                     )}
                     <RowAction onClick={() => setModal({ type: "view", visit: v })} icon="view">View</RowAction>
                     {(v.physicalStatus === undefined || canReschedule(v)) && (
                       <RowAction tone="neutral" icon="calendar" onClick={() => setModal({ type: "reschedule", visit: v })}>Reschedule</RowAction>
                     )}
-                    {canCancel(v) && (
+                    {canCancel(v) && canActOnVisit(v, isDA, ownDaId) && (
                       <RowAction tone="danger" icon="remove" onClick={() => setModal({ type: "cancel", visit: v })}>Cancel</RowAction>
                     )}
                   </div>

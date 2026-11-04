@@ -56,11 +56,11 @@ export const matchFarmers = (term: string, choices: Farmer[] = FARMER_CHOICES) =
 const isSampleFarmer = (farmer: Farmer) => FARMERS.some((f) => f.id === farmer.id);
 
 /**
- * The farmer's registry id: a farmer from GET /farmers already carries it as its id; a sample farmer gets a mock
- * code derived from the record.
+ * The Farmer ID (`FR-…`, the API's reg_id) every farmer API call sends: the internal farmer_id only when a farmer has
+ * no reg_id. A sample farmer gets a mock code derived from the record.
  */
 export const registryCode = (farmer: Farmer) =>
-  isSampleFarmer(farmer) ? `FR-${(88000 + farmer.name.length * 31 + farmer.kebele.length * 7).toString().slice(0, 5)}` : farmer.id;
+  isSampleFarmer(farmer) ? `FR-${(88000 + farmer.name.length * 31 + farmer.kebele.length * 7).toString().slice(0, 5)}` : farmer.regId ?? farmer.id;
 
 /** Human-readable date/time from the (uncontrolled) date and time inputs. */
 export const readWhen = () => {

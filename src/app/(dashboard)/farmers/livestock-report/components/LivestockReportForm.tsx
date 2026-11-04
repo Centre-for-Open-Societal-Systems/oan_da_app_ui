@@ -330,7 +330,7 @@ export function LivestockReportForm() {
               {submitted && farmer && (
                 <>
                   {" "}
-                  <Link href={`/farmers/${farmer.id}`} className="font-semibold underline">
+                  <Link href={`/farmers/${farmer.regId ?? farmer.id}`} className="font-semibold underline">
                     Open farmer profile
                   </Link>
                 </>
