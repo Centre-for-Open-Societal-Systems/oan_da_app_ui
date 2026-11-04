@@ -8,8 +8,10 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { ErrorAlert } from "@/components/ui/ErrorAlert";
 import { cn } from "@/lib/utils";
-import { fetchPlaces, type Place } from "@/features/farmers";
+import { loadScopeAreas, woredasInRegion, type ScopeAreas } from "@/features/assignments";
 import { ASSIGNABLE_ROLES } from "@/features/users";
+import { delegatedUserId } from "@/lib/delegatedUser";
+import { IAM_LOGIN_KEY } from "@/lib/iam";
 import { ROLE_LABELS, ROLES, type Role } from "@/lib/rbac";
 
 /** Everything the Add and Edit user forms capture (dates are display strings, e.g. "12 Mar 2019"; "—" = open-ended). */
@@ -20,58 +22,25 @@ export interface UserFormValues {
   role: Role;
   /** DA-ID the Development Agent assignment is bound to; empty for other roles. */
   daId: string;
+  /**
+   * Set when the role goes to an account that already exists because the person signed in with their staff
+   * (SSO) account: the DA Services id (…@iam.internal). No account is registered and no password is issued.
+   */
+  existingUserId?: string;
   active: boolean;
+  /** Area-master P-codes (e.g. "ET04", "ET040301"), as the backend stores and checks scopes; "" when the role has none. */
   regionScope: string;
   woredaScope: string;
   effectiveFrom: string;
   effectiveTo: string;
 }
 
-const ALL_REGIONS = "All regions";
-
-/** Every Woreda of a Region, across its Zones, from the registry's Master Data; sorted by name. */
-async function woredasOf(regionId: string): Promise<Place[]> {
-  const zones = await fetchPlaces("zone", regionId);
-  const lists = await Promise.all(zones.map((zone) => fetchPlaces("woreda", zone.id)));
-  return lists.flat().sort((a, b) => a.name.localeCompare(b.name));
-}
-
-/**
- * Regions and the chosen Region's Woredas from Master Data (GET /registries/farmer/places). Scope is saved by *name*,
- * the way the Farmer Registry names areas, so a DA's farmers can be matched to it.
- */
-function useScopePlaces(region: string) {
-  const [regions, setRegions] = useState<Place[]>([]);
-  const [woredas, setWoredas] = useState<{ region: string; list: Place[] } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let current = true;
-    fetchPlaces("region")
-      .then((list) => current && setRegions(list))
-      .catch((err: unknown) => current && setError(err instanceof Error ? err.message : "Could not load the regions."));
-    return () => {
-      current = false;
-    };
-  }, []);
-
-  const regionId = regions.find((r) => r.name === region)?.id;
-  useEffect(() => {
-    if (!regionId) return;
-    let current = true;
-    woredasOf(regionId)
-      .then((list) => current && setWoredas({ region, list }))
-      .catch((err: unknown) => current && setError(err instanceof Error ? err.message : "Could not load the woredas."));
-    return () => {
-      current = false;
-    };
-  }, [regionId, region]);
-
-  return { regions, woredas: woredas?.region === region ? woredas.list : null, error };
-}
-
-// Region-wide roles are not tied to a single Woreda.
+// Region-wide roles are not tied to a single Woreda; what the disabled Woreda field shows for them.
 const WIDE_SCOPE: Record<Role, string | null> = { DA: null, Supervisor: null, Executive: "All (read)", Admin: "All", CommsOfficer: null, SuperAdmin: "All" };
+
+// The backend's login option for staff sign-in; part of how it names the accounts it creates for them.
+
+type AccountKind = "new" | "existing";
 
 const toIso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const today = () => toIso(new Date());
@@ -82,7 +51,7 @@ export const parseDisplayDate = (value: string) => {
   return Number.isNaN(d.getTime()) ? "" : toIso(d);
 };
 
-type ErrorKey = "name" | "phone" | "email" | "daId" | "region" | "woreda" | "effectiveTo";
+type ErrorKey = "name" | "phone" | "email" | "staffUserId" | "daId" | "scope" | "effectiveTo";
 type Errors = Partial<Record<ErrorKey, string>>;
 
 // Compact field: 13px semibold label, h-9 control (matches the Add user design).
@@ -110,37 +79,68 @@ interface UserFormModalProps {
 }
 
 // Add and Edit share one form so both always carry the same fields: user details, scope and effective dates.
+// Region and Woreda come from the backend's area master (GET /master/areas) and are sent as P-codes: the
+// backend compares scopes with the codes the DA Registry puts on every DA's posting, so a name would never match.
 export function UserFormModal({ mode, initial, subtitle, onClose, onSave }: UserFormModalProps) {
   const [name, setName] = useState(initial?.name ?? "");
   const [phone, setPhone] = useState(initial?.phone ?? "");
   const [email, setEmail] = useState(initial?.email ?? "");
   const [role, setRole] = useState<Role>(initial?.role ?? "DA");
   const [daId, setDaId] = useState(initial?.daId ?? "");
+  // "new": register an account with a temporary password. "existing": the person signs in with the staff
+  // (SSO) account; only the role and scope are assigned, to the account their first sign-in created.
+  const [accountKind, setAccountKind] = useState<AccountKind>("new");
+  const [staffUserId, setStaffUserId] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [active, setActive] = useState(initial?.active ?? true);
-  const [region, setRegion] = useState(initial && initial.regionScope !== ALL_REGIONS ? initial.regionScope : "");
+  const [areas, setAreas] = useState<ScopeAreas | null>(null);
+  const [areasError, setAreasError] = useState<string | null>(null);
+  // The picked codes; "" means "not picked yet", which resolves to the first option once the areas are loaded.
+  const [region, setRegion] = useState(initial?.regionScope ?? "");
   const [woreda, setWoreda] = useState(initial?.woredaScope ?? "");
-  const scope = useScopePlaces(region);
   const [effectiveFrom, setEffectiveFrom] = useState(initial ? parseDisplayDate(initial.effectiveFrom) : "");
   const [effectiveTo, setEffectiveTo] = useState(initial ? parseDisplayDate(initial.effectiveTo) : "");
   const [errors, setErrors] = useState<Errors>({});
 
+  useEffect(() => {
+    let cancelled = false;
+    loadScopeAreas()
+      .then((loaded) => !cancelled && setAreas(loaded))
+      .catch((err: unknown) => !cancelled && setAreasError(err instanceof Error ? err.message : "Could not load the Regions and Woredas."));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const isEdit = mode === "edit";
+  const isExisting = !isEdit && accountKind === "existing";
   const wideScope = WIDE_SCOPE[role];
   // A new account is created on the backend, which signs in by email and hands out four roles (not Admin).
   const roleOptions: readonly Role[] = isEdit ? ROLES.filter((r) => r !== "SuperAdmin") : ASSIGNABLE_ROLES;
 
+  // A stored value that is not a known code (an older row holding a name) falls back to the first option.
+  const regions = areas?.regions ?? [];
+  const regionCode = regions.some((r) => r.code === region) ? region : (regions[0]?.code ?? "");
+  const woredaOptions = areas ? woredasInRegion(areas.woredas, regionCode) : [];
+  const woredaCode = woredaOptions.some((w) => w.code === woreda) ? woreda : (woredaOptions[0]?.code ?? "");
+  const needsScope = role !== "Admin";
+  const needsWoreda = needsScope && !wideScope;
+
   const submit = async () => {
     if (saving) return;
     const next: Errors = {};
-    if (name.trim().length < 3) next.name = "Enter the user's full name";
-    if (!/^\+?251\s?9\d(\s?\d){7}$/.test(phone.trim())) next.phone = "Use an Ethiopian mobile number, e.g. +251 91 234 5678";
-    if (!isEdit && !email.trim()) next.email = "Enter the email the user will sign in with";
-    else if (email.trim() && !/^\S+@\S+\.\S+$/.test(email.trim())) next.email = "Enter a valid email";
+    if (isExisting) {
+      if (!staffUserId.trim()) next.staffUserId = "Paste the user's ID from Keycloak, or their DA Services id ending in @iam.internal";
+    } else {
+      if (name.trim().length < 3) next.name = "Enter the user's full name";
+      if (!/^\+?251\s?9\d(\s?\d){7}$/.test(phone.trim())) next.phone = "Use an Ethiopian mobile number, e.g. +251 91 234 5678";
+      if (!isEdit && !email.trim()) next.email = "Enter the email the user will sign in with";
+      else if (email.trim() && !/^\S+@\S+\.\S+$/.test(email.trim())) next.email = "Enter a valid email";
+    }
     if (!isEdit && role === "DA" && !daId.trim()) next.daId = "Enter the DA-ID this agent is bound to";
-    if (role !== "Admin" && !region) next.region = "Pick the region";
-    if (!wideScope && !woreda) next.woreda = "Pick the woreda";
+    if (needsScope && !regionCode) next.scope = areasError ?? "Wait for the Regions and Woredas to load";
+    else if (needsWoreda && !woredaCode) next.scope = "This Region has no Woreda in the area master";
     if (effectiveTo && effectiveTo < (effectiveFrom || today())) next.effectiveTo = "Must be on or after the From date";
     setErrors(next);
     if (Object.keys(next).length > 0) return;
@@ -154,9 +154,10 @@ export function UserFormModal({ mode, initial, subtitle, onClose, onSave }: User
         email: email.trim(),
         role,
         daId: role === "DA" ? daId.trim() : "",
+        ...(isExisting && { existingUserId: await delegatedUserId(staffUserId, IAM_LOGIN_KEY) }),
         active,
-        regionScope: role === "Admin" ? ALL_REGIONS : region,
-        woredaScope: wideScope ?? woreda,
+        regionScope: needsScope ? regionCode : "",
+        woredaScope: needsWoreda ? woredaCode : "",
         // No From date means the assignment starts today
         effectiveFrom: formatDate(effectiveFrom || today()),
         effectiveTo: effectiveTo ? formatDate(effectiveTo) : "—",
@@ -168,6 +169,10 @@ export function UserFormModal({ mode, initial, subtitle, onClose, onSave }: User
   };
 
   const clear = (key: ErrorKey) => setErrors((e) => ({ ...e, [key]: undefined }));
+  const areaOption = (a: { code: string; name_en: string }) => (
+    <option key={a.code} value={a.code}>{a.name_en} ({a.code})</option>
+  );
+  const loadingOption = <option value="">{areasError ? "Areas unavailable" : "Loading…"}</option>;
 
   return (
     <Modal
@@ -190,15 +195,55 @@ export function UserFormModal({ mode, initial, subtitle, onClose, onSave }: User
         </div>
       )}
       <Section title="User details" first>
-        <FormField label="Full name" htmlFor="uf-name" required hint={errors.name} hintTone="error" className={cn(FIELD, "sm:col-span-2")}>
-          <Input id="uf-name" value={name} onChange={(e) => { setName(e.target.value); clear("name"); }} placeholder="e.g. Hana Alemu" className={CONTROL} />
-        </FormField>
-        <FormField label="Mobile number" htmlFor="uf-phone" required hint={errors.phone} hintTone="error" className={FIELD}>
-          <Input id="uf-phone" type="tel" value={phone} onChange={(e) => { setPhone(e.target.value); clear("phone"); }} placeholder="+251 91 234 5678" className={CONTROL} />
-        </FormField>
-        <FormField label="Email" htmlFor="uf-email" required={!isEdit} hint={errors.email} hintTone="error" className={FIELD}>
-          <Input id="uf-email" type="email" value={email} onChange={(e) => { setEmail(e.target.value); clear("email"); }} placeholder="name@moa.gov.et" className={CONTROL} />
-        </FormField>
+        {!isEdit && (
+          <div role="radiogroup" aria-label="Account" className="flex gap-1 rounded-lg border border-zinc-200 bg-surface p-1 sm:col-span-2">
+            {([
+              ["new", "New account", "Creates the account and a temporary password"],
+              ["existing", "Existing staff account", "Signs in with the staff (SSO) account; assign the role only"],
+            ] as const).map(([kind, label, hint]) => (
+              <button
+                key={kind}
+                type="button"
+                role="radio"
+                aria-checked={accountKind === kind}
+                title={hint}
+                onClick={() => { setAccountKind(kind); setErrors({}); }}
+                className={cn("flex-1 rounded-md px-3 py-1.5 text-[13px] font-semibold transition-colors", accountKind === kind ? "bg-white text-brand-green shadow-sm" : "text-ink-soft hover:text-ink")}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+        {isExisting ? (
+          <>
+            <FormField
+              label="Staff user ID"
+              htmlFor="uf-staff-id"
+              required
+              hint={errors.staffUserId ?? "The user's ID in Keycloak (Users → the user → ID), or their DA Services id ending in @iam.internal. They must have signed in once with the staff account."}
+              hintTone={errors.staffUserId ? "error" : undefined}
+              className={cn(FIELD, "sm:col-span-2")}
+            >
+              <Input id="uf-staff-id" value={staffUserId} onChange={(e) => { setStaffUserId(e.target.value); clear("staffUserId"); }} placeholder="e.g. 3f2c1d8e-1111-4c3e-9d2f-8b5a1e7c3f90" className={cn(CONTROL, "font-mono")} />
+            </FormField>
+            <FormField label="Full name" htmlFor="uf-name" hint="Shown in this table only; the name itself comes from the staff account." className={cn(FIELD, "sm:col-span-2")}>
+              <Input id="uf-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Hana Alemu" className={CONTROL} />
+            </FormField>
+          </>
+        ) : (
+          <>
+            <FormField label="Full name" htmlFor="uf-name" required hint={errors.name} hintTone="error" className={cn(FIELD, "sm:col-span-2")}>
+              <Input id="uf-name" value={name} onChange={(e) => { setName(e.target.value); clear("name"); }} placeholder="e.g. Hana Alemu" className={CONTROL} />
+            </FormField>
+            <FormField label="Mobile number" htmlFor="uf-phone" required hint={errors.phone} hintTone="error" className={FIELD}>
+              <Input id="uf-phone" type="tel" value={phone} onChange={(e) => { setPhone(e.target.value); clear("phone"); }} placeholder="+251 91 234 5678" className={CONTROL} />
+            </FormField>
+            <FormField label="Email" htmlFor="uf-email" required={!isEdit} hint={errors.email} hintTone="error" className={FIELD}>
+              <Input id="uf-email" type="email" value={email} onChange={(e) => { setEmail(e.target.value); clear("email"); }} placeholder="name@moa.gov.et" className={CONTROL} />
+            </FormField>
+          </>
+        )}
         {/* A new account always starts active; Status only changes on an existing one. */}
         {isEdit && (
           <FormField label="Status" htmlFor="uf-active" required className={FIELD}>
@@ -209,7 +254,7 @@ export function UserFormModal({ mode, initial, subtitle, onClose, onSave }: User
           </FormField>
         )}
         <FormField label="Role" htmlFor="uf-role" required className={FIELD}>
-          <Select id="uf-role" value={role} onChange={(e) => { setRole(e.target.value as Role); clear("daId"); }} className={CONTROL}>
+          <Select id="uf-role" value={role} onChange={(e) => { setRole(e.target.value as Role); clear("daId"); clear("scope"); }} className={CONTROL}>
             {roleOptions.map((r) => (
               <option key={r} value={r}>{ROLE_LABELS[r]}</option>
             ))}
@@ -220,48 +265,32 @@ export function UserFormModal({ mode, initial, subtitle, onClose, onSave }: User
             <Input id="uf-da-id" value={daId} onChange={(e) => { setDaId(e.target.value); clear("daId"); }} placeholder="e.g. DA-000003" className={CONTROL} />
           </FormField>
         )}
-        {!isEdit && (
+        {!isEdit && !isExisting && (
           <p className="text-[12.5px] text-ink-soft sm:col-span-2">A temporary password is generated when you save. Share it with the user; they sign in with this email.</p>
         )}
       </Section>
 
       <Section title="Scope">
-        {scope.error && (
-          <div className="sm:col-span-2">
-            <ErrorAlert message={`Could not load the location list: ${scope.error}`} />
-          </div>
-        )}
-        <FormField label="Region" htmlFor="uf-region" required hint={errors.region} hintTone="error" className={FIELD}>
+        <FormField label="Region" htmlFor="uf-region" required={needsScope} hint={errors.scope ?? areasError ?? undefined} hintTone="error" className={FIELD}>
           <Select
             id="uf-region"
-            value={role === "Admin" ? ALL_REGIONS : region}
-            disabled={role === "Admin"}
-            onChange={(e) => { setRegion(e.target.value); setWoreda(""); clear("region"); }}
+            value={needsScope ? regionCode : ""}
+            disabled={!needsScope || !areas}
+            onChange={(e) => { setRegion(e.target.value); setWoreda(""); clear("scope"); }}
             className={CONTROL}
           >
-            {role === "Admin" ? (
-              <option value={ALL_REGIONS}>{ALL_REGIONS}</option>
-            ) : (
-              <>
-                <option value="" disabled>{scope.regions.length ? "Select region" : "Loading…"}</option>
-                {/* A saved region stays selectable before (or without) a Master Data match. */}
-                {region && !scope.regions.some((r) => r.name === region) && <option value={region}>{region}</option>}
-                {scope.regions.map((r) => <option key={r.id} value={r.name}>{r.name}</option>)}
-              </>
-            )}
+            {!needsScope ? <option value="">All regions</option> : areas ? regions.map(areaOption) : loadingOption}
           </Select>
         </FormField>
-        <FormField label="Woreda" htmlFor="uf-woreda" required hint={errors.woreda} hintTone="error" className={FIELD}>
-          <Select id="uf-woreda" value={wideScope ?? woreda} disabled={!!wideScope || !region} onChange={(e) => { setWoreda(e.target.value); clear("woreda"); }} className={CONTROL}>
-            {wideScope ? (
-              <option value={wideScope}>{wideScope}</option>
-            ) : (
-              <>
-                <option value="" disabled>{!region ? "Pick a region first" : scope.woredas ? "Select woreda" : "Loading…"}</option>
-                {woreda && !scope.woredas?.some((w) => w.name === woreda) && <option value={woreda}>{woreda}</option>}
-                {scope.woredas?.map((w) => <option key={w.id} value={w.name}>{w.name}</option>)}
-              </>
-            )}
+        <FormField label="Woreda" htmlFor="uf-woreda" required={needsWoreda} className={FIELD}>
+          <Select
+            id="uf-woreda"
+            value={needsWoreda ? woredaCode : ""}
+            disabled={!needsWoreda || !areas}
+            onChange={(e) => { setWoreda(e.target.value); clear("scope"); }}
+            className={CONTROL}
+          >
+            {!needsWoreda ? <option value="">{wideScope ?? "All"}</option> : areas ? woredaOptions.map(areaOption) : loadingOption}
           </Select>
         </FormField>
       </Section>

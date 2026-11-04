@@ -13,6 +13,8 @@ import { ApiError } from "@/lib/api";
 import { readDraft, removeDraft, writeDraft } from "@/lib/drafts";
 import {
   CROP_SOWN_FORM,
+  CROP_SOWN_INTRO_TAB,
+  CROP_SOWN_TABS,
   FARMERS,
   FarmerAvatar,
   describeCropSownError,
@@ -84,7 +86,7 @@ export function CropReportForm() {
   const [farmer, setFarmer] = useState<Farmer>();
   const [values, setValues] = useState<CropSownValues>({});
   const [prefilled, setPrefilled] = useState<CropSownValues>({});
-  const [tab, setTab] = useState(CROP_SOWN_FORM[0].key);
+  const [tab, setTab] = useState(CROP_SOWN_TABS[0].key);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -127,7 +129,7 @@ export function CropReportForm() {
     setPrefilled(prefill);
     // The registry takes the current crop year only: start from it (editable).
     setValues(hasDraft ? draft.values : { ...prefill, [valueKey("identity", "crop_year")]: String(new Date().getFullYear()) });
-    setTab(CROP_SOWN_FORM[0].key);
+    setTab(CROP_SOWN_TABS[0].key);
     setSubmitted(false);
     setShowAutoFillBanner(true);
     if (hasDraft) {
@@ -244,13 +246,16 @@ export function CropReportForm() {
   // Each stage is saved before moving on, so a closed tab or lost connection costs at most the current stage.
   /** Runs the registry's checks on the current tab (and the identity the stage hangs on); true when nothing is wrong. */
   const checkTab = (): boolean => {
-    const all = validateSections(current.sections, values);
+    // A stage hangs on the identity (and Planning on the address), which the "Crop Sown" tab holds: checked as the stage is saved.
+    const stage = CROP_SOWN_FORM.find((t) => t.key === tab)?.sections ?? current.sections;
+    const all = validateSections(stage, values);
     // A value fetched from the registry cannot be edited here, so it is not held to the form's rules (the Farmer ID, which
     // the user typed to find the farmer, still is).
     const found = Object.fromEntries(Object.entries(all).filter(([k]) => !(k in prefilled) || k === "identity.farmer_id"));
     setErrors(found);
     const bad = Object.keys(found);
     if (bad.length === 0) return true;
+    if (!current.sections.some((s) => bad[0].startsWith(`${s.id}.`))) setTab(CROP_SOWN_INTRO_TAB);
     setNotice({ tone: "error", title: `${bad.length} field${bad.length === 1 ? "" : "s"} need attention`, body: found[bad[0]] });
     window.setTimeout(() => document.getElementById(bad[0])?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
     return false;
@@ -260,10 +265,10 @@ export function CropReportForm() {
   const showSaveError = (err: unknown, title: string) => {
     const message = describeCropSownError(err);
     // The tab being saved first: field names such as land_id repeat across the four forms.
-    const named = err instanceof MissingFieldError ? null : fieldInMessage(message, current.sections) ?? fieldInMessage(message, CROP_SOWN_FORM.flatMap((t) => t.sections));
+    const named = err instanceof MissingFieldError ? null : fieldInMessage(message, current.sections) ?? fieldInMessage(message, CROP_SOWN_TABS.flatMap((t) => t.sections));
     if (err instanceof MissingFieldError) setTab(err.tab);
     if (named) {
-      const owner = current.sections.some((s) => s.id === named.sectionId) ? current : CROP_SOWN_FORM.find((t) => t.sections.some((s) => s.id === named.sectionId));
+      const owner = current.sections.some((s) => s.id === named.sectionId) ? current : CROP_SOWN_TABS.find((t) => t.sections.some((s) => s.id === named.sectionId));
       if (owner && owner.key !== tab) setTab(owner.key);
       setErrors({ [named.key]: message });
       window.setTimeout(() => document.getElementById(named.key)?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
@@ -323,15 +328,15 @@ export function CropReportForm() {
     setPrefilled({});
     setSubmitted(false);
     setIsEditing(false);
-    setTab(CROP_SOWN_FORM[0].key);
+    setTab(CROP_SOWN_TABS[0].key);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const tabIndex = CROP_SOWN_FORM.findIndex((t) => t.key === tab);
-  const current = CROP_SOWN_FORM[tabIndex];
-  const isLast = tabIndex === CROP_SOWN_FORM.length - 1;
+  const tabIndex = CROP_SOWN_TABS.findIndex((t) => t.key === tab);
+  const current = CROP_SOWN_TABS[tabIndex];
+  const isLast = tabIndex === CROP_SOWN_TABS.length - 1;
   const goTo = (i: number) => {
-    setTab(CROP_SOWN_FORM[i].key);
+    setTab(CROP_SOWN_TABS[i].key);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
   // Registry choices for the current tab; the geo ids picked in each section are kept for the save.
@@ -557,7 +562,7 @@ export function CropReportForm() {
                 <SegmentTabs
                   label="Crop Sown stages"
                   className="border-0 shadow-none rounded-none"
-                  tabs={CROP_SOWN_FORM.map((t) => ({
+                  tabs={CROP_SOWN_TABS.map((t) => ({
                     key: t.key,
                     label: t.label,
                     // Fields still to enter on this stage.
@@ -633,7 +638,7 @@ export function CropReportForm() {
                     onClick={handleOpenConfirm}
                     className="flex items-center gap-1.5 px-6 py-2.5 font-semibold"
                   >
-                    Submit Crop Report →
+                    Submit Crop sown →
                   </Button>
                 ) : (
                   <Button

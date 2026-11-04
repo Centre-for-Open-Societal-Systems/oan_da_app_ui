@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { AgentsPageHeader, ModuleStrip } from "@/features/agents";
-import { ExceptionsPanel } from "@/features/agents";
 import { AgentsRegistry } from "./components/AgentsRegistry";
 
 export const metadata: Metadata = {
@@ -14,7 +13,6 @@ export default function AgentsPage() {
       <AgentsPageHeader />
       <ModuleStrip activeHref="/agents" />
       <AgentsRegistry />
-      <ExceptionsPanel />
     </div>
   );
 }
