@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
@@ -14,13 +14,14 @@ import { useAuthStore } from "@/store/useAuthStore";
 import {
   fetchGrievanceOptions,
   newClientOpId,
-  SAMPLE_KEBELE,
   selfSubmitter,
   submitGrievance,
   toAdministrativeArea,
+  type GrievanceArea,
   type GrievanceOptions,
   type SubmitGrievanceResult,
 } from "../api";
+import { DaKebele, KebelePicker } from "./KebelePicker";
 import { VoiceRecorder } from "./VoiceRecorder";
 
 interface Props {
@@ -43,6 +44,8 @@ type Result = { kind: "draft" } | { kind: "sent"; result: SubmitGrievanceResult 
 const DA_SUBMITTER_TYPE = "Development Agent";
 const SUBMITTER_TYPES_FALLBACK = ["Individual Farmer", "Cooperative", DA_SUBMITTER_TYPE, "FPO", "NGO", "Woreda/Kebele Body"];
 const PRIORITIES = ["Low", "Medium", "High", "Critical"];
+/** The Grievance Service's min_description_length. */
+const MIN_DESCRIPTION = 20;
 
 // FR-12 / FR-12a: native raise form → POST /grievances → external case ID. When the Grievance Service is down
 // DA Services queues the grievance and returns no ticket yet; it is forwarded once the service is back.
@@ -68,12 +71,13 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
   const [grievanceType, setGrievanceType] = useState("");
   const [priority, setPriority] = useState("Medium");
 
-  // Administrative area: the DA portal has no geo lookup yet (see api.ts), so the Kebele code + name are entered.
-  // A DA raising for themselves starts from the Kebele on their record.
-  const areaFor = (whom: "farmer" | "me") =>
-    whom === "me" && role === "DA" && self.kebeleCode && self.kebeleName ? { code: self.kebeleCode, name: self.kebeleName } : SAMPLE_KEBELE;
-  const [kebeleCode, setKebeleCode] = useState(() => areaFor(forWhom).code);
-  const [kebeleName, setKebeleName] = useState(() => areaFor(forWhom).name);
+  // Administrative area: picked from the Grievance Service's own list (KebelePicker).
+  const [kebeleCode, setKebeleCode] = useState("");
+  const [kebeleName, setKebeleName] = useState("");
+  const pickKebele = useCallback((kebele: GrievanceArea | null) => {
+    setKebeleCode(kebele?.code ?? "");
+    setKebeleName(kebele?.area_name ?? "");
+  }, []);
 
   // Content
   const [subject, setSubject] = useState("");
@@ -122,15 +126,13 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
 
   const chooseFor = (whom: "farmer" | "me") => {
     setForWhom(whom);
-    const area = areaFor(whom);
-    setKebeleCode(area.code);
-    setKebeleName(area.name);
+    pickKebele(null);
   };
 
   const reset = () => {
     setSubject(""); setDescription(""); setDesiredOutcome("");
     setSubmitterName(""); setContactMobile(""); setFarmerRef(farmerId ?? "");
-    setGrievanceType(""); setKebeleCode(areaFor(forWhom).code); setKebeleName(areaFor(forWhom).name);
+    setGrievanceType(""); pickKebele(null);
     setConsent(true); setAnonymous(false);
     setError(null); setResult(null);
     setClientOpId(newClientOpId());
@@ -177,13 +179,13 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
   const canSubmit =
     (forWhom !== "farmer" || !!farmerRef.trim()) &&
     subject.trim().length >= 3 &&
-    description.trim().length >= 10 &&
+    description.trim().length >= MIN_DESCRIPTION &&
     !!serviceCategory &&
     !!grievanceType &&
     effectiveName.trim().length >= 2 &&
     effectiveMobile.trim().length >= 6 &&
-    kebeleCode.trim().length >= 3 &&
-    kebeleName.trim().length >= 2 &&
+    !!kebeleCode &&
+    !!kebeleName &&
     !submitting;
   const reference = result?.kind === "sent" ? result.result.ticket_number ?? result.result.ticket_id : null;
   const queued = result?.kind === "sent" && result.result.sync_state === "pending";
@@ -272,20 +274,12 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
             </FormField>
           </div>
 
-          {/* Administrative area — Kebele code + name (no DA-side geo lookup yet; see api.ts). */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="Kebele code" htmlFor="grv-kebele-code" required {...minLengthNote(kebeleCode, 3, "Grievance geo code; submitted as kebele-<code>. ")}>
-              <Input id="grv-kebele-code" value={kebeleCode} onChange={(e) => setKebeleCode(e.target.value)} placeholder="e.g. ET140108101008" />
-            </FormField>
-            <FormField label="Kebele name" htmlFor="grv-kebele-name" required {...minLengthNote(kebeleName, 2)}>
-              <Input id="grv-kebele-name" value={kebeleName} onChange={(e) => setKebeleName(e.target.value)} placeholder="e.g. Kebele 01 Center" />
-            </FormField>
-          </div>
+          {selfAsDa ? <DaKebele woredaCode={self.woredaCode} kebeleName={self.kebeleName} onChange={pickKebele} /> : <KebelePicker onChange={pickKebele} />}
 
           <FormField label="Subject" htmlFor="grv-subject" required {...minLengthNote(subject, 3)}>
             <Input id="grv-subject" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Short title" />
           </FormField>
-          <FormField label="Description" htmlFor="grv-desc" required {...minLengthNote(description, 10)}>
+          <FormField label="Description" htmlFor="grv-desc" required {...minLengthNote(description, MIN_DESCRIPTION)}>
             <Textarea id="grv-desc" rows={4} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What happened, where, and when" />
           </FormField>
           <VoiceRecorder />

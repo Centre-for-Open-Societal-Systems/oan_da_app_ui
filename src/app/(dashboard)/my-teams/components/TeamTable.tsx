@@ -107,7 +107,7 @@ export function TeamTable({ team, myDaId, loading = false }: { team: TeamMember[
         minWidth="960px"
         state={loading ? "loading" : "ready"}
         emptyTitle={team.length === 0 ? "No team members yet" : "No team members match the selected filters"}
-        emptyHint={team.length === 0 ? "You will see your Woreda colleagues here once the DA Registry lists them in your Woreda." : "Clear a filter or try a different search."}
+        emptyHint={team.length === 0 ? "You will see your Kebele colleagues here once the DA Registry lists them in your Woreda." : "Clear a filter or try a different search."}
       />
 
       <AdvancedFiltersDrawer
@@ -115,6 +115,7 @@ export function TeamTable({ team, myDaId, loading = false }: { team: TeamMember[
         onClose={() => setIsFiltersOpen(false)}
         fields={filterFields}
         filters={filters}
+        showDateRange={false}
         onApply={(next) =>
           setFilters({
             specialisation: next.specialisation ?? new Set(),

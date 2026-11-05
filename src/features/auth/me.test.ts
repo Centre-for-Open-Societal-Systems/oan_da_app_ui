@@ -53,6 +53,14 @@ beforeEach(() => {
   useAuthStore.setState({ user: null, isAuthenticated: false, tokens: null, profile: null });
 });
 
+describe("toMeSession name", () => {
+  it("shows the DA's registry name instead of the account name", () => {
+    const body = me();
+    body.data.agent = { full_name: " Selamawit Tesfaye " };
+    expect(toMeSession(body)?.user.name).toBe("Selamawit Tesfaye");
+  });
+});
+
 describe("toMeSession", () => {
   it("maps /me to identity, portal role and profile", () => {
     expect(toMeSession(me())).toEqual({

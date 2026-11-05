@@ -204,7 +204,7 @@ export function RegisterFarmerWizard() {
 
       {optionsError !== null && (
         <Banner tone="error" title="The registry's lists could not be loaded">
-          {describeFarmerError(optionsError)} The dropdowns stay empty until they load; reload the page to try again.
+          {describeFarmerError(optionsError)} Some dropdowns use a basic list or stay empty until they load; reload the page to try again.
         </Banner>
       )}
       {notice && (

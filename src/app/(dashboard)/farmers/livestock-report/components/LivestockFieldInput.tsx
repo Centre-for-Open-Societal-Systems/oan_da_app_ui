@@ -25,7 +25,7 @@ const BOOLEAN_CHOICES = [
 // One Livestock field, rendered by its type. The form holds strings; what is sent is decided in buildLivestockSections.
 export function LivestockFieldInput({ id, field, value, onChange, error, animals }: LivestockFieldInputProps) {
   return (
-    <div className="flex min-w-0 flex-col gap-2">
+    <div className={error ? "field-invalid flex min-w-0 flex-col gap-2" : "flex min-w-0 flex-col gap-2"}>
       <label htmlFor={id} className="text-[14px] font-medium text-ink">
         {field.label} {(field.required || field.requiredInRow) && !field.readOnly && <span className="text-danger">*</span>}
       </label>

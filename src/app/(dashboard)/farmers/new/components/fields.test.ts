@@ -11,6 +11,7 @@ describe("choicesFor", () => {
     expect(choicesFor(null, "gender")?.map((o) => o.value)).toEqual(["male", "female"]);
     expect(choicesFor(null, "marital_status")?.length).toBeGreaterThan(0);
     expect(choicesFor({}, "education_level")?.length).toBeGreaterThan(0);
+    expect(choicesFor(null, "income_sources")?.map((o) => o.value)).toEqual(["crop", "livestock", "govngo", "other"]);
   });
 
   it("has no fallback for other lists", () => {

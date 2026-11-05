@@ -234,13 +234,23 @@ export async function submitGrievance(body: SubmitGrievanceRequest): Promise<Sub
 }
 
 // --- administrative area ----------------------------------------------------
-// The create endpoint validates administrative_area against the grievance service's geo registry, as
-// `kebele-<geo value_id>` (e.g. "kebele-ET140108101008"). As of 2026-11-04 no DA-token-accessible endpoint
-// lists those codes (the registries' /geo-level-values reject the DA issuer, and grievances exposes no areas
-// route), so the raise form takes the Kebele code directly. Swap to a picker once the backend exposes one.
+// The create endpoint validates administrative_area against the Grievance Service's own area list, as
+// `kebele-<code>` (e.g. "kebele-ET140108101008"). Those codes are not the DA record's Kebele codes.
 
-/** A known-valid staging Kebele, used to prefill the raise form's area field. */
-export const SAMPLE_KEBELE = { code: "ET140108101008", name: "Kebele 01 Center" };
+/** One row of the Grievance Service's area list. */
+export interface GrievanceArea {
+  /** "region-ET14", "kebele-ET140108101008", … */
+  area_id: string;
+  area_name: string;
+  code: string;
+}
+
+/** The areas under `parent` (the regions without one), read through this app's /api/grievance-areas. */
+export async function fetchGrievanceAreas(parent?: string): Promise<GrievanceArea[]> {
+  const res = await fetch(`/api/grievance-areas${parent ? `?parent=${encodeURIComponent(parent)}` : ""}`);
+  if (!res.ok) throw new Error("Could not load the areas. Please try again.");
+  return ((await res.json()) as { areas: GrievanceArea[] }).areas;
+}
 
 /** administrative_area the create endpoint expects for a Kebele: `kebele-<geo value_id>`. */
 export const toAdministrativeArea = (kebeleCode: string) => {
@@ -341,7 +351,7 @@ export function selfSubmitter(agent: Record<string, unknown> | null | undefined,
   return {
     name: text(agent?.full_name) || accountName.trim(),
     mobile: text(agent?.phone) || text(agent?.mobile),
-    kebeleCode: text(agent?.kebele),
+    woredaCode: text(agent?.woreda),
     kebeleName: text(agent?.kebele_name),
   };
 }

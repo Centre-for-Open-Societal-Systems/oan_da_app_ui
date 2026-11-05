@@ -25,6 +25,8 @@ interface AdvancedFiltersDrawerProps {
   filters: FilterSelection;
   /** `range` is the Date Range (yyyy-mm-dd, empty = open ended); pages without date data ignore it. */
   onApply: (next: FilterSelection, range: { from: string; to: string }) => void;
+  /** Hide the Date Range block on pages whose rows have no date to filter. */
+  showDateRange?: boolean;
 }
 
 type QuickRange = "today" | "yesterday" | "7d" | "30d";
@@ -63,7 +65,7 @@ function rangeFor(quick: QuickRange): { from: string; to: string } {
   return { from: toISODate(start), to: toISODate(today) };
 }
 
-export function AdvancedFiltersDrawer({ isOpen, onClose, fields, filters, onApply }: AdvancedFiltersDrawerProps) {
+export function AdvancedFiltersDrawer({ isOpen, onClose, fields, filters, onApply, showDateRange = true }: AdvancedFiltersDrawerProps) {
   // Unique per drawer so pages with two tables (two drawers) do not repeat element ids.
   const uid = useId();
   const [mounted, setMounted] = useState(false);
@@ -182,6 +184,7 @@ export function AdvancedFiltersDrawer({ isOpen, onClose, fields, filters, onAppl
             </FormField>
           ))}
 
+          {showDateRange && (
           <div className="flex flex-col gap-3">
             <p className="text-[14px] font-medium text-ink">Date Range</p>
             <div className="grid grid-cols-2 gap-3">
@@ -227,6 +230,7 @@ export function AdvancedFiltersDrawer({ isOpen, onClose, fields, filters, onAppl
               })}
             </div>
           </div>
+          )}
         </div>
 
         <div className="flex items-center gap-3 border-t border-line bg-surface px-6 py-5">

@@ -242,3 +242,10 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 input[type="date"]:hover::-webkit-calendar-picker-indicator {
   opacity: 1;
 }
+
+/* A field whose note is an error: the control itself turns red too, whatever kind it is (see FormField). */
+.field-invalid input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.field-invalid textarea,
+.field-invalid [role="combobox"] {
+  border-color: var(--color-danger);
+}

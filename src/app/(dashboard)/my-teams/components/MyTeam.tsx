@@ -12,8 +12,8 @@ import { TeamTable } from "./TeamTable";
 const asApiAgent = (value: Record<string, unknown> | null | undefined): ApiAgent | null =>
   value && typeof value.da_id === "string" ? (value as unknown as ApiAgent) : null;
 
-// A DA's team is the other Development Agents in their Woreda (GET /da-services/experts, scoped by the backend),
-// with the DA's own registry record (from /me) first.
+// A DA's team is the other Development Agents in their Kebele (GET /da-services/experts is scoped to the Woreda by the
+// backend, so the Kebele is narrowed here), with the DA's own registry record (from /me) first.
 export function MyTeam() {
   const profile = useAuthStore((s) => s.profile);
   const me = useMemo(() => {
@@ -32,11 +32,14 @@ export function MyTeam() {
     };
   }, []);
 
-  const colleagues = loaded?.items ?? [];
+  // The registry may give a Kebele as its code or its name. A DA with no Kebele on record sees their Woreda.
+  const record = asApiAgent(profile?.agent);
+  const myKebeles = [record?.kebele, record?.kebele_name].filter((k): k is string => !!k);
+  const colleagues = (loaded?.items ?? []).filter((m) => myKebeles.length === 0 || myKebeles.includes(m.kebele));
   const team = me ? [me, ...colleagues.filter((m) => m.daId !== me.daId)] : colleagues;
-  const description = me?.woreda
-    ? `Development Agents in ${me.woreda} Woreda${me.region ? `, ${me.region}` : ""}`
-    : "The Development Agents in your Woreda, from the DA Registry.";
+  const description = myKebeles.length > 0 && me
+    ? `Development Agents in ${me.kebele} Kebele, ${me.woreda} Woreda`
+    : "The Development Agents in your Kebele, from the DA Registry.";
 
   return (
     <div className="flex w-full flex-col gap-4">

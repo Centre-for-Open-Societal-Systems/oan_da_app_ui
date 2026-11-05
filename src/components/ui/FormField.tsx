@@ -15,7 +15,7 @@ interface FormFieldProps {
 
 export function FormField({ label, htmlFor, required, hint, hintTone = "muted", className, children }: FormFieldProps) {
   return (
-    <div className={cn("flex flex-col gap-2", className)}>
+    <div className={cn("flex flex-col gap-2", hint && hintTone === "error" && "field-invalid", className)}>
       <label htmlFor={htmlFor} className="text-[14px] font-medium text-ink">
         {label}
         {required && <span className="ml-1 text-danger">*</span>}
