@@ -17,6 +17,8 @@ export * from "./components/StatusPill";
 export * from "./farmersApi";
 export * from "./registryApi";
 export * from "./livestockReport";
+export * from "./livestockApi";
+export * from "./livestockRecords";
 export * from "./cropSownApi";
 export * from "./useGeoLevels";
 export * from "./cropSownSubmit";
