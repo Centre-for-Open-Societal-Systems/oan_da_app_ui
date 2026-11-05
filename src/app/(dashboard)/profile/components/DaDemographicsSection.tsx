@@ -153,7 +153,7 @@ export function DaDemographicsSection({ editing, profile, editableFields, onEdit
                     );
                   }
                   return (
-                    <FormField key={f.key} label={f.label} htmlFor={id}>
+                    <FormField key={f.key} label={f.label} htmlFor={id} hint={f.key === "mobile" ? "Ethiopian mobile number, e.g. +251 91 234 5678." : f.key === "email" ? "If given, a valid email address." : undefined}>
                       {f.key === "education" ? (
                         <Select id={id} name={f.key} defaultValue={p.education} className="h-11">
                           {educationOptions.map((l) => <option key={l}>{l}</option>)}

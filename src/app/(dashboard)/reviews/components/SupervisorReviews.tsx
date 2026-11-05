@@ -136,19 +136,21 @@ function StartReviewModal({ onClose, onStart }: { onClose: () => void; onStart: 
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <FormField label="Review period start" htmlFor="rv-start"><Input id="rv-start" type="date" value={start} onChange={(e) => setStart(e.target.value)} /></FormField>
-          <FormField label="Review period end" htmlFor="rv-end" hint={start && end && start > end ? "End must be after the start." : undefined} hintTone="error">
+          <FormField label="Review period start" htmlFor="rv-start" required><Input id="rv-start" type="date" value={start} onChange={(e) => setStart(e.target.value)} /></FormField>
+          <FormField label="Review period end" htmlFor="rv-end" required hint={start && end && start > end ? "End must be after the start." : "On or after the start date."} hintTone={start && end && start > end ? "error" : "muted"}>
             <Input id="rv-end" type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
           </FormField>
         </div>
 
-        <FormField label="Coach / reviewer" htmlFor="rv-coach">
+        <FormField label="Coach / reviewer" htmlFor="rv-coach" required>
           <Dropdown id="rv-coach" value={coach} onChange={setCoach} options={REVIEW_COACHES} placeholder="Kassahun Tessema" />
         </FormField>
 
         <FormField label="Kickoff note (optional)" htmlFor="rv-note">
           <Textarea id="rv-note" rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="What should this review focus on?" className="rounded-lg border-line" />
         </FormField>
+
+        {!valid && <p className="text-[12.5px] text-muted">Complete every field marked * to enable Start review.</p>}
       </div>
     </Modal>
   );

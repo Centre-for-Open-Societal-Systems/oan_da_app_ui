@@ -149,6 +149,8 @@ export function LeaveRequestModal({ onClose }: { onClose: () => void }) {
           <FormField label="Notes (optional)" htmlFor="lr-notes">
             <Textarea id="lr-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Write here..." />
           </FormField>
+
+          {!canSend && <p className="text-[12.5px] text-muted">Complete every field marked * to enable Send to {approver}.</p>}
         </div>
 
         <LeaveCalendar

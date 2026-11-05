@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Pill } from "@/components/ui/Pill";
 import { Banner } from "@/components/ui/Banner";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { Checkbox } from "@/components/ui/Checkbox";
-import { FARMERS } from "@/features/farmers";
+import { apiFarmerToFarmer, describeFarmerError, listFarmers, type Farmer } from "@/features/farmers";
 import { RESPONSE_TONE, type Parameter, type ResponseStatus, type SurveyTask } from "@/features/surveys";
 import { cn } from "@/lib/utils";
 import { BackLink } from "@/components/ui/BackLink";
@@ -26,7 +26,20 @@ export function SurveyCapture({ task }: { task: SurveyTask }) {
   const [answers, setAnswers] = useState<Answers>({});
   const [status, setStatus] = useState<ResponseStatus | "In progress" | "Declined" | null>(null);
 
-  const farmer = FARMERS.find((f) => f.id === farmerId);
+  const [farmers, setFarmers] = useState<Farmer[] | null>(null);
+  const [farmersError, setFarmersError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let current = true;
+    listFarmers({ pageSize: 500 })
+      .then(({ items }) => current && setFarmers(items.map(apiFarmerToFarmer)))
+      .catch((err: unknown) => current && setFarmersError(describeFarmerError(err)));
+    return () => {
+      current = false;
+    };
+  }, []);
+
+  const farmer = farmers?.find((f) => f.id === farmerId);
   const duplicate = Boolean(farmerId && answered.has(farmerId));
 
   // Skip logic: hide parameters whose condition isn't met
@@ -92,9 +105,10 @@ export function SurveyCapture({ task }: { task: SurveyTask }) {
           <div className="mt-5">
             <label htmlFor="farmer" className="text-[14px] font-medium text-ink">Farmer</label>
             <Select id="farmer" value={farmerId} disabled={started} onChange={(e) => { setFarmerId(e.target.value); setStatus(null); }} className="mt-1.5">
-              <option value="">Select farmer…</option>
-              {FARMERS.map((f) => <option key={f.id} value={f.id}>{f.name} — {f.kebele}{answered.has(f.id) ? " (answered)" : ""}</option>)}
+              <option value="">{farmers ? (farmers.length === 0 ? "No farmer assigned" : "Select farmer…") : "Loading farmers…"}</option>
+              {farmers?.map((f) => <option key={f.id} value={f.id}>{f.name} — {f.kebele}{answered.has(f.id) ? " (answered)" : ""}</option>)}
             </Select>
+            {farmersError && <p className="mt-1.5 text-[12.5px] font-medium text-danger">{farmersError}</p>}
             {duplicate && <p className="mt-1.5 text-[12.5px] font-medium text-danger">A response for this farmer already exists for this survey — one response per farmer.</p>}
           </div>
 

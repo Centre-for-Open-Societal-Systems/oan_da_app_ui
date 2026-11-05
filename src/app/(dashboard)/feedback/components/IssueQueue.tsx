@@ -241,9 +241,10 @@ export function IssueQueue() {
                 </Select>
               </FormField>
             )}
-            <FormField label={action.type === "assign" ? "Note (optional)" : action.type === "info" ? "What do you need from the reporter?" : action.type === "resolve" ? "Resolution note" : "Why is this being reopened?"} htmlFor="note" required={action.type !== "assign"} hint="Added to the audit history and sent to the reporter by app/SMS.">
+            <FormField label={action.type === "assign" ? "Note (optional)" : action.type === "info" ? "What do you need from the reporter?" : action.type === "resolve" ? "Resolution note" : "Why is this being reopened?"} htmlFor="note" required={action.type !== "assign"} hint={`${action.type === "assign" ? "" : "At least 3 characters. "}Added to the audit history and sent to the reporter by app/SMS.`} hintTone={action.type !== "assign" && note.trim().length > 0 && note.trim().length < 3 ? "error" : "muted"}>
               <Textarea id="note" rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
             </FormField>
+            {action.type !== "assign" && note.trim().length < 3 && <p className="text-[12.5px] text-muted">Complete every field marked * to enable {{ assign: "Assign", info: "Send request", resolve: "Mark resolved", reopen: "Reopen" }[action.type]}.</p>}
             <div className="rounded-lg border border-line bg-surface p-3">
               <p className="text-[12px] font-semibold uppercase tracking-wider text-muted">History</p>
               <ul className="mt-1.5 space-y-1 text-[12.5px] text-ink-soft">

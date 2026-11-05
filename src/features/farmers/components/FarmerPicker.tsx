@@ -8,6 +8,8 @@ interface FarmerPickerProps {
   selected: Farmer | undefined;
   onSelect: (farmer: Farmer | undefined) => void;
   matches: Farmer[];
+  /** Shown when there are no farmers at all, e.g. "No farmer assigned" or the loading text. */
+  emptyText: string;
   query: string;
   /** True once a search ran for the current (non-empty) term — shows the match count. */
   showCount: boolean;
@@ -15,7 +17,7 @@ interface FarmerPickerProps {
 }
 
 // The picked farmer, or the search results / no-match message.
-export function FarmerPicker({ selected, onSelect, matches, query, showCount, onClearSearch }: FarmerPickerProps) {
+export function FarmerPicker({ selected, onSelect, matches, emptyText, query, showCount, onClearSearch }: FarmerPickerProps) {
   return (
     <div className="flex flex-col gap-2">
       <p className="text-[14px] font-medium text-ink">
@@ -39,7 +41,7 @@ export function FarmerPicker({ selected, onSelect, matches, query, showCount, on
           </button>
         </div>
       ) : matches.length === 0 && !query.trim() ? (
-        <p className="rounded-lg border border-dashed border-slate-300 bg-surface px-4 py-5 text-center text-[14px] font-semibold text-ink">No farmer assigned</p>
+        <p className="rounded-lg border border-dashed border-slate-300 bg-surface px-4 py-5 text-center text-[14px] font-semibold text-ink">{emptyText}</p>
       ) : matches.length === 0 ? (
         <div className="flex flex-col items-center gap-1 rounded-lg border border-dashed border-slate-300 bg-surface px-4 py-5 text-center">
           <p className="text-[14px] font-semibold text-ink">No farmers match &ldquo;{query.trim()}&rdquo;</p>

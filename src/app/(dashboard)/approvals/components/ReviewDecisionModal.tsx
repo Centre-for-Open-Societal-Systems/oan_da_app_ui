@@ -43,10 +43,11 @@ export function ReviewDecisionModal({ reviewIds, reason, reasonError, onReasonCh
         Return {reviewIds && reviewIds.length > 1 ? `these ${reviewIds.length} DA submissions to their applicants` : "this DA submission to the applicant"} or reject it. The applicant is notified and the audit trail is updated.
       </p>
       <FormField
-        label="Reason (required)"
+        label="Reason"
         htmlFor="review-reason"
-        hint={reasonError ? `Enter a reason (at least ${MIN_NOTE} characters).` : undefined}
-        hintTone="error"
+        required
+        hint={`At least ${MIN_NOTE} characters.`}
+        hintTone={reasonError || (reason.trim().length > 0 && reason.trim().length < MIN_NOTE) ? "error" : "muted"}
         className="mt-4 [&>label]:text-[13px] [&>label]:text-slate-600"
       >
         <Textarea

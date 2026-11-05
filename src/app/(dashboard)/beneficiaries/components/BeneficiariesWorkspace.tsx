@@ -19,7 +19,7 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { FilterDropdown, type FilterOption } from "@/components/ui/FilterDropdown";
 import { AdvancedFiltersDrawer, type FilterFieldConfig, type FilterSelection } from "@/components/ui/AdvancedFiltersDrawer";
 import { useAuthStore } from "@/store/useAuthStore";
-import { FARMERS, FarmerAvatar } from "@/features/farmers";
+import { apiFarmerToFarmer, describeFarmerError, FarmerAvatar, listFarmers, type Farmer } from "@/features/farmers";
 import { SEGMENTS, segmentName, useBeneficiariesStore, type Beneficiary, type Segment } from "@/features/beneficiaries";
 import { matchesQuery, searchPlaceholder } from "@/lib/search";
 import { cn } from "@/lib/utils";
@@ -71,6 +71,24 @@ export function BeneficiariesWorkspace() {
   const [addFarmers, setAddFarmers] = useState<Set<string>>(() => new Set());
   const [farmerQuery, setFarmerQuery] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
+  // The caller's farmers from GET /farmers, read when the Add form first opens.
+  const [farmers, setFarmers] = useState<Farmer[] | null>(null);
+  const [farmersError, setFarmersError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!addOpen || farmers) return;
+    let current = true;
+    listFarmers({ pageSize: 500 })
+      .then(({ items }) => {
+        if (!current) return;
+        setFarmersError(null);
+        setFarmers(items.map(apiFarmerToFarmer));
+      })
+      .catch((err: unknown) => current && setFarmersError(describeFarmerError(err)));
+    return () => {
+      current = false;
+    };
+  }, [addOpen, farmers]);
   const pickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -122,7 +140,7 @@ export function BeneficiariesWorkspace() {
     );
   }, [rows, filters, query]);
 
-  const pickerMatches = FARMERS.filter((f) => matchesQuery(farmerQuery, f.name, f.kebele, f.woreda, f.crop, f.livestock, f.phone));
+  const pickerMatches = (farmers ?? []).filter((f) => matchesQuery(farmerQuery, f.name, f.kebele, f.woreda, f.crop, f.livestock, f.phone));
   const allMatchesPicked = pickerMatches.length > 0 && pickerMatches.every((f) => addFarmers.has(f.id));
 
   const togglePick = (id: string) =>
@@ -146,7 +164,7 @@ export function BeneficiariesWorkspace() {
   const add = () => {
     if (addFarmers.size === 0) return;
     setAddOpen(false);
-    const { added, skipped } = linkFarmers([...addFarmers], addSegment);
+    const { added, skipped } = linkFarmers((farmers ?? []).filter((f) => addFarmers.has(f.id)), addSegment);
     const parts = [
       added.length > 0 && `${added.length === 1 ? added[0] : `${added.length} farmers`} added to “${segmentName(addSegment)}” — Pending verification against the segment rule. The Farmer Registry record is untouched.`,
       skipped.length > 0 && `Already in this segment: ${skipped.join(", ")}.`,
@@ -334,7 +352,7 @@ export function BeneficiariesWorkspace() {
               </div>
 
               <ul className="max-h-[240px] min-h-0 overflow-y-auto overscroll-contain green-scrollbar">
-                {pickerMatches.length === 0 && <li className="px-4 py-4 text-center text-[13px] text-muted">No matches for “{farmerQuery.trim()}”</li>}
+                {pickerMatches.length === 0 && <li className="px-4 py-4 text-center text-[13px] text-muted">{farmersError ?? (!farmers ? "Loading farmers…" : farmers.length === 0 ? "No farmer assigned" : `No matches for “${farmerQuery.trim()}”`)}</li>}
                 {pickerMatches.map((f) => (
                   <li key={f.id} className="border-b border-line-soft last:border-0">
                     <label className="flex cursor-pointer items-center gap-3 px-4 py-2.5 transition-colors hover:bg-surface">

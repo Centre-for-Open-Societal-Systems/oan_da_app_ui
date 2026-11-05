@@ -138,11 +138,11 @@ export function DemographicsSection({ editing, onEdit, onCancel, onSubmit }: Dem
               <div className="grid grid-cols-1 content-start gap-x-6 gap-y-5 md:grid-cols-2 xl:grid-cols-3">
                 <LockedField label="First Name" value={p.firstName} required />
                 <LockedField label="Last Name" value={p.lastName} required />
-                <FormField label="Mobile Phone" htmlFor="mobile">
+                <FormField label="Mobile Phone" htmlFor="mobile" required hint="Ethiopian mobile number, e.g. +251 91 234 5678.">
                   <Input id="mobile" name="mobile" type="tel" defaultValue={p.mobile} className="h-11" />
                 </FormField>
 
-                <FormField label="Email ID" htmlFor="email">
+                <FormField label="Email ID" htmlFor="email" hint="If given, a valid email address.">
                   <Input id="email" name="email" type="email" defaultValue={p.email} className="h-11" />
                 </FormField>
                 <LockedField label="Date of Birth" value={formatDate(p.dob)} required />

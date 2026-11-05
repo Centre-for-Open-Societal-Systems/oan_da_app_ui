@@ -72,7 +72,7 @@ export function LoginCard() {
           {error && <ErrorAlert message={error} />}
 
           <div className="flex flex-col gap-1.5">
-            <label className={AUTH_LABEL} htmlFor="email">Email or username</label>
+            <label className={AUTH_LABEL} htmlFor="email">Email or username<span className="ml-1 text-danger">*</span></label>
             <Input
               id="email"
               name="email"
@@ -91,7 +91,7 @@ export function LoginCard() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className={AUTH_LABEL} htmlFor="password">Password</label>
+            <label className={AUTH_LABEL} htmlFor="password">Password<span className="ml-1 text-danger">*</span></label>
             <PasswordInput id="password" name="password" autoComplete="current-password" />
           </div>
 

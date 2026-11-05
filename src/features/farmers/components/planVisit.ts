@@ -46,11 +46,8 @@ export function readVisitDetails() {
 
 export const FORM_ID = "plan-visit-form";
 
-// One entry per distinct farmer (the mock list repeats names to fill a page).
-export const FARMER_CHOICES = FARMERS.filter((f, i, all) => all.findIndex((o) => o.name === f.name) === i);
-
 /** Farmers whose name, phone or kebele contains the (lower-cased, trimmed) term; all of them when it is empty. */
-export const matchFarmers = (term: string, choices: Farmer[] = FARMER_CHOICES) =>
+export const matchFarmers = (term: string, choices: Farmer[]) =>
   term ? choices.filter((f) => `${f.name} ${f.phone} ${f.kebele}`.toLowerCase().includes(term)) : choices;
 
 const isSampleFarmer = (farmer: Farmer) => FARMERS.some((f) => f.id === farmer.id);

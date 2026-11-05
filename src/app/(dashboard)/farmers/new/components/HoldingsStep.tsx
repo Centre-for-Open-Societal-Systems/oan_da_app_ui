@@ -21,7 +21,7 @@ export function HoldingsStep({ form, update, errors, options, optionsLoading }: 
         render={(row, i) => (
           <Grid>
             <OptionField id={`lands.${i}.ownership`} label="Ownership" list="ownership" required {...choice} value={row.ownership} onChange={(v) => setLand(i, { ownership: v })} error={errors[`lands.${i}.ownership`]} />
-            <TextField id={`lands.${i}.area_hectare`} label="Area (ha)" type="number" inputMode="decimal" required value={row.area_hectare} onChange={(v) => setLand(i, { area_hectare: v })} error={errors[`lands.${i}.area_hectare`]} />
+            <TextField id={`lands.${i}.area_hectare`} label="Area (ha)" type="number" inputMode="decimal" required value={row.area_hectare} onChange={(v) => setLand(i, { area_hectare: v })} error={errors[`lands.${i}.area_hectare`]} hint="A number above 0." />
           </Grid>
         )}
       />
@@ -48,7 +48,7 @@ export function HoldingsStep({ form, update, errors, options, optionsLoading }: 
         render={(row, i) => (
           <Grid>
             <OptionField id={`livestock.${i}.animal`} label="Animal" list="animal" required {...choice} value={row.animal} onChange={(v) => setAnimal(i, { animal: v })} error={errors[`livestock.${i}.animal`]} />
-            <TextField id={`livestock.${i}.count`} label="Count" type="number" inputMode="numeric" required value={row.count} onChange={(v) => setAnimal(i, { count: v })} error={errors[`livestock.${i}.count`]} />
+            <TextField id={`livestock.${i}.count`} label="Count" type="number" inputMode="numeric" required value={row.count} onChange={(v) => setAnimal(i, { count: v })} error={errors[`livestock.${i}.count`]} hint="Whole number, 1 or more." />
             <OptionField id={`livestock.${i}.system`} label="System" list="livestock_system" {...choice} value={row.system} onChange={(v) => setAnimal(i, { system: v })} error={errors[`livestock.${i}.system`]} />
           </Grid>
         )}

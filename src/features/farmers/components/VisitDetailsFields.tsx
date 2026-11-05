@@ -26,7 +26,7 @@ export function VisitDetailsFields({ selected, preset, isSchedule }: VisitDetail
       </FormField>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <FormField label="Date" htmlFor="visit-date" required hint={pastDate ? "You cannot select past date for visit" : undefined} hintTone="error">
+        <FormField label="Date" htmlFor="visit-date" required hint={pastDate ? "You cannot select past date for visit" : "Today or later."} hintTone={pastDate ? "error" : "muted"}>
           <Input id="visit-date" type="date" className="h-10" value={date} min={today} onChange={(e) => setDate(e.target.value)} required />
         </FormField>
         <FormField label="Time" htmlFor="visit-time" required>

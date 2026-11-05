@@ -2,18 +2,22 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
+
+export interface FarmerSearchHit {
+  id: string;
+  name: string;
+  details: string;
+}
 
 interface SearchModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Farmers matching the text; it talks to the backend, so the layout passes it in. */
+  searchFarmers?: (searchText: string) => Promise<FarmerSearchHit[]>;
 }
 
-const MOCK_FARMERS = [
-  { id: '1', name: 'Lelise Gudeta', details: 'Bako Tibe kebele, Teff, 1.2 ha' },
-  { id: '2', name: 'Almaz Tesfaye', details: 'Gedo kebele, Maize, 0.8 ha' },
-  { id: '3', name: 'Chaltu Dinkesa', details: 'Lume woreda, Wheat, 2.5 ha' },
-  { id: '4', name: 'Abebe Kebede', details: 'Gedo kebele, Barley, 1.5 ha' },
-];
+const FARMER_SEARCH_DEBOUNCE_MS = 300;
 
 const MOCK_AGENTS = [
   { id: '1', name: 'Almaz Regassa', details: 'Development Agent, Lume woreda' },
@@ -27,14 +31,31 @@ const MOCK_KEBELES = [
 ];
 
 const RECENT_SEARCHES = [
-  'Chaltu Dinkesa',
   'Bako Tibe',
   'Payments overdue'
 ];
 
-export function SearchModal({ isOpen, onClose }: SearchModalProps) {
+export function SearchModal({ isOpen, onClose, searchFarmers }: SearchModalProps) {
   const [mounted, setMounted] = useState(false);
   const [query, setQuery] = useState("");
+  const [farmerHits, setFarmerHits] = useState<FarmerSearchHit[]>([]);
+  const router = useRouter();
+
+  // Farmers in the caller's scope, one request per pause in typing; a failed search just shows none.
+  useEffect(() => {
+    const searchText = query.trim();
+    if (!searchText || !searchFarmers) return;
+    let current = true;
+    const timer = setTimeout(() => {
+      searchFarmers(searchText)
+        .then((hits) => current && setFarmerHits(hits))
+        .catch(() => current && setFarmerHits([]));
+    }, FARMER_SEARCH_DEBOUNCE_MS);
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
+  }, [query, searchFarmers]);
 
   useEffect(() => {
     const t = setTimeout(() => setMounted(true), 0); return () => clearTimeout(t);
@@ -72,9 +93,7 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
 
   const normalizedQuery = query.toLowerCase().trim();
   
-  const filteredFarmers = normalizedQuery 
-    ? MOCK_FARMERS.filter(f => f.name.toLowerCase().includes(normalizedQuery) || f.details.toLowerCase().includes(normalizedQuery))
-    : [];
+  const filteredFarmers = normalizedQuery ? farmerHits : [];
     
   const filteredAgents = normalizedQuery 
     ? MOCK_AGENTS.filter(a => a.name.toLowerCase().includes(normalizedQuery) || a.details.toLowerCase().includes(normalizedQuery))
@@ -165,7 +184,7 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
                 <div className="mb-3">
                   <div className="px-3 py-2 text-[11px] font-bold text-muted tracking-wider uppercase">Farmers</div>
                   {filteredFarmers.map((farmer) => (
-                    <div key={farmer.id} className="flex items-center justify-between px-3 py-2.5 hover:bg-zinc-50 rounded-lg cursor-pointer transition-colors group">
+                    <div key={farmer.id} onClick={() => { onClose(); router.push(`/farmers/${farmer.id}`); }} className="flex items-center justify-between px-3 py-2.5 hover:bg-zinc-50 rounded-lg cursor-pointer transition-colors group">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-zinc-100 text-muted group-hover:bg-brand-green/10 group-hover:text-brand-green transition-colors flex items-center justify-center shrink-0">
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

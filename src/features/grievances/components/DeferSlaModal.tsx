@@ -147,6 +147,7 @@ export function DeferSlaModal({ onClose, onSubmit }: DeferSlaModalProps) {
             )}
           </div>
 
+          {!canSubmit && <p className="text-[12.5px] text-muted">Complete every field marked * to enable Submit for Approval.</p>}
           <Banner tone="warning">Deferral requests are logged in the audit trail. The approver will be notified and must explicitly approve or reject
               the request. SLA clock continues until approval is granted.</Banner>
         </div>

@@ -58,14 +58,14 @@ export function LeaveTypeModal({ existing, takenNames, onClose, onSave }: { exis
   return (
     <Modal isOpen onClose={onClose} title={existing ? "Edit a leave type" : "Add a leave type"} size="md" bodyClassName={BODY} footer={<Footer onCancel={onClose} confirm={existing ? "Save changes" : "Add leave type"} onConfirm={save} disabled={!valid} />}>
       <div className="flex flex-col gap-4">
-        <FormField label="Name" htmlFor="lt-name">
+        <FormField label="Name" htmlFor="lt-name" required>
           <Select id="lt-name" value={name} onChange={(e) => setName(e.target.value)} className={FIELD}>
             <option value="" disabled>e.g. Sick leave</option>
             {names.map((n) => <option key={n} value={n}>{n}</option>)}
           </Select>
         </FormField>
         <Row2>
-          <FormField label="Base days" htmlFor="lt-days">
+          <FormField label="Base days" htmlFor="lt-days" required hint="More than 0." hintTone={baseDays !== "" && !(Number(baseDays) > 0) ? "error" : "muted"}>
             <Input id="lt-days" type="number" min={1} value={baseDays} onChange={(e) => setBaseDays(e.target.value)} />
           </FormField>
           <FormField label="Count" htmlFor="lt-count">
@@ -93,6 +93,7 @@ export function LeaveTypeModal({ existing, takenNames, onClose, onSave }: { exis
         <FormField label="Legal basis" htmlFor="lt-legal">
           <Input id="lt-legal" value={legalBasis} onChange={(e) => setLegalBasis(e.target.value)} />
         </FormField>
+        {!valid && <p className="text-[12.5px] text-muted">Complete every field marked * to enable {existing ? "Save changes" : "Add leave type"}.</p>}
       </div>
     </Modal>
   );
@@ -223,6 +224,7 @@ export function ImportPolicyModal({ onClose, onCheck, onDownloadBlank }: { onClo
           <input ref={inputRef} type="file" accept=".xlsx" className="hidden" onChange={(e) => { pick(e.target.files); e.target.value = ""; }} />
         </div>
         {error && <p className="text-[12.5px] text-danger">{error}</p>}
+        {!file && <p className="text-[12.5px] text-muted">Choose an .xlsx workbook to enable Check file.</p>}
         <p className="text-[14px] text-ink-soft">Every row is checked first. Nothing changes until you import.</p>
         <button type="button" onClick={onDownloadBlank} className="w-fit text-[14px] font-semibold text-brand-green hover:underline">Download the blank policy workbook</button>
       </div>

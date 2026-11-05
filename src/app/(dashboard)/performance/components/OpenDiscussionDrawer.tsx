@@ -113,6 +113,7 @@ export function OpenDiscussionDrawer({ kpi, onClose, onSend }: OpenDiscussionDra
                 <span className="text-[13px] text-muted">%</span>
               </span>
             </label>
+            {choice === "change" && <p className={cn("text-[12.5px]", value !== "" && !valid ? "text-danger" : "text-muted")}>Enter a target from 0 to 100 to enable Send reply.</p>}
           </div>
 
           <Textarea

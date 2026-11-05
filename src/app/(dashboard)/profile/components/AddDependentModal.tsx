@@ -56,12 +56,12 @@ export function AddDependentModal({ isOpen, onClose, onSubmit }: AddDependentMod
           New dependents are added here and routed to your Woreda Extension Officer for approval.
         </p>
 
-        <FormField label="Full name" htmlFor="dep-name">
+        <FormField label="Full name" htmlFor="dep-name" required>
           <Input id="dep-name" name="name" className="h-10" placeholder="e.g. Hana Alemu" required autoFocus />
         </FormField>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <FormField label="Relationship" htmlFor="dep-relationship">
+          <FormField label="Relationship" htmlFor="dep-relationship" required>
             <Select id="dep-relationship" name="relationship" className="h-10" defaultValue="" required>
               <option value="" disabled>Select relationship</option>
               {RELATIONSHIPS.map((r) => (
@@ -69,7 +69,7 @@ export function AddDependentModal({ isOpen, onClose, onSubmit }: AddDependentMod
               ))}
             </Select>
           </FormField>
-          <FormField label="Date of birth" htmlFor="dep-dob">
+          <FormField label="Date of birth" htmlFor="dep-dob" required>
             <Input id="dep-dob" name="dateOfBirth" type="date" className="h-10" placeholder="DD MMM YYYY" required />
           </FormField>
         </div>

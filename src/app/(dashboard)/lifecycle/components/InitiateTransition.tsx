@@ -95,6 +95,9 @@ export function useSessionDraft(draftKey: string, initial: InitiateDraft) {
   };
 }
 
+/** The "today or later" rule of a date field as its note; red on a failed submit, or once the date is earlier. */
+export const fromTodayNote = (value: string, error?: string) => ({ hint: error ?? "Today or later.", hintTone: error || (!!value && value < todayIso()) ? ("error" as const) : ("muted" as const) });
+
 export function FormSection({ step, title, subtitle, tone, children }: { step: number; title: string; subtitle: string; tone: LifecycleTransition["tone"]; children: ReactNode }) {
   return (
     <section className="[&+section]:border-t [&+section]:border-line-soft">
@@ -119,7 +122,7 @@ export function LockedField({ id, label, value }: { id: string; label: string; v
   );
 }
 
-export function DocumentPicker({ title = "Supporting document", label, tone, files, onChange }: { title?: string; label: string; tone: LifecycleTransition["tone"]; files: File[]; onChange: (files: File[]) => void }) {
+export function DocumentPicker({ title = "Supporting document", required, label, tone, files, onChange }: { title?: string; required?: boolean; label: string; tone: LifecycleTransition["tone"]; files: File[]; onChange: (files: File[]) => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -133,7 +136,7 @@ export function DocumentPicker({ title = "Supporting document", label, tone, fil
 
   return (
     <div className="flex flex-col gap-2 sm:col-span-2">
-      <p className="text-[14px] font-medium text-ink">{title}</p>
+      <p className="text-[14px] font-medium text-ink">{title}{required && <span className="ml-1 text-danger">*</span>}</p>
       <div
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
@@ -261,7 +264,7 @@ export function InitiateTransition({ slug }: { slug: string }) {
     </FormField>
   );
   const effectiveField = (
-    <FormField key="effective" label="Effective date" htmlFor="lc-effective" required hint={error("effective")} hintTone="error">
+    <FormField key="effective" label="Effective date" htmlFor="lc-effective" required {...fromTodayNote(draft.effective, error("effective"))}>
       <Input id="lc-effective" type="date" min={todayIso()} value={draft.effective} onChange={(e) => set("effective", e.target.value)} />
     </FormField>
   );

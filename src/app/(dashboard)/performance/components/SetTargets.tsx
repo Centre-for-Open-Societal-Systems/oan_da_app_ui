@@ -158,7 +158,7 @@ export function SetTargets({ agent, initialTab = "targets" }: { agent: TeamMembe
 
       {tab === "targets" && (
         <Card className="flex flex-col gap-3 px-5 py-4 shadow-card sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[13.5px] text-ink-soft">Changes are saved with your name and the date.</p>
+          <p className="text-[13.5px] text-ink-soft">Changes are saved with your name and the date. Every target needs a value of 0 or more; percent targets go up to 100.{hasInvalid && " Fix the outlined targets to enable Save targets."}</p>
           <Button variant="brand" className="h-10 px-6" disabled={hasInvalid} onClick={() => setConfirming(true)}>Save targets</Button>
         </Card>
       )}

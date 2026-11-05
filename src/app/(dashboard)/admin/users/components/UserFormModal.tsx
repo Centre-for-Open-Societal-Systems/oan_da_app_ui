@@ -58,6 +58,11 @@ type Errors = Partial<Record<ErrorKey, string>>;
 const FIELD = "gap-1.5 [&>label]:text-[13px] [&>label]:font-semibold";
 const CONTROL = "h-9 border-zinc-200 text-[13.5px]";
 
+/** A rule as the field's visible note; red on a failed save, or once what is typed breaks it. */
+const note = (rule: string, error?: string, broken = false) => ({ hint: error ?? rule, hintTone: error || broken ? ("error" as const) : ("muted" as const) });
+const tooShort = (value: string, min: number) => value.trim().length > 0 && value.trim().length < min;
+const breaks = (value: string, rule: RegExp) => value.trim().length > 0 && !rule.test(value.trim());
+
 function Section({ title, children, first }: { title: string; children: ReactNode; first?: boolean }) {
   return (
     <section className={cn("px-4 py-5 sm:px-6", !first && "border-t border-line")}>
@@ -233,13 +238,13 @@ export function UserFormModal({ mode, initial, subtitle, onClose, onSave }: User
           </>
         ) : (
           <>
-            <FormField label="Full name" htmlFor="uf-name" required hint={errors.name} hintTone="error" className={cn(FIELD, "sm:col-span-2")}>
+            <FormField label="Full name" htmlFor="uf-name" required {...note("At least 3 characters.", errors.name, tooShort(name, 3))} className={cn(FIELD, "sm:col-span-2")}>
               <Input id="uf-name" value={name} onChange={(e) => { setName(e.target.value); clear("name"); }} placeholder="e.g. Hana Alemu" className={CONTROL} />
             </FormField>
-            <FormField label="Mobile number" htmlFor="uf-phone" required hint={errors.phone} hintTone="error" className={FIELD}>
+            <FormField label="Mobile number" htmlFor="uf-phone" required {...note("Ethiopian mobile number, e.g. +251 91 234 5678.", errors.phone, breaks(phone, /^\+?251\s?9\d(\s?\d){7}$/))} className={FIELD}>
               <Input id="uf-phone" type="tel" value={phone} onChange={(e) => { setPhone(e.target.value); clear("phone"); }} placeholder="+251 91 234 5678" className={CONTROL} />
             </FormField>
-            <FormField label="Email" htmlFor="uf-email" required={!isEdit} hint={errors.email} hintTone="error" className={FIELD}>
+            <FormField label="Email" htmlFor="uf-email" required={!isEdit} {...note("A valid email address.", errors.email, breaks(email, /^\S+@\S+\.\S+$/))} className={FIELD}>
               <Input id="uf-email" type="email" value={email} onChange={(e) => { setEmail(e.target.value); clear("email"); }} placeholder="name@moa.gov.et" className={CONTROL} />
             </FormField>
           </>
@@ -299,7 +304,7 @@ export function UserFormModal({ mode, initial, subtitle, onClose, onSave }: User
         <FormField label="From" htmlFor="uf-from" className={FIELD}>
           <Input id="uf-from" type="date" value={effectiveFrom} onChange={(e) => { setEffectiveFrom(e.target.value); clear("effectiveTo"); }} className={CONTROL} />
         </FormField>
-        <FormField label="To" htmlFor="uf-to" hint={errors.effectiveTo} hintTone="error" className={FIELD}>
+        <FormField label="To" htmlFor="uf-to" {...note("Must be on or after the From date.", errors.effectiveTo, !!effectiveTo && effectiveTo < (effectiveFrom || today()))} className={FIELD}>
           <Input id="uf-to" type="date" value={effectiveTo} min={effectiveFrom || undefined} onChange={(e) => { setEffectiveTo(e.target.value); clear("effectiveTo"); }} className={CONTROL} />
         </FormField>
       </Section>

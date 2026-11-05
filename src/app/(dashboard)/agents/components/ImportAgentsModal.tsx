@@ -142,6 +142,7 @@ export function ImportAgentsModal({ isOpen, onClose, onImported }: Props) {
     >
       <div className="flex flex-col gap-4">
         {error && <Banner tone="error" onDismiss={() => setError(null)}>{error}</Banner>}
+        {!file && <p className="text-[12.5px] text-muted">Choose a file to enable Validate only and Upload &amp; import.</p>}
 
         <div
           role="button"

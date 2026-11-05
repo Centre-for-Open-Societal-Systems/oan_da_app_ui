@@ -87,6 +87,7 @@ export function PlanVisitModal({ farmer, isOpen, onClose, mode = "plan", preset 
           selected={v.selected}
           onSelect={v.setSelected}
           matches={v.matches}
+          emptyText={v.emptyText}
           query={v.query}
           showCount={v.searched && !!v.term}
           onClearSearch={() => v.changeQuery("")}

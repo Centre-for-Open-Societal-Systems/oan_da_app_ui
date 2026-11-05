@@ -109,6 +109,8 @@ export function SendReminderModal({ senderName, members, agent, onClose, onSend 
             className="rounded-lg border-line"
           />
         </FormField>
+
+        {!valid && <p className="text-[12.5px] text-muted">Complete every field marked * to enable Send to {names.length} agent{names.length === 1 ? "" : "s"}.</p>}
       </div>
     </Modal>
   );

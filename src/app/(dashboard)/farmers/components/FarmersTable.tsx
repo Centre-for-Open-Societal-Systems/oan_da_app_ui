@@ -115,7 +115,7 @@ export function FarmersTable() {
   const selectedFarmers = source.filter((f) => selected.has(f.id));
 
   const addToBeneficiaries = () => {
-    const { added, skipped } = linkBeneficiaries([...selected], segmentId);
+    const { added, skipped } = linkBeneficiaries(selectedFarmers, segmentId);
     const parts = [
       added.length > 0 && `${added.length} farmer${added.length === 1 ? "" : "s"} added to “${segmentName(segmentId)}” — Pending verification.`,
       skipped.length > 0 && `Already in this segment: ${skipped.join(", ")}.`,
