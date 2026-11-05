@@ -1,3 +1,4 @@
+import { farmerActivity } from "./filters";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuthStore } from "@/store/useAuthStore";
 import {
@@ -183,5 +184,13 @@ describe("mapping the collection's example responses", () => {
   it("words 503 and a 400's details as the integration guide says", () => {
     expect(describeFarmerError(new ApiError("x", 503))).toBe("Registry unavailable, try again.");
     expect(describeFarmerError(new ApiError("Validation failed", 400, { kebele: "Kebele is required", phone: "Invalid phone" }))).toBe("Kebele is required Invalid phone");
+  });
+});
+
+describe("farmerActivity", () => {
+  it("shows an approved farmer as Active and every other one as Inactive", () => {
+    expect(farmerActivity("Verified")).toBe("Active");
+    expect(farmerActivity("Pending")).toBe("Inactive");
+    expect(farmerActivity("Flagged")).toBe("Inactive");
   });
 });

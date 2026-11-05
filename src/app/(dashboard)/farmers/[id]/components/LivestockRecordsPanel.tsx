@@ -1,20 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import { Banner } from "@/components/ui/Banner";
-import { Select } from "@/components/ui/Select";
-import { headCount, livestockDetailsTabs, noLivestockHolding, type Farmer, type LivestockHolding, type LivestockOverview } from "@/features/farmers";
+import { livestockDetailsTabs, noLivestockHolding, type Farmer, type LivestockOverview } from "@/features/farmers";
 import { useAuthStore } from "@/store/useAuthStore";
 import { LivestockDetailsSection } from "./LivestockDetailsSection";
 
-const holdingLabel = (h: LivestockHolding) => {
-  const place = [h.holding.kebele, h.holding.woreda].filter((p) => typeof p === "string" && p).join(", ");
-  return `${h.label}${place ? ` · ${place}` : ""} · ${headCount(h)} heads · ${h.status}`;
-};
-
-// The profile's "Livestock Details": a farmer can have several holdings, so one is picked (newest first) and shown in full.
+// The profile's "Livestock Details": the farmer's newest holding, shown in full.
 export function LivestockRecordsPanel({ overview, error, farmer }: { overview: LivestockOverview | null; error?: string; farmer: Farmer }) {
-  const [selected, setSelected] = useState<string>();
   const signedInWithSso = useAuthStore((s) => s.tokens?.provider === "iam" || s.tokens?.provider === "oidc");
 
   if (error) return <Banner tone="error" title="Livestock details could not be loaded">{error}</Banner>;
@@ -36,24 +28,6 @@ export function LivestockRecordsPanel({ overview, error, farmer }: { overview: L
     );
   }
 
-  const current = overview.holdings.find((h) => h.key === selected) ?? overview.holdings[0];
-  return (
-    <div className="flex flex-col gap-4">
-      {overview.holdings.length > 1 && (
-        <div className="flex flex-col gap-2">
-          <label htmlFor="livestock-holding" className="text-[14px] font-medium text-ink">
-            Holding ({overview.holdings.length})
-          </label>
-          <Select id="livestock-holding" value={current.key} onChange={(e) => setSelected(e.target.value)}>
-            {overview.holdings.map((h) => (
-              <option key={h.key} value={h.key}>
-                {holdingLabel(h)}
-              </option>
-            ))}
-          </Select>
-        </div>
-      )}
-      <LivestockDetailsSection key={current.key} tabs={livestockDetailsTabs(current, farmer.name)} />
-    </div>
-  );
+  const [newest] = overview.holdings;
+  return <LivestockDetailsSection key={newest.key} tabs={livestockDetailsTabs(newest, farmer.name)} />;
 }
