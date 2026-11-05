@@ -33,9 +33,10 @@ export function CoverDialog({ leave, onClose, onSave }: { leave: TeamLeaveRow; o
       }
     >
       <div className="flex flex-col gap-4">
-        <FormField label="Covering agent" htmlFor="cv-agent">
+        <FormField label="Covering agent" htmlFor="cv-agent" required>
           <Dropdown id="cv-agent" value={cover} onChange={setCover} options={options} placeholder="Select a DA" triggerClassName="h-12" />
         </FormField>
+        {!cover && <p className="text-[12.5px] text-muted">Complete every field marked * to enable Save cover.</p>}
         {cover && <Banner tone="success">Farmer visits and alerts for {leave.kebele} go to {firstName(cover)} while {firstName(leave.agent)} is away.</Banner>}
       </div>
     </Modal>
@@ -78,9 +79,9 @@ export function ApproveDialog({ request, onClose, onApprove }: { request: Waitin
 }
 
 // A date shown as "12 Tahsas 2019"; a transparent date input over it opens the native picker.
-function DateField({ id, label, value, min, onChange }: { id: string; label: string; value: string; min?: string; onChange: (iso: string) => void }) {
+function DateField({ id, label, value, min, hint, broken, onChange }: { id: string; label: string; value: string; min?: string; hint?: string; broken?: boolean; onChange: (iso: string) => void }) {
   return (
-    <FormField label={label} htmlFor={id}>
+    <FormField label={label} htmlFor={id} required hint={hint} hintTone={broken ? "error" : "muted"}>
       <div className="relative flex h-12 items-center justify-between gap-2 rounded-lg border border-zinc-300 bg-white px-3 text-[14.5px] text-ink focus-within:border-brand-green focus-within:ring-2 focus-within:ring-brand-green/20">
         <span>{value ? ethiopianFull(value) : "Pick a date"}</span>
         <Icon d={ICONS.calendar} className="h-4 w-4 shrink-0 text-subtle" />
@@ -122,11 +123,12 @@ export function SuggestDatesDialog({ request, onClose, onSend }: { request: Wait
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-4">
           <DateField id="sg-from" label="From" value={from} onChange={setFrom} />
-          <DateField id="sg-to" label="To" value={to} min={from} onChange={setTo} />
+          <DateField id="sg-to" label="To" value={to} min={from} hint="On or after the From date." broken={!!to && !!from && to < from} onChange={setTo} />
         </div>
         <FormField label="Notes" htmlFor="sg-notes">
           <Textarea id="sg-notes" rows={3} placeholder={`Two agents near ${request.kebele} are away that week. Could these dates work instead?`} />
         </FormField>
+        {!valid && <p className="text-[12.5px] text-muted">Complete every field marked * to enable Send suggestion.</p>}
       </div>
     </Modal>
   );

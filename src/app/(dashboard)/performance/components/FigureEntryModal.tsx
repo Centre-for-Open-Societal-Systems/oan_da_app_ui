@@ -55,7 +55,7 @@ export function FigureEntryModal({ agent, onClose, onSave }: { agent: TeamMember
       <div className="flex flex-col gap-4">
         {FIELDS.map((f) => (
           <div key={f.key} className="flex items-center justify-between gap-4">
-            <label htmlFor={`fig-${f.key}`} className="text-[14.5px] text-ink">{f.label}</label>
+            <label htmlFor={`fig-${f.key}`} className="text-[14.5px] text-ink">{f.label}<span className="ml-1 text-danger">*</span></label>
             <div className="flex items-center gap-4">
               <input
                 id={`fig-${f.key}`}
@@ -71,7 +71,7 @@ export function FigureEntryModal({ agent, onClose, onSave }: { agent: TeamMember
             </div>
           </div>
         ))}
-        {womenTooHigh && <p className="text-right text-[12.5px] text-danger">Women cannot be more than farmers trained.</p>}
+        <p className={cn("text-right text-[12.5px]", womenTooHigh ? "text-danger" : "text-muted")}>Women cannot be more than farmers trained.</p>
 
         <div className="mt-1 flex flex-col gap-2.5">
           <p className="text-[14px] text-ink">Where did these figures come from?</p>
@@ -91,6 +91,7 @@ export function FigureEntryModal({ agent, onClose, onSave }: { agent: TeamMember
           </div>
         </div>
 
+        {!valid && <p className="text-[12.5px] text-muted">Complete every field marked * to enable Save for {first}.</p>}
         <p className="text-[12.5px] text-muted">{first} will see these figures with your name. They show in the “Figures entered by supervisors” report.</p>
       </div>
     </Modal>

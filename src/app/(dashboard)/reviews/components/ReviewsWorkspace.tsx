@@ -843,7 +843,7 @@ export function ReviewsWorkspace({
       >
         <form className="space-y-4" onSubmit={completeReview}>
           <label className="block text-sm font-medium text-ink">
-            Overall rating (1–5)
+            Overall rating (1–5)<span className="ml-1 text-danger">*</span>
             <input
               className="mt-1.5 h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm"
               type="number"
@@ -856,7 +856,7 @@ export function ReviewsWorkspace({
             />
           </label>
           <label className="block text-sm font-medium text-ink">
-            Strengths
+            Strengths<span className="ml-1 text-danger">*</span>
             <textarea
               className="mt-1.5 min-h-20 w-full rounded-lg border border-zinc-200 bg-white p-3 text-sm"
               value={editStrengths}
@@ -865,7 +865,7 @@ export function ReviewsWorkspace({
             />
           </label>
           <label className="block text-sm font-medium text-ink">
-            Improvement areas
+            Improvement areas<span className="ml-1 text-danger">*</span>
             <textarea
               className="mt-1.5 min-h-20 w-full rounded-lg border border-zinc-200 bg-white p-3 text-sm"
               value={editAreas}
@@ -874,7 +874,7 @@ export function ReviewsWorkspace({
             />
           </label>
           <label className="block text-sm font-medium text-ink">
-            Agreed goal
+            Agreed goal<span className="ml-1 text-danger">*</span>
             <textarea
               className="mt-1.5 min-h-20 w-full rounded-lg border border-zinc-200 bg-white p-3 text-sm"
               value={editGoals}

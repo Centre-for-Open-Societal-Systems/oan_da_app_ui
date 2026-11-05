@@ -6,15 +6,17 @@ import { useSidebar } from "@/contexts/SidebarContext";
 import { cn } from "@/lib/utils";
 import { UserProfile } from "@/components/layout/UserProfile";
 import { LanguageSelector } from "@/components/layout/LanguageSelector";
-import { SearchModal } from "@/components/layout/SearchModal";
+import { SearchModal, type FarmerSearchHit } from "@/components/layout/SearchModal";
 import { pageTitleFor } from "@/lib/rbac";
 
 interface HeaderProps {
   /** The notification bell; it talks to the backend, so the layout passes it in (components never import features). */
   notifications?: ReactNode;
+  /** Global search's farmer lookup; the layout passes it in for the same reason. */
+  searchFarmers?: (searchText: string) => Promise<FarmerSearchHit[]>;
 }
 
-export function Header({ notifications }: HeaderProps) {
+export function Header({ notifications, searchFarmers }: HeaderProps) {
   const { toggle, isOpen, toggleMobile } = useSidebar();
   const pathname = usePathname();
   const pageTitle = pageTitleFor(pathname);
@@ -78,7 +80,7 @@ export function Header({ notifications }: HeaderProps) {
           </svg>
         </button>
 
-        <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+        <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} searchFarmers={searchFarmers} />
 
         {/* Notifications */}
         {notifications}

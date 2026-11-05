@@ -88,18 +88,18 @@ export function BroadcastWorkspace() {
               <FormField label="Woreda" htmlFor="bc-woreda" required hint="Broadcasts reach a whole Woreda.">
                 <Select id="bc-woreda" value={woreda} onChange={(e) => setWoreda(e.target.value)}>{BROADCAST_WOREDAS.map((w) => <option key={w} value={w}>{w}</option>)}</Select>
               </FormField>
-              <FormField label="Recipients" htmlFor="bc-group" required hint={`${size.toLocaleString()} ${toDAs ? "Development Agents" : "farmers"} in ${woreda} Woreda`}>
+              <FormField label="Recipients" htmlFor="bc-group" required hint={`${size.toLocaleString()} ${toDAs ? "Development Agents" : "farmers"} in ${woreda} Woreda${toDAs ? "" : ". In-app delivery reaches Development Agents only."}`}>
                 <Select id="bc-group" value={group} onChange={(e) => setGroup(e.target.value as RecipientGroup)}>{RECIPIENT_GROUPS.map((g) => <option key={g} value={g}>{g === "Farmers" ? "All farmers" : "All Development Agents"}</option>)}</Select>
               </FormField>
             </div>
-            <FormField label="Title" htmlFor="bc-title" required hint="Shown as the notification heading (up to 140 characters).">
+            <FormField label="Title" htmlFor="bc-title" required hint="Shown as the notification heading (3 to 140 characters)." hintTone={title.trim().length > 0 && title.trim().length < 3 ? "error" : "muted"}>
               <Input id="bc-title" value={title} maxLength={140} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Fertiliser distribution starts Monday" />
             </FormField>
-            <FormField label="Message" htmlFor="bc-message" required hint={`${message.length} characters · ${Math.max(1, Math.ceil(message.length / 160))} SMS segment${message.length > 160 ? "s" : ""} · Amharic + English supported`}>
+            <FormField label="Message" htmlFor="bc-message" required hint={`At least 5 characters · ${message.length} characters · ${Math.max(1, Math.ceil(message.length / 160))} SMS segment${message.length > 160 ? "s" : ""} · Amharic + English supported`} hintTone={message.trim().length > 0 && message.trim().length < 5 ? "error" : "muted"}>
               <Textarea id="bc-message" rows={5} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Write the message farmers or DAs will receive…" />
             </FormField>
             <fieldset>
-              <legend className="text-[14px] font-medium text-ink">Channels</legend>
+              <legend className="text-[14px] font-medium text-ink">Channels<span className="ml-1 text-danger">*</span></legend>
               <div className="mt-2 flex flex-wrap gap-5">
                 <label className="flex cursor-pointer items-center gap-2 text-[13.5px] text-slate-700">
                   <Checkbox checked={inApp} onChange={() => setInApp((v) => !v)} /> In-app
@@ -113,6 +113,7 @@ export function BroadcastWorkspace() {
               <p className="mt-1.5 text-[12px] text-muted">In-app delivers to the Development Agents&apos; notification bell (live). SMS / Telegram are not wired yet.</p>
             </fieldset>
             <FileDropInput label="Evidence" actionLabel="Upload evidence" hint="Field photos or documents · PDF, JPG or PNG up to 5 MB each" files={evidence} onChange={setEvidence} />
+            {canDispatch && !canSend && !sending && <p className="text-right text-[12.5px] text-muted">Complete every field marked * to enable Send to {size.toLocaleString()}.</p>}
             <div className="flex items-center justify-end gap-2">
               <button type="button" onClick={() => { setTitle(""); setMessage(""); setEvidence([]); }} className="inline-flex shrink-0 whitespace-nowrap h-10 items-center rounded-md border border-zinc-200 bg-white px-4 text-[14px] font-medium text-ink-soft hover:bg-zinc-50">Clear</button>
               <button type="button" disabled={!canSend} onClick={dispatch} className="inline-flex shrink-0 whitespace-nowrap h-10 items-center gap-2 rounded-md bg-brand-green px-4 text-[14px] font-semibold text-white hover:bg-brand-green-dark disabled:opacity-50">

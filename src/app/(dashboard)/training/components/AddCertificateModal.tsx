@@ -143,10 +143,10 @@ export function AddCertificateModal({ isOpen, onClose }: { isOpen: boolean; onCl
                 {CERTIFICATE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
               </Select>
             </FormField>
-            <FormField label="Issue date" htmlFor="cert-issued" required hint={show("issuedOn")} hintTone="error">
+            <FormField label="Issue date" htmlFor="cert-issued" required hint={show("issuedOn") ?? "Cannot be in the future."} hintTone={show("issuedOn") || (form.issuedOn && errors.issuedOn) ? "error" : "muted"}>
               <Input id="cert-issued" type="date" value={form.issuedOn} onChange={set("issuedOn")} />
             </FormField>
-            <FormField label="Expiry date (optional)" htmlFor="cert-expiry" hint={show("expiresOn")} hintTone="error">
+            <FormField label="Expiry date (optional)" htmlFor="cert-expiry" hint={show("expiresOn") ?? "Must be after the issue date."} hintTone={errors.expiresOn ? "error" : "muted"}>
               <Input id="cert-expiry" type="date" value={form.expiresOn} min={form.issuedOn || undefined} onChange={set("expiresOn")} />
             </FormField>
           </div>

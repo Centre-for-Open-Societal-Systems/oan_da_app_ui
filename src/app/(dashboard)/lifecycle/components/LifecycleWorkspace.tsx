@@ -280,7 +280,7 @@ function InitiateModal({ transition, onClose, onSubmit }: { transition: Lifecycl
           <Input id="lc-target" type={transition.code === "LV" ? "date" : "text"} value={draft.target} onChange={(e) => set("target", e.target.value)} />
         </FormField>
       )}
-      <FormField label="Effective date" htmlFor="lc-effective" required hint={error("effective")} hintTone="error">
+      <FormField label="Effective date" htmlFor="lc-effective" required hint={error("effective") ?? "Today or later."} hintTone={error("effective") || (!!draft.effective && draft.effective < todayIso()) ? "error" : "muted"}>
         <Input id="lc-effective" type="date" min={todayIso()} value={draft.effective} onChange={(e) => set("effective", e.target.value)} />
       </FormField>
       {transition.handover && (

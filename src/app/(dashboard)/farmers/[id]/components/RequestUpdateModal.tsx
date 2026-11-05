@@ -8,7 +8,6 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
-import { CURRENT_AGENT } from "@/features/farmers";
 import { AttributionCard } from "@/features/farmers";
 import type { Farmer } from "@/features/farmers";
 import { FileDropInput } from "@/components/ui/FileDropInput";
@@ -57,7 +56,7 @@ export function RequestUpdateModal({ farmer, isOpen, onClose }: RequestUpdateMod
           onClose();
         }}
       >
-        <AttributionCard name={CURRENT_AGENT.name} avatar={CURRENT_AGENT.avatar} subtitle="Today · will be attributed to you" />
+        <AttributionCard subtitle="Today · will be attributed to you" />
 
         <FormField label="Field to update" htmlFor="update-field">
           <Select id="update-field" className="h-10" value={fieldKey} onChange={(e) => setFieldKey(e.target.value)}>
@@ -71,12 +70,12 @@ export function RequestUpdateModal({ farmer, isOpen, onClose }: RequestUpdateMod
           <FormField label="Current value" htmlFor="update-current">
             <Input id="update-current" value={current.value} readOnly className="h-10 border-transparent bg-slate-100 text-slate-600" />
           </FormField>
-          <FormField label="New value" htmlFor="update-new">
+          <FormField label="New value" htmlFor="update-new" required>
             <Input id="update-new" placeholder="Enter the updated value" className="h-10" required />
           </FormField>
         </div>
 
-        <FormField label="Reason for update" htmlFor="update-reason">
+        <FormField label="Reason for update" htmlFor="update-reason" required>
           <Textarea id="update-reason" rows={2} placeholder="e.g. The farmer shared a new phone number during the last visit." required />
         </FormField>
 

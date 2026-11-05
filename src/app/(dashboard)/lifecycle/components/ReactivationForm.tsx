@@ -11,7 +11,7 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
-import { DocumentPicker, FormSection, LockedField, PreviewCard, useSessionDraft } from "./InitiateTransition";
+import { DocumentPicker, FormSection, LockedField, PreviewCard, fromTodayNote, useSessionDraft } from "./InitiateTransition";
 import { transitionFor } from "./lifecycle";
 import { INACTIVE_REASON, INACTIVE_SINCE, KEEP_PREVIOUS, PREVIOUS_ASSIGNMENT, REACTIVATION_FORM, RETURN_OPTIONS, eligibilityChecks } from "./reactivation";
 import {
@@ -82,7 +82,7 @@ export function ReactivationForm() {
           <Card className="overflow-hidden p-0">
             <FormSection step={1} title="Reactivation details" subtitle="Status after approval and assignment on return." tone={transition.tone}>
               <LockedField id="lc-status" label="Resulting status" value={transition.outcome} />
-              <FormField label="Effective date" htmlFor="lc-effective" required hint={error("effective")} hintTone="error">
+              <FormField label="Effective date" htmlFor="lc-effective" required {...fromTodayNote(draft.effective, error("effective"))}>
                 <Input id="lc-effective" type="date" min={todayIso()} value={draft.effective} onChange={(e) => set("effective", e.target.value)} />
               </FormField>
               <LockedField id="lc-previous" label="Previous assignment" value={PREVIOUS_ASSIGNMENT} />
@@ -93,7 +93,7 @@ export function ReactivationForm() {
               </FormField>
             </FormSection>
             <FormSection step={2} title="Eligibility checks" subtitle="Everything must be green before submitting." tone={transition.tone}>
-              <DocumentPicker title="Renewed documents" label="Upload renewed documents" tone={transition.tone} files={draft.files} onChange={setFiles} />
+              <DocumentPicker title="Renewed documents" required label="Upload renewed documents" tone={transition.tone} files={draft.files} onChange={setFiles} />
               <ChecklistField label="Eligibility" items={eligibilityChecks(hasDocument)} tone={transition.tone} error={error("document") && "Upload the renewed documents to continue"} />
             </FormSection>
             <FormSection step={3} title="Reason" subtitle="Explain the reason for this transition." tone={transition.tone}>

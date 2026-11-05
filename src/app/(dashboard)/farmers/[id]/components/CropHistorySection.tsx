@@ -1,30 +1,52 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { Banner } from "@/components/ui/Banner";
 import { DataTable, type Column } from "@/components/ui/DataTable";
-import { CROP_HISTORY } from "@/features/farmers";
-import { StatusPill } from "@/features/farmers";
+import { describeCropSownError, isCropsNotFound, listFarmerCrops, type ApiFarmerCrop } from "@/features/farmers";
 import { SectionCard } from "./SectionCard";
 
-type CropRow = (typeof CROP_HISTORY)[number];
-
-const COLUMNS: Column<CropRow>[] = [
-  { key: "season", header: "Season", cell: (row) => <span className="font-medium text-ink">{row.season}</span> },
-  { key: "crop", header: "Crop", cell: (row) => row.crop },
-  { key: "yield", header: "Yield", cell: (row) => row.yield },
-  { key: "status", header: "Status", align: "center", cell: (row) => <StatusPill status={row.status} /> },
+const COLUMNS: Column<ApiFarmerCrop>[] = [
+  { key: "record", header: "Record", cell: (row) => <span className="font-medium text-ink">{row.record_name}</span> },
+  { key: "year", header: "Crop year", cell: (row) => row.display_fields?.find((f) => f.field_name === "crop_year")?.value || "—" },
+  { key: "status", header: "Status", cell: (row) => [row.draft_status, row.approval_status].filter(Boolean).join(" · ") || "—" },
 ];
 
-export function CropHistorySection() {
+// The farmer's Crop Sown records (GET /farmers/{id}/crops). A 404 means the registry holds no crops for them.
+export function CropHistorySection({ farmerCode }: { farmerCode: string }) {
+  const [crops, setCrops] = useState<ApiFarmerCrop[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let current = true;
+    listFarmerCrops(farmerCode)
+      .then((rows) => current && setCrops(rows))
+      .catch((err: unknown) => {
+        if (!current) return;
+        if (isCropsNotFound(err)) setCrops([]);
+        else setError(describeCropSownError(err));
+      });
+    return () => {
+      current = false;
+    };
+  }, [farmerCode]);
+
   return (
     <SectionCard title="Crop History" bodyClassName="p-0">
-      <DataTable
-        columns={COLUMNS}
-        rows={CROP_HISTORY}
-        rowKey={(row) => row.season}
-        minWidth="440px"
-        itemLabel="seasons"
-        emptyTitle="No crop history yet"
-      />
+      {error ? (
+        <div className="p-4"><Banner tone="error" title="Could not load crop details">{error}</Banner></div>
+      ) : crops === null ? (
+        <p className="px-4 py-8 text-center text-[13.5px] text-muted">Loading crops…</p>
+      ) : (
+        <DataTable
+          columns={COLUMNS}
+          rows={crops}
+          rowKey={(row) => row.submission_id ?? row.internal_record_id ?? row.record_name}
+          minWidth="440px"
+          itemLabel="records"
+          emptyTitle="No crops"
+        />
+      )}
     </SectionCard>
   );
 }

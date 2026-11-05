@@ -149,6 +149,7 @@ export function ServicesWorkspace({ farmer }: { farmer: Farmer }) {
                 <Textarea id="mk-notes" rows={2} value={payment.notes} onChange={(e) => setPayment({ ...payment, notes: e.target.value })} />
               </FormField>
             </div>
+            {(!payment.amount || !payment.payee || !payment.provider) && <p className="text-[12.5px] text-muted">Complete every field marked * to enable Pay.</p>}
             <div className="flex flex-wrap items-center justify-between gap-3">
               <Pill tone="slate">Payment gateway WIP · e-Mandate · QR · IPS · payee management · reconciliation</Pill>
               <div className="flex items-center gap-2">
@@ -180,9 +181,10 @@ export function ServicesWorkspace({ farmer }: { farmer: Farmer }) {
           <FormField label="Supporting documents" htmlFor="cr-docs" hint={`${credit.docs} attached`}>
             <button id="cr-docs" type="button" onClick={() => setCredit({ ...credit, docs: credit.docs + 1 })} className="h-11 w-full rounded-lg border border-dashed border-zinc-300 text-[13.5px] font-medium text-slate-700 hover:border-brand-green">Add document / photo</button>
           </FormField>
-          <FormField label="Purpose" htmlFor="cr-purpose" required className="sm:col-span-2">
+          <FormField label="Purpose" htmlFor="cr-purpose" required hint="At least 3 characters." hintTone={credit.purpose.trim().length > 0 && credit.purpose.trim().length < 3 ? "error" : "muted"} className="sm:col-span-2">
             <Textarea id="cr-purpose" rows={3} value={credit.purpose} onChange={(e) => setCredit({ ...credit, purpose: e.target.value })} placeholder="What the loan will fund" />
           </FormField>
+          {(!credit.amount || credit.purpose.trim().length < 3) && <p className="text-[12.5px] text-muted sm:col-span-2">Complete every field marked * to enable Submit application.</p>}
         </div>
         <Banner tone="info" className="mt-4">
           <p><span className="font-semibold">Consent:</span> {farmer.name} consented to share identity, holding and credit data with the partner bank (valid to 30 Jun 2027). Consent can be withdrawn from the farmer profile at any time before submission; a withdrawn consent stops this application.</p>

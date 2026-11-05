@@ -15,11 +15,10 @@ import {
   CROP_SOWN_FORM,
   CROP_SOWN_INTRO_TAB,
   CROP_SOWN_TABS,
-  FARMERS,
   FarmerAvatar,
+  apiFarmerToFarmer,
+  listFarmers,
   describeCropSownError,
-  findFarmersById,
-  getCropSownPrefill,
   registryCode,
   MissingFieldError,
   saveStage,
@@ -118,11 +117,10 @@ export function CropReportForm() {
   const choose = (f: Farmer, crops?: ApiFarmerCrop[]) => {
     const draft = readDraft<Draft>(DRAFT_KEY);
     const hasDraft = draft && draft.farmerId === f.id;
-    // Demo farmers keep their sample record; any other farmer is filled from the registry's own APIs (below).
-    const isDemo = FARMERS.some((d) => d.id === f.id);
-    const prefill = isDemo ? getCropSownPrefill(f) : { [valueKey("identity", "farmer_id")]: registryCode(f), [valueKey("identity", "farmer_name")]: f.name };
+    // The farmer is filled from the registry's own APIs (below).
+    const prefill = { [valueKey("identity", "farmer_id")]: registryCode(f), [valueKey("identity", "farmer_name")]: f.name };
     setLoadNote(null);
-    if (!isDemo) void loadFromRegistry(f, crops);
+    void loadFromRegistry(f, crops);
     setFarmer(f);
     setDrafts({});
     setErrors({});
@@ -194,9 +192,22 @@ export function CropReportForm() {
     setAccessDenied(null);
     setHistory(null);
     const q = query.trim();
-    // Search by query or default to demo farmer Lelise Gudeta (FR-88466) if search clicked with empty input
-    let found = q ? findFarmersById(q) : [FARMERS[0]];
-    // Not a demo farmer: the Search button asks the registry's Crop Sown API for the farmer's record
+    if (!q) {
+      setMatches([]);
+      setFarmer(undefined);
+      return;
+    }
+    // The caller's farmers by name, Farmer-ID or phone (GET /farmers).
+    let found: Farmer[] = [];
+    setSearching(true);
+    try {
+      found = (await listFarmers({ searchText: q, pageSize: 20 })).items.map(apiFarmerToFarmer);
+    } catch {
+      // The Crop Sown lookup below still works with a Farmer ID.
+    } finally {
+      setSearching(false);
+    }
+    // Not in that list: the Search button asks the registry's Crop Sown API for the farmer's record
     // (GET /farmers/{id}/crops). That one list tells whether the farmer exists and is this DA's, and it is reused to fill
     // the form (not asked for twice). No profile call is made here.
     let crops: ApiFarmerCrop[] | undefined;
