@@ -10,15 +10,18 @@ import { Textarea } from "@/components/ui/Textarea";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Banner } from "@/components/ui/Banner";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/store/useAuthStore";
 import {
   fetchGrievanceOptions,
   newClientOpId,
   SAMPLE_KEBELE,
+  selfSubmitter,
   submitGrievance,
   toAdministrativeArea,
   type GrievanceOptions,
   type SubmitGrievanceResult,
 } from "../api";
+import { VoiceRecorder } from "./VoiceRecorder";
 
 interface Props {
   isOpen: boolean;
@@ -29,15 +32,29 @@ interface Props {
   onSubmitted?: (result: SubmitGrievanceResult) => void;
 }
 
+/** The rule of a minimum-length field as its visible note; red once what is typed falls short. */
+const minLengthNote = (value: string, min: number, prefix = "") => {
+  const length = value.trim().length;
+  return { hint: `${prefix}At least ${min} characters.`, hintTone: length > 0 && length < min ? ("error" as const) : ("muted" as const) };
+};
+
 type Result = { kind: "draft" } | { kind: "sent"; result: SubmitGrievanceResult };
 
-const SUBMITTER_TYPES_FALLBACK = ["Individual Farmer", "Cooperative", "Development Agent", "FPO", "NGO", "Woreda/Kebele Body"];
+const DA_SUBMITTER_TYPE = "Development Agent";
+const SUBMITTER_TYPES_FALLBACK = ["Individual Farmer", "Cooperative", DA_SUBMITTER_TYPE, "FPO", "NGO", "Woreda/Kebele Body"];
 const PRIORITIES = ["Low", "Medium", "High", "Critical"];
 
 // FR-12 / FR-12a: native raise form → POST /grievances → external case ID. When the Grievance Service is down
 // DA Services queues the grievance and returns no ticket yet; it is forwarded once the service is back.
 export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: Props) {
+  const role = useAuthStore((s) => s.role);
+  const accountName = useAuthStore((s) => s.user?.name);
+  const agent = useAuthStore((s) => s.profile?.agent);
+  const self = useMemo(() => selfSubmitter(agent, accountName), [agent, accountName]);
+
   const [forWhom, setForWhom] = useState<"farmer" | "me">(farmerId ? "farmer" : "me");
+  // Fixed when launched from a farmer profile, otherwise typed in.
+  const [farmerRef, setFarmerRef] = useState(farmerId ?? "");
   const [options, setOptions] = useState<GrievanceOptions | null>(null);
   const [optionsError, setOptionsError] = useState<string | null>(null);
 
@@ -52,8 +69,11 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
   const [priority, setPriority] = useState("Medium");
 
   // Administrative area: the DA portal has no geo lookup yet (see api.ts), so the Kebele code + name are entered.
-  const [kebeleCode, setKebeleCode] = useState(SAMPLE_KEBELE.code);
-  const [kebeleName, setKebeleName] = useState(SAMPLE_KEBELE.name);
+  // A DA raising for themselves starts from the Kebele on their record.
+  const areaFor = (whom: "farmer" | "me") =>
+    whom === "me" && role === "DA" && self.kebeleCode && self.kebeleName ? { code: self.kebeleCode, name: self.kebeleName } : SAMPLE_KEBELE;
+  const [kebeleCode, setKebeleCode] = useState(() => areaFor(forWhom).code);
+  const [kebeleName, setKebeleName] = useState(() => areaFor(forWhom).name);
 
   // Content
   const [subject, setSubject] = useState("");
@@ -90,10 +110,27 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
 
   const submitterTypes = options?.submitterTypes?.length ? options.submitterTypes : SUBMITTER_TYPES_FALLBACK;
 
+  // A DA raising for themselves is the submitter: the type is fixed, and name and mobile come from their DA record.
+  // A value the record does not hold stays editable, so the form can still be completed.
+  const selfAsDa = forWhom === "me" && role === "DA";
+  const daType = submitterTypes.find((t) => /development agent/i.test(t)) ?? DA_SUBMITTER_TYPE;
+  const nameLocked = selfAsDa && !!self.name;
+  const mobileLocked = selfAsDa && !!self.mobile;
+  const effectiveType = selfAsDa ? daType : submitterType;
+  const effectiveName = nameLocked ? self.name : submitterName;
+  const effectiveMobile = mobileLocked ? self.mobile : contactMobile;
+
+  const chooseFor = (whom: "farmer" | "me") => {
+    setForWhom(whom);
+    const area = areaFor(whom);
+    setKebeleCode(area.code);
+    setKebeleName(area.name);
+  };
+
   const reset = () => {
     setSubject(""); setDescription(""); setDesiredOutcome("");
-    setSubmitterName(""); setContactMobile("");
-    setGrievanceType(""); setKebeleCode(SAMPLE_KEBELE.code); setKebeleName(SAMPLE_KEBELE.name);
+    setSubmitterName(""); setContactMobile(""); setFarmerRef(farmerId ?? "");
+    setGrievanceType(""); setKebeleCode(areaFor(forWhom).code); setKebeleName(areaFor(forWhom).name);
     setConsent(true); setAnonymous(false);
     setError(null); setResult(null);
     setClientOpId(newClientOpId());
@@ -108,10 +145,11 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
         description: description.trim(),
         priority,
         raised_for: forWhom === "farmer" ? "Farmer" : "Self",
+        farmer_id: forWhom === "farmer" ? farmerRef.trim() : undefined,
 
-        submitter_type: submitterType,
-        submitter_name: submitterName.trim(),
-        contact_mobile: contactMobile.trim(),
+        submitter_type: effectiveType,
+        submitter_name: effectiveName.trim(),
+        contact_mobile: effectiveMobile.trim(),
         administrative_area: toAdministrativeArea(kebeleCode),
         administrative_unit: kebeleName.trim(),
         service_category: serviceCategory,
@@ -137,12 +175,13 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
   };
 
   const canSubmit =
+    (forWhom !== "farmer" || !!farmerRef.trim()) &&
     subject.trim().length >= 3 &&
     description.trim().length >= 10 &&
     !!serviceCategory &&
     !!grievanceType &&
-    submitterName.trim().length >= 2 &&
-    contactMobile.trim().length >= 6 &&
+    effectiveName.trim().length >= 2 &&
+    effectiveMobile.trim().length >= 6 &&
     kebeleCode.trim().length >= 3 &&
     kebeleName.trim().length >= 2 &&
     !submitting;
@@ -185,24 +224,32 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
 
           <div className="grid grid-cols-2 gap-2 rounded-lg bg-slate-100 p-1">
             {(["farmer", "me"] as const).map((k) => (
-              <button key={k} type="button" onClick={() => setForWhom(k)} className={cn("h-9 rounded-md text-[13.5px] font-semibold transition-colors", forWhom === k ? "bg-white text-brand-green shadow-sm" : "text-ink-soft")}>
+              <button key={k} type="button" onClick={() => chooseFor(k)} className={cn("h-9 rounded-md text-[13.5px] font-semibold transition-colors", forWhom === k ? "bg-white text-brand-green shadow-sm" : "text-ink-soft")}>
                 {k === "farmer" ? "On behalf of a farmer" : "For myself"}
               </button>
             ))}
           </div>
 
+          {forWhom === "farmer" && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <FormField label="Farmer ID" htmlFor="grv-farmer-id" required hint={farmerId ? "From the farmer's profile." : "Required, e.g. FR-675618129549."}>
+                <Input id="grv-farmer-id" value={farmerRef} disabled={!!farmerId} onChange={(e) => setFarmerRef(e.target.value)} placeholder="FR-…" />
+              </FormField>
+            </div>
+          )}
+
           {/* Submitter */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <FormField label="Submitter type" htmlFor="grv-subtype" required>
-              <Select id="grv-subtype" value={submitterType} onChange={(e) => setSubmitterType(e.target.value)}>
-                {submitterTypes.map((t) => <option key={t}>{t}</option>)}
+              <Select id="grv-subtype" value={effectiveType} disabled={selfAsDa} onChange={(e) => setSubmitterType(e.target.value)}>
+                {(selfAsDa ? [daType] : submitterTypes).map((t) => <option key={t}>{t}</option>)}
               </Select>
             </FormField>
-            <FormField label="Submitter name" htmlFor="grv-subname" required>
-              <Input id="grv-subname" value={submitterName} onChange={(e) => setSubmitterName(e.target.value)} placeholder="Full name" />
+            <FormField label="Submitter name" htmlFor="grv-subname" required {...(nameLocked ? { hint: "From your DA record." } : minLengthNote(submitterName, 2))}>
+              <Input id="grv-subname" value={effectiveName} disabled={nameLocked} onChange={(e) => setSubmitterName(e.target.value)} placeholder="Full name" />
             </FormField>
-            <FormField label="Contact mobile" htmlFor="grv-mobile" required>
-              <Input id="grv-mobile" value={contactMobile} onChange={(e) => setContactMobile(e.target.value)} placeholder="09xxxxxxxx" inputMode="tel" />
+            <FormField label="Contact mobile" htmlFor="grv-mobile" required {...(mobileLocked ? { hint: "From your DA record." } : minLengthNote(contactMobile, 6))}>
+              <Input id="grv-mobile" value={effectiveMobile} disabled={mobileLocked} onChange={(e) => setContactMobile(e.target.value)} placeholder="09xxxxxxxx" inputMode="tel" />
             </FormField>
           </div>
 
@@ -227,20 +274,21 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
 
           {/* Administrative area — Kebele code + name (no DA-side geo lookup yet; see api.ts). */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="Kebele code" htmlFor="grv-kebele-code" required hint="Grievance geo code; submitted as kebele-<code>.">
+            <FormField label="Kebele code" htmlFor="grv-kebele-code" required {...minLengthNote(kebeleCode, 3, "Grievance geo code; submitted as kebele-<code>. ")}>
               <Input id="grv-kebele-code" value={kebeleCode} onChange={(e) => setKebeleCode(e.target.value)} placeholder="e.g. ET140108101008" />
             </FormField>
-            <FormField label="Kebele name" htmlFor="grv-kebele-name" required>
+            <FormField label="Kebele name" htmlFor="grv-kebele-name" required {...minLengthNote(kebeleName, 2)}>
               <Input id="grv-kebele-name" value={kebeleName} onChange={(e) => setKebeleName(e.target.value)} placeholder="e.g. Kebele 01 Center" />
             </FormField>
           </div>
 
-          <FormField label="Subject" htmlFor="grv-subject" required>
+          <FormField label="Subject" htmlFor="grv-subject" required {...minLengthNote(subject, 3)}>
             <Input id="grv-subject" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Short title" />
           </FormField>
-          <FormField label="Description" htmlFor="grv-desc" required>
+          <FormField label="Description" htmlFor="grv-desc" required {...minLengthNote(description, 10)}>
             <Textarea id="grv-desc" rows={4} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What happened, where, and when" />
           </FormField>
+          <VoiceRecorder />
           <FormField label="Desired outcome" htmlFor="grv-outcome">
             <Textarea id="grv-outcome" rows={2} value={desiredOutcome} onChange={(e) => setDesiredOutcome(e.target.value)} placeholder="What resolution the submitter is seeking" />
           </FormField>
@@ -255,6 +303,8 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
               Submit anonymously (hide the submitter&rsquo;s identity in reports).
             </label>
           </div>
+
+          {!canSubmit && !submitting && <p className="text-[12.5px] text-muted">Complete every field marked * to enable Submit.</p>}
         </div>
       )}
     </Modal>

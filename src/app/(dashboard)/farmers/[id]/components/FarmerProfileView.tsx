@@ -102,7 +102,7 @@ export function FarmerProfileView({ id }: { id: string }) {
       <ProfileStats farmer={farmer} fromApi={fromApi} />
       <ProfileTabs
         panels={{
-          Overview: <ProfileOverview livestock={loaded.livestock} livestockError={loaded.livestockError} />,
+          Overview: <ProfileOverview livestock={loaded.livestock} livestockError={loaded.livestockError} visits={fromApi ? loaded.visits : undefined} />,
           Holdings: fromApi ? <HoldingsSection plots={loaded.plots} /> : <HoldingsSection />,
           "Crop Sown Details": <CropSownSection farmer={farmer} />,
           "Livestock Details": <LivestockRecordsPanel overview={loaded.livestock} error={loaded.livestockError} farmer={farmer} />,

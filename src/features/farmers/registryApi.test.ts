@@ -34,6 +34,12 @@ describe("registration form data", () => {
     expect(optionsFor(read, "nope")).toBeUndefined();
   });
 
+  it("reads the lists from under options, as the backend wraps them", async () => {
+    const gender = [{ value: "female", label: "Female" }];
+    fetchMock.mockResolvedValueOnce(json({ data: { registry: "farmer", options: { Farmer: { gender } } } }));
+    expect(optionsFor(await fetchFieldOptions(), "gender")).toEqual(gender);
+  });
+
   it("asks for the places of a level under the chosen parent", async () => {
     fetchMock.mockResolvedValueOnce(json({ data: { places: [{ id: "ET04", name: "Oromia" }] } })).mockResolvedValueOnce(json({ data: { places: [{ id: "ET04080101", name: "K" }] } }));
     await expect(fetchPlaces("region")).resolves.toEqual([{ id: "ET04", name: "Oromia" }]);

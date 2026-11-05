@@ -7,6 +7,7 @@ import {
   fetchGrievanceSummary,
   fetchGrievanceTimeline,
   listGrievances,
+  selfSubmitter,
   submitGrievance,
   toGrievance,
   type ApiGrievance,
@@ -150,5 +151,24 @@ describe("mapping", () => {
     expect(c.grievance).toMatchObject({ status: "In Progress", type: "Canal maintenance problems" });
     expect(c.submitter).toMatchObject({ name: "Abebe Bikila", kind: "Individual Farmer" });
     expect(c.sla.consumedPct).toBe(40);
+  });
+});
+
+describe("selfSubmitter", () => {
+  it("reads the submitter from the DA record", () => {
+    expect(selfSubmitter({ full_name: " Abebe Kebede ", phone: "0911000000", kebele: "ET140108101008", kebele_name: "Kebele 01" }, "abebe@moa.gov.et")).toEqual({
+      name: "Abebe Kebede",
+      mobile: "0911000000",
+      kebeleCode: "ET140108101008",
+      kebeleName: "Kebele 01",
+    });
+  });
+
+  it("falls back to the account name and leaves what the record lacks empty", () => {
+    expect(selfSubmitter(null, "Abebe")).toEqual({ name: "Abebe", mobile: "", kebeleCode: "", kebeleName: "" });
+  });
+
+  it("accepts mobile when the record has no phone", () => {
+    expect(selfSubmitter({ mobile: "0922000000" }).mobile).toBe("0922000000");
   });
 });

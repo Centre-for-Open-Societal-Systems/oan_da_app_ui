@@ -19,6 +19,7 @@ import { matchesQuery } from "@/lib/search";
 import { formatDate } from "../lifecycle/components/lifecycle";
 import { ICONS } from "../lifecycle/components/shared";
 import { PageIntro, SELECT_CLASS, SummaryTile, has, optionsOf } from "../leave-admin/shared";
+import { todayIso } from "@/lib/utils";
 
 interface CalendarRow {
   id: string;
@@ -67,7 +68,7 @@ const EMPTY_FILTERS = { layer: new Set<string>() };
 function AddDateModal({ region, onClose, onAdd }: { region: string; onClose: () => void; onAdd: (row: CalendarRow) => void }) {
   const [name, setName] = useState("");
   const [dateMode, setDateMode] = useState("each-year");
-  const [date, setDate] = useState("");
+  const [date, setDate] = useState(() => todayIso());
   const [layer, setLayer] = useState(LAYER_OPTIONS[0]);
   const [scope, setScope] = useState(region === FEDERAL ? REGIONS[0] : region);
   const [rule, setRule] = useState("move");
@@ -114,7 +115,7 @@ function AddDateModal({ region, onClose, onAdd }: { region: string; onClose: () 
         </div>
         {dateMode === "pick" && (
           <FormField label="Date" htmlFor="gc-date" hint={date ? ethiopianFull(date) : undefined}>
-            <Input id="gc-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <Input id="gc-date" type="date" min={todayIso()} value={date} onChange={(e) => setDate(e.target.value)} />
           </FormField>
         )}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

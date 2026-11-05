@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/Input";
 import { Dropdown } from "@/components/ui/Dropdown";
 import { Textarea } from "@/components/ui/Textarea";
 import { FormField } from "@/components/ui/FormField";
-import { cn } from "@/lib/utils";
+import { cn, todayIso } from "@/lib/utils";
 import { RESPONSE_TYPES } from "../data";
 
 export interface DeptResponseInput {
@@ -93,7 +93,7 @@ export function GrievanceResponsePanel({ onSubmitResponse, onAddNote }: Grievanc
               <Dropdown id="responseType" value={responseType} onChange={setResponseType} options={RESPONSE_TYPES} placeholder="Select Response Type" />
             </FormField>
             <FormField label="Proposed Closure Date" htmlFor="proposedClosure" required>
-              <Input id="proposedClosure" type="date" value={proposedClosure} onChange={(e) => setProposedClosure(e.target.value)} className={cn(!proposedClosure && "text-zinc-400")} />
+              <Input id="proposedClosure" type="date" min={todayIso()} value={proposedClosure} onChange={(e) => setProposedClosure(e.target.value)} className={cn(!proposedClosure && "text-zinc-400")} />
             </FormField>
           </div>
 

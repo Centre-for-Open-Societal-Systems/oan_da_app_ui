@@ -331,11 +331,14 @@ export function apiPlotToPlot(p: ApiPlot): Plot {
   };
 }
 
+/** The backend's closed-visit status as people read it. */
+const VISIT_STATUS_LABELS: Record<string, string> = { "Physical Visit Complete": "Completed" };
+
 /** A visit for the Visit history timeline. */
 export function apiVisitToVisit(v: ApiFarmerVisit): Visit {
   const at = splitDateTime(v.completed_at ?? v.scheduled_at);
   return {
-    title: `${v.visit_type} · ${v.physical_status}`,
+    title: `${v.visit_type} · ${VISIT_STATUS_LABELS[v.physical_status] ?? v.physical_status}`,
     summary: v.outcome || `Visit ${v.name} by ${v.da_id}`,
     date: at.date,
     time: at.time,

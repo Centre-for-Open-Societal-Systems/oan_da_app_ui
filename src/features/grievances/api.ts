@@ -191,6 +191,8 @@ export interface SubmitGrievanceRequest {
   priority: string;
   /** "Self" or "Farmer". */
   raised_for: string;
+  /** The Farmer-ID; the backend refuses raised_for "Farmer" without it. */
+  farmer_id?: string;
   submitter_type: string;
   submitter_name: string;
   contact_mobile: string;
@@ -327,5 +329,19 @@ export function caseFromApi(grievance: Grievance, detail?: ApiGrievanceDetail, t
       submittedOn,
     },
     sla: { consumedPct: Math.max(0, Math.min(100, detail?.sla_consumed_percent ?? 0)), submittedOn, dueOn },
+  };
+}
+
+/**
+ * Submitter details for a DA raising a grievance for themselves, from the registry record GET /me returns
+ * (`agent`). The account name stands in when the record has no name; anything else missing comes back empty.
+ */
+export function selfSubmitter(agent: Record<string, unknown> | null | undefined, accountName = "") {
+  const text = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+  return {
+    name: text(agent?.full_name) || accountName.trim(),
+    mobile: text(agent?.phone) || text(agent?.mobile),
+    kebeleCode: text(agent?.kebele),
+    kebeleName: text(agent?.kebele_name),
   };
 }

@@ -7,7 +7,7 @@ import { RowAction } from "@/components/ui/RowAction";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { cn } from "@/lib/utils";
+import { cn, todayIso } from "@/lib/utils";
 import { CERTIFICATE_TYPES, fileMeta, formatFileSize, type Certificate } from "@/features/farmers";
 import { Banner } from "@/components/ui/Banner";
 
@@ -235,7 +235,7 @@ export function UploadCertificateModal({ isOpen, onClose, onSubmit }: UploadCert
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <FormField label="Issue date" htmlFor="cert-issued" required>
-            <Input id="cert-issued" name="issueDate" type="date" className="h-10" defaultValue="2026-02-18" required />
+            <Input id="cert-issued" name="issueDate" type="date" className="h-10" defaultValue={todayIso()} required />
           </FormField>
           <FormField label="Expiry date" htmlFor="cert-expires">
             <Input id="cert-expires" name="expiryDate" type="date" className="h-10" defaultValue="2028-02-18" />

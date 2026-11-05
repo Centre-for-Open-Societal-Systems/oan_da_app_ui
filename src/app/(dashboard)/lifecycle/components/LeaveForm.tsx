@@ -10,7 +10,7 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
-import { cn } from "@/lib/utils";
+import { cn, todayIso } from "@/lib/utils";
 import { DocumentPicker, FormSection, LockedField, PreviewCard, useSessionDraft } from "./InitiateTransition";
 import {
   ACCESS_OPTIONS,
@@ -169,7 +169,7 @@ export function LeaveForm() {
               </FormField>
               <LockedField id="lc-duration" label="Duration" value={datesSet ? durationLine(draft.effective, draft.target) : "Set the start and end dates"} />
               <FormField label="Start date" htmlFor="lc-effective" required hint={error("effective")} hintTone="error">
-                <Input id="lc-effective" type="date" value={draft.effective} onChange={(e) => set("effective", e.target.value)} />
+                <Input id="lc-effective" type="date" min={todayIso()} value={draft.effective} onChange={(e) => set("effective", e.target.value)} />
               </FormField>
               <FormField label="End date" htmlFor="lc-target" required hint={error("target")} hintTone="error">
                 <Input id="lc-target" type="date" min={draft.effective || undefined} value={draft.target} onChange={(e) => set("target", e.target.value)} />

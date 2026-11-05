@@ -7,6 +7,7 @@ import { SegmentTabs } from "@/components/ui/SegmentTabs";
 import {
   cropSownTabs,
   describeCropSownError,
+  isCropsNotFound,
   listFarmerCrops,
   loadCropDetails,
   registryCode,
@@ -66,7 +67,13 @@ export function CropSownSection({ farmer }: { farmer: Farmer }) {
         const loaded = await loadCropDetails(code, rows, { display: true });
         if (live) setDetails(loaded);
       } catch (err) {
-        if (live) setError(describeCropSownError(err));
+        if (!live) return;
+        if (isCropsNotFound(err)) {
+          setCrops([]);
+          setDetails({ values: {}, stages: [], total: 0 });
+        } else {
+          setError(describeCropSownError(err));
+        }
       }
     })();
     return () => {
@@ -104,6 +111,7 @@ export function CropSownSection({ farmer }: { farmer: Farmer }) {
           <>
             {tabs[0]?.sections.filter(isIntro).map((section) => <FieldsCard key={section.title} section={section} />)}
             <CropSownRecord crops={crops} />
+            {crops?.length === 0 && <EmptyState title="No crops" hint="No crop has been recorded for this farmer yet." />}
           </>
         ) : loading ? (
           <p className="py-8 text-center text-[13.5px] text-muted">Loading crop details…</p>

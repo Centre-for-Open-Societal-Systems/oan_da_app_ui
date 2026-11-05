@@ -11,6 +11,7 @@ import { SEGMENTS, segmentName, useBeneficiariesStore } from "@/features/benefic
 import { AdvancedFiltersButton } from "@/components/ui/AdvancedFiltersButton";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { useAuthStore } from "@/store/useAuthStore";
 import { ExportButton } from "@/components/ui/ExportButton";
 import { cn } from "@/lib/utils";
 import { ALL_FARMERS_SEARCH, apiFarmerToFarmer, describeFarmerError, listFarmers } from "@/features/farmers";
@@ -72,6 +73,7 @@ export function FarmersTable() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [segmentId, setSegmentId] = useState(SEGMENTS[0].id);
   const linkBeneficiaries = useBeneficiariesStore((s) => s.link);
+  const isDA = useAuthStore((s) => s.role) === "DA";
   // GET /farmers is scoped by the backend: a DA gets farmers in their kebele, a supervisor in their woreda, Admin all.
   // Search and paging run on the server; the column filters only narrow the page on screen.
   const [loaded, setLoaded] = useState<{ key: string; rows: Farmer[]; total: number; error: string | null } | null>(null);
@@ -230,7 +232,7 @@ export function FarmersTable() {
               <tr>
                 <td colSpan={8} className="px-4 py-6">
                   {source.length === 0 ? (
-                    <EmptyState title={searchText && searchText !== ALL_FARMERS_SEARCH ? "No farmers match your search" : "No farmers in your area yet"} hint={searchText && searchText !== ALL_FARMERS_SEARCH ? "Try a name, a Farmer-ID or a phone number." : "Approved farmers in your scope appear here."} />
+                    <EmptyState title={searchText && searchText !== ALL_FARMERS_SEARCH ? "No farmers match your search" : isDA ? "No farmer assigned" : "No farmers in your area yet"} hint={searchText && searchText !== ALL_FARMERS_SEARCH ? "Try a name, a Farmer-ID or a phone number." : isDA ? "Farmers your supervisor assigns to you appear here." : "Approved farmers in your scope appear here."} />
                   ) : (
                     <EmptyState title="No farmers match the selected filters" hint="Clear a filter or try a different search." />
                   )}

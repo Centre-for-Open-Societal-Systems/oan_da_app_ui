@@ -7,7 +7,7 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Textarea } from "@/components/ui/Textarea";
-import { cn } from "@/lib/utils";
+import { cn, todayIso } from "@/lib/utils";
 import {
   COACHING_AGENT,
   COACHING_FOCUS_OPTIONS,
@@ -169,7 +169,7 @@ export function ShareModal({ sessionDate, entry, onClose, onShare }: { sessionDa
 // ---------- New session ----------
 
 export function NewSessionModal({ onClose, onCreate }: { onClose: () => void; onCreate: (s: { date: string; topic: string; focus: string[] }) => void }) {
-  const [date, setDate] = useState("");
+  const [date, setDate] = useState(() => todayIso());
   const [topic, setTopic] = useState("");
   const [focus, setFocus] = useState<Set<string>>(new Set());
   const valid = date !== "" && topic.trim() !== "";
@@ -200,7 +200,7 @@ export function NewSessionModal({ onClose, onCreate }: { onClose: () => void; on
       }
     >
       <div className="flex flex-col gap-4">
-        <FormField label="Session date" htmlFor="ns-date" required><Input id="ns-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></FormField>
+        <FormField label="Session date" htmlFor="ns-date" required><Input id="ns-date" type="date" min={todayIso()} value={date} onChange={(e) => setDate(e.target.value)} /></FormField>
         <FormField label="Topic" htmlFor="ns-topic" required><Input id="ns-topic" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="What will you work on together?" /></FormField>
         <div className="flex flex-col gap-2">
           <p className="text-[14px] font-medium text-ink">Focus areas</p>

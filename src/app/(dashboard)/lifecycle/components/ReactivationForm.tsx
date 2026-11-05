@@ -1,5 +1,6 @@
 "use client";
 
+import { todayIso } from "@/lib/utils";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -82,7 +83,7 @@ export function ReactivationForm() {
             <FormSection step={1} title="Reactivation details" subtitle="Status after approval and assignment on return." tone={transition.tone}>
               <LockedField id="lc-status" label="Resulting status" value={transition.outcome} />
               <FormField label="Effective date" htmlFor="lc-effective" required hint={error("effective")} hintTone="error">
-                <Input id="lc-effective" type="date" value={draft.effective} onChange={(e) => set("effective", e.target.value)} />
+                <Input id="lc-effective" type="date" min={todayIso()} value={draft.effective} onChange={(e) => set("effective", e.target.value)} />
               </FormField>
               <LockedField id="lc-previous" label="Previous assignment" value={PREVIOUS_ASSIGNMENT} />
               <FormField label="Assignment on return" htmlFor="lc-target" required hint={error("target")} hintTone="error">
