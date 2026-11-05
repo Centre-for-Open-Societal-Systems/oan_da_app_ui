@@ -1,111 +1,70 @@
 "use client";
 
 import { Input } from "@/components/ui/Input";
-import { MultiSelectDropdown } from "@/components/ui/MultiSelectDropdown";
 import { Select } from "@/components/ui/Select";
 import { cn } from "@/lib/utils";
-import type { LivestockFieldDef } from "@/features/farmers";
+import type { LivestockAnimalOption, LivestockFieldDef } from "@/features/farmers";
 
 interface LivestockFieldInputProps {
   id: string;
   field: LivestockFieldDef;
+  /** The stored value; for a read-only field, the text to show. */
   value: string;
   onChange: (value: string) => void;
-  /** Fetched from the registries when the farmer was found: shown in its input, but read-only. */
-  autoFilled?: boolean;
+  error?: string;
+  /** What the animal picker offers. */
+  animals?: LivestockAnimalOption[];
 }
 
-const MULTI_SEPARATOR = ", ";
 const READ_ONLY = "cursor-not-allowed border-gray-200 bg-surface text-ink-soft hover:border-gray-200 hover:ring-0 focus:border-gray-200 focus:ring-0";
+const BOOLEAN_CHOICES = [
+  { value: "true", label: "Yes" },
+  { value: "false", label: "No" },
+];
 
-// One Livestock Report field, rendered by its type. Values stay strings (multi-select joins with ", ").
-export function LivestockFieldInput({ id, field, value, onChange, autoFilled = false }: LivestockFieldInputProps) {
-  const isRequired = !!field.required;
+// One Livestock field, rendered by its type. The form holds strings; what is sent is decided in buildLivestockSections.
+export function LivestockFieldInput({ id, field, value, onChange, error, animals }: LivestockFieldInputProps) {
   return (
-    <div className="flex min-w-0 flex-col gap-2">
-      <label htmlFor={id} className="flex items-center gap-2 text-[14px] font-medium text-ink">
-        <span className="min-w-0">
-          {field.label} {isRequired && <span className="text-danger">*</span>}
-        </span>
-        {autoFilled && (
-          <span className="shrink-0 rounded-full bg-[#ECFDF3] border border-[#C9E8D6] px-2 py-px text-[11px] font-semibold text-[#16A34A]" title="Fetched from the farmer's registry record">
-            Auto-filled
-          </span>
-        )}
+    <div className={error ? "field-invalid flex min-w-0 flex-col gap-2" : "flex min-w-0 flex-col gap-2"}>
+      <label htmlFor={id} className="text-[14px] font-medium text-ink">
+        {field.label} {(field.required || field.requiredInRow) && !field.readOnly && <span className="text-danger">*</span>}
       </label>
-      <Control id={id} field={field} value={value} onChange={onChange} autoFilled={autoFilled} />
+      <Control id={id} field={field} value={value} onChange={onChange} animals={animals} />
+      {error && <p className="text-[12.5px] text-danger">{error}</p>}
     </div>
   );
 }
 
-function Control({ id, field, value, onChange, autoFilled }: LivestockFieldInputProps) {
+function Choices({ id, label, value, onChange, choices }: { id: string; label: string; value: string; onChange: (v: string) => void; choices: { value: string; label: string }[] }) {
+  // A saved value the list no longer has must still show, or the field would look empty.
+  const all = value && !choices.some((c) => c.value === value) ? [{ value, label: value }, ...choices] : choices;
+  return (
+    <Select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">Select {label.toLowerCase()}</option>
+      {all.map((c) => (
+        <option key={c.value} value={c.value}>
+          {c.label}
+        </option>
+      ))}
+    </Select>
+  );
+}
+
+function Control({ id, field, value, onChange, animals }: LivestockFieldInputProps) {
+  if (field.readOnly) return <Input id={id} value={value} readOnly placeholder="Filled by the registry" className={READ_ONLY} />;
   switch (field.type) {
-    case "select": {
-      // A registry value the option list does not know about must still show, or the auto-fill would look empty.
-      const options = value && !field.options?.includes(value) ? [value, ...(field.options ?? [])] : (field.options ?? []);
-      return (
-        <Select id={id} value={value} onChange={(e) => onChange(e.target.value)} disabled={autoFilled} className={cn(autoFilled && READ_ONLY)}>
-          <option value="">Select {field.label.toLowerCase()}</option>
-          {options.map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </Select>
-      );
-    }
-    case "multiselect": {
-      const selected = value ? value.split(MULTI_SEPARATOR) : [];
-      return (
-        <MultiSelectDropdown
-          id={id}
-          placeholder={`Select ${field.label}`}
-          options={field.options ?? []}
-          selected={selected}
-          onChange={(next) => onChange(next.join(MULTI_SEPARATOR))}
-          disabled={autoFilled}
-          className={cn(autoFilled && READ_ONLY)}
-        />
-      );
-    }
-    case "radio":
-      return (
-        <div id={id} role="radiogroup" aria-label={field.label} className="flex min-h-11 items-center gap-5">
-          {field.options?.map((o) => (
-            <label key={o} className={cn("flex items-center gap-2 text-[14px] text-ink", autoFilled ? "cursor-not-allowed" : "cursor-pointer")}>
-              <input type="radio" name={id} checked={value === o} onChange={() => onChange(o)} disabled={autoFilled} className="h-4 w-4 accent-brand-green" />
-              {o}
-            </label>
-          ))}
-        </div>
-      );
+    case "select":
+      return <Choices id={id} label={field.label} value={value} onChange={onChange} choices={field.choices ?? []} />;
+    case "boolean":
+      return <Choices id={id} label={field.label} value={value} onChange={onChange} choices={BOOLEAN_CHOICES} />;
+    case "animal":
+      return <Choices id={id} label="animal" value={value} onChange={onChange} choices={animals ?? []} />;
     case "date":
-      return <Input id={id} type="date" value={value} onChange={(e) => onChange(e.target.value)} readOnly={autoFilled} className={cn(!autoFilled && "cursor-pointer", autoFilled && READ_ONLY)} />;
+      return <Input id={id} type="date" value={value} onChange={(e) => onChange(e.target.value)} className={cn("cursor-pointer")} />;
     case "number":
-      return (
-        <Input
-          id={id}
-          type="number"
-          inputMode="decimal"
-          step="any"
-          min={0}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          readOnly={autoFilled}
-          placeholder="0"
-          className={cn(autoFilled && READ_ONLY)}
-        />
-      );
+    case "integer":
+      return <Input id={id} type="number" inputMode={field.type === "integer" ? "numeric" : "decimal"} step={field.type === "integer" ? 1 : "any"} value={value} onChange={(e) => onChange(e.target.value)} placeholder="0" />;
     default:
-      return (
-        <Input
-          id={id}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          readOnly={autoFilled}
-          placeholder={`Enter ${field.label.toLowerCase()}`}
-          className={cn(autoFilled && READ_ONLY)}
-        />
-      );
+      return <Input id={id} value={value} onChange={(e) => onChange(e.target.value)} maxLength={field.maxLength} placeholder={`Enter ${field.label.toLowerCase()}`} />;
   }
 }

@@ -1,6 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuthStore } from "@/store/useAuthStore";
-import { caseFromApi, fetchGrievance, fetchGrievanceOptions, fetchGrievanceTimeline, listGrievances, submitGrievance, toGrievance, type ApiGrievance, type ApiGrievanceDetail } from "./api";
+import {
+  caseFromApi,
+  fetchGrievance,
+  fetchGrievanceOptions,
+  fetchGrievanceSummary,
+  fetchGrievanceTimeline,
+  listGrievances,
+  fetchGrievanceAreas,
+  selfSubmitter,
+  submitGrievance,
+  toGrievance,
+  type ApiGrievance,
+  type ApiGrievanceDetail,
+  type SubmitGrievanceRequest,
+} from "./api";
 
 // Minimal in-memory Storage so the persisted auth store runs under Node.
 class MemoryStorage implements Storage {
@@ -17,27 +31,34 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const fetchMock = vi.fn<typeof fetch>();
 
 const row: ApiGrievance = {
-  ticket_id: "GRV-000001",
-  subject: "Fertilizer delivery delayed",
-  status: "Open",
-  priority: "High",
-  category: "Supply Chain",
-  complainant_name: "Abebe Kebede",
+  ticket_number: "GRV-000001",
+  status: "In Progress",
+  category: "Water & Resources",
+  subject: "Canal not cleaned",
   created_at: "2026-09-20T10:00:00Z",
-  updated_at: "2026-09-20T10:00:00Z",
+  location: "Kebele 01 Center",
 };
 
 const detail: ApiGrievanceDetail = {
-  ...row,
-  description: "Expected delivery on 2026-09-15 has not arrived.",
-  subcategory: "Input Delivery",
-  complainant_id: "DA-000001",
-  complainant_role: "Development Agent",
-  region: "ET04",
-  woreda: "ET04-W01",
-  assigned_to: null,
+  ticket_number: "GRV-000001",
+  ticket_id: "GRV-000001",
+  status: "In Progress",
+  subject: "Canal not cleaned",
+  description: "The irrigation canal has not been maintained this season.",
+  category: "Water & Resources",
+  subcategory: "Canal maintenance problems",
+  complainant_name: "Abebe Bikila",
+  complainant_role: "Individual Farmer",
+  complainant_id: "",
+  region: null,
+  woreda: "kebele-ET140108101008",
+  assigned_to: "officer@isda.gov.et",
   resolution: null,
   resolved_at: null,
+  sla_due_date: "2026-09-27T10:00:00Z",
+  sla_consumed_percent: 40,
+  created_at: null,
+  updated_at: null,
 };
 
 beforeEach(() => {
@@ -49,31 +70,57 @@ beforeEach(() => {
 });
 
 describe("grievances api", () => {
-  it("reads options, a page of tickets, one ticket and its timeline", async () => {
+  it("reads options, summary, a page of tickets, one ticket and its timeline", async () => {
     fetchMock
-      .mockResolvedValueOnce(json({ data: { categories: [], priorities: ["Low"], statuses: [] } }))
+      .mockResolvedValueOnce(json({ data: { categories: [{ code: "005", value: "Water & Resources", label: "Water & Resources", subcategories: ["Canal maintenance problems"] }], grievance_types: [{ grievance_type_id: "GTYPE-1", service_category: "Water & Resources", type_name: "Canal maintenance problems" }], statuses: [{ status: "All", label: "All", order: 1 }, { status: "In Progress", label: "In Progress", order: 5 }], submitter_types: [{ code: "IND", type_name: "Individual Farmer" }, { code: "COOP", type_name: "Cooperative" }] } }))
+      .mockResolvedValueOnce(json({ data: { cards: [{ status: "In Progress", label: "In Progress", order: 2, is_open: 1, is_terminal: 0, count: 3 }, { status: "All", label: "All", order: 1, is_open: 0, is_terminal: 0, count: 5 }] } }))
       .mockResolvedValueOnce(json({ data: [row], meta: { page: 1, page_size: 100, total: 3 } }))
       .mockResolvedValueOnce(json({ data: detail }))
       .mockResolvedValueOnce(json({ data: [] }));
 
-    await expect(fetchGrievanceOptions()).resolves.toMatchObject({ priorities: ["Low"] });
-    await expect(listGrievances({ pageSize: 100, status: "Open" })).resolves.toEqual({ items: [row], total: 3 });
-    await expect(fetchGrievance("GRV-000001")).resolves.toMatchObject({ subcategory: "Input Delivery" });
+    await expect(fetchGrievanceOptions()).resolves.toEqual({
+      categories: [{ value: "Water & Resources", label: "Water & Resources", subcategories: ["Canal maintenance problems"] }],
+      grievanceTypes: ["Canal maintenance problems"],
+      // "All" and empty statuses are dropped (the summary carries the All card).
+      statuses: [{ status: "In Progress", label: "In Progress" }],
+      submitterTypes: ["Individual Farmer", "Cooperative"],
+    });
+    // Summary cards come back sorted by order (All first).
+    await expect(fetchGrievanceSummary()).resolves.toMatchObject([{ status: "All" }, { status: "In Progress", count: 3 }]);
+    await expect(listGrievances({ pageSize: 100, status: "In Progress" })).resolves.toEqual({ items: [row], total: 3 });
+    await expect(fetchGrievance("GRV-000001")).resolves.toMatchObject({ sla_consumed_percent: 40 });
     await expect(fetchGrievanceTimeline("GRV-000001")).resolves.toEqual([]);
 
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
       "/api/v1/da-services/grievances/options",
-      "/api/v1/da-services/grievances?page=1&page_size=100&status=Open",
+      "/api/v1/da-services/grievances/summary",
+      "/api/v1/da-services/grievances?page=1&page_size=100&status=In+Progress",
       "/api/v1/da-services/grievances/GRV-000001",
       "/api/v1/da-services/grievances/GRV-000001/timeline",
     ]);
   });
 
-  it("submits a grievance raised for a farmer", async () => {
-    fetchMock.mockResolvedValueOnce(json({ data: { ticket_id: null, sync_state: "pending", queue_ref: "EVT-1", message: "queued" } }, 201));
-    const body = { subject: "Voucher not redeemed", description: "Rejected twice at dealer", category: "Supply Chain", priority: "Medium", raised_for: "Farmer" as const, farmer_id: "FR-88341", client_op_id: "op-1" };
+  it("submits a grievance with the service's create body", async () => {
+    fetchMock.mockResolvedValueOnce(json({ data: { ticket_id: null, ticket_number: null, sync_state: "pending", queue_ref: "EVT-1", message: "queued" } }, 201));
+    const body: SubmitGrievanceRequest = {
+      subject: "Canal not cleaned",
+      description: "The irrigation canal has not been maintained this season.",
+      priority: "Medium",
+      raised_for: "Self",
+      submitter_type: "Individual Farmer",
+      submitter_name: "Abebe Bikila",
+      contact_mobile: "0911000000",
+      administrative_area: "kebele-ET140108101008",
+      administrative_unit: "Kebele 01 Center",
+      service_category: "Water & Resources",
+      grievance_type: "Canal maintenance problems",
+      desired_outcome: "Canal cleaned before the next irrigation cycle",
+      consent_given: 1,
+      is_anonymous: 0,
+      client_op_id: "op-1",
+    };
 
-    await expect(submitGrievance(body)).resolves.toMatchObject({ ticket_id: null, sync_state: "pending" });
+    await expect(submitGrievance(body)).resolves.toMatchObject({ ticket_id: null, ticket_number: null, sync_state: "pending" });
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/v1/da-services/grievances");
@@ -84,18 +131,59 @@ describe("grievances api", () => {
 
 describe("mapping", () => {
   it("maps a ticket onto a table row", () => {
-    expect(toGrievance(row)).toMatchObject({ ticketId: "GRV-000001", title: "Fertilizer delivery delayed", category: "Supply Chain", status: "Submitted", priority: "High", raisedBy: "DA", fromApi: true });
-    expect(toGrievance({ ...row, status: "Escalated" }).status).toBe("Under Review");
-    expect(toGrievance({ ...row, priority: "Urgent" }).priority).toBe("Medium");
+    expect(toGrievance(row)).toMatchObject({
+      ticketId: "GRV-000001",
+      title: "Canal not cleaned",
+      category: "Water & Resources",
+      status: "In Progress",
+      location: "Kebele 01 Center",
+      raisedBy: "DA",
+      fromApi: true,
+    });
   });
 
-  it("builds the case thread from the description and timeline", () => {
+  it("builds the case thread, submitter and SLA from the detail and timeline", () => {
     const c = caseFromApi(toGrievance(row), detail, [
-      { timestamp: "2026-09-20T10:00:00Z", action: "created", actor: "DA-000001", detail: "Grievance submitted" },
-      { timestamp: "2026-09-21T08:00:00Z", action: "assigned", actor: "Woreda office", detail: "To inputs desk" },
+      { timestamp: "2026-09-20T10:00:00Z", action: "submission", actor: "Abebe Bikila", detail: "Canal not cleaned" },
+      { timestamp: "2026-09-21T08:00:00Z", action: "assignment", actor: "Woreda office", detail: "To inputs desk" },
     ]);
+    // The timeline's own "submission" entry is dropped (we synthesise the submission block from the description).
     expect(c.thread.map((m) => m.kind)).toEqual(["submission", "event"]);
-    expect(c.grievance).toMatchObject({ region: "ET04", woreda: "ET04-W01", type: "Input Delivery" });
-    expect(c.submitter).toMatchObject({ name: "Abebe Kebede", kind: "Development Agent", faydaId: "DA-000001" });
+    expect(c.grievance).toMatchObject({ status: "In Progress", type: "Canal maintenance problems" });
+    expect(c.submitter).toMatchObject({ name: "Abebe Bikila", kind: "Individual Farmer" });
+    expect(c.sla.consumedPct).toBe(40);
+  });
+});
+
+describe("fetchGrievanceAreas", () => {
+  it("asks this app's route for the areas under a parent", async () => {
+    const areas = [{ area_id: "kebele-ET140108101008", area_name: "8", code: "ET140108101008" }];
+    fetchMock.mockResolvedValueOnce(json({ areas }));
+    await expect(fetchGrievanceAreas("woreda-ET140108")).resolves.toEqual(areas);
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toBe("/api/grievance-areas?parent=woreda-ET140108");
+  });
+
+  it("says so when the list cannot be read", async () => {
+    fetchMock.mockResolvedValueOnce(json({ message: "no" }, 502));
+    await expect(fetchGrievanceAreas()).rejects.toThrow("Could not load the areas");
+  });
+});
+
+describe("selfSubmitter", () => {
+  it("reads the submitter from the DA record", () => {
+    expect(selfSubmitter({ full_name: " Abebe Kebede ", phone: "0911000000", woreda: "ET030403", kebele_name: "Kebele 01" }, "abebe@moa.gov.et")).toEqual({
+      name: "Abebe Kebede",
+      mobile: "0911000000",
+      woredaCode: "ET030403",
+      kebeleName: "Kebele 01",
+    });
+  });
+
+  it("falls back to the account name and leaves what the record lacks empty", () => {
+    expect(selfSubmitter(null, "Abebe")).toEqual({ name: "Abebe", mobile: "", woredaCode: "", kebeleName: "" });
+  });
+
+  it("accepts mobile when the record has no phone", () => {
+    expect(selfSubmitter({ mobile: "0922000000" }).mobile).toBe("0922000000");
   });
 });

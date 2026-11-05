@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuthStore } from "@/store/useAuthStore";
-import { canAddEvidence, canCancel, canLogOutcome, canReschedule, canStartVisit, cancelVisit, evidenceProblem, fetchActivityReport, fetchVisit, formatVisitTime, listVisits, rescheduleVisit, startVisit, submitVisitOutcome, toVisitRecord, uploadVisitEvidence, type ApiVisit } from "./api";
+import { canActOnVisit, canAddEvidence, canCancel, canLogOutcome, canReschedule, canStartVisit, cancelVisit, evidenceProblem, fetchActivityReport, fetchVisit, formatVisitTime, listVisits, rescheduleVisit, startVisit, submitVisitOutcome, toVisitRecord, uploadVisitEvidence, type ApiVisit } from "./api";
 
 // Minimal in-memory Storage so the persisted auth store runs under Node.
 class MemoryStorage implements Storage {
@@ -44,6 +44,25 @@ describe("listVisits", () => {
 
     await expect(listVisits({ date: "2026-10-16" })).resolves.toEqual({ items: [apiVisit], total: 1 });
     expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/visits?date=2026-10-16");
+  });
+
+  it("passes da_id and leaves it out when there is none", async () => {
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({ data: [], meta: { total: 0 } })));
+
+    await listVisits({ date: "2026-10-16", da_id: "DA-000003" });
+    await listVisits({ date: "2026-10-16", da_id: undefined });
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/visits?date=2026-10-16&da_id=DA-000003");
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/v1/da-services/visits?date=2026-10-16");
+  });
+});
+
+describe("canActOnVisit", () => {
+  it("lets a DA act only on their own visit and leaves officers alone", () => {
+    const visit = { agent: "DA-000003" };
+    expect(canActOnVisit(visit, true, "DA-000003")).toBe(true);
+    expect(canActOnVisit(visit, true, "DA-000009")).toBe(false);
+    expect(canActOnVisit(visit, true, null)).toBe(false);
+    expect(canActOnVisit(visit, false, null)).toBe(true);
   });
 });
 

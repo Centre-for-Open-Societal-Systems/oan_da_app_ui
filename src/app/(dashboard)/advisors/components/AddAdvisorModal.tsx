@@ -32,6 +32,11 @@ type Errors = Partial<Record<ErrorKey, string>>;
 const FIELD = "gap-1.5 [&>label]:text-[13px] [&>label]:font-semibold";
 const CONTROL = "h-9 border-zinc-200 text-[13.5px]";
 
+/** A rule as the field's visible note; red on a failed save, or once what is typed breaks it. */
+const note = (rule: string, error?: string, broken = false) => ({ hint: error ?? rule, hintTone: error || broken ? ("error" as const) : ("muted" as const) });
+const tooShort = (value: string, min: number) => value.trim().length > 0 && value.trim().length < min;
+const breaks = (value: string, rule: RegExp) => value.trim().length > 0 && !rule.test(value.trim());
+
 /** "12 Oct 2026, 15:20" — same shape as the seeded `updatedAt`. */
 const nowStamp = () => {
   const d = new Date();
@@ -103,7 +108,7 @@ export function AddAdvisorModal({ onClose, onAdded }: { onClose: () => void; onA
       }
     >
       <Section title="Advisor details" first>
-        <FormField label="Full name" htmlFor="adv-name" required hint={errors.name} hintTone="error" className={cn(FIELD, "sm:col-span-2")}>
+        <FormField label="Full name" htmlFor="adv-name" required {...note("At least 3 characters.", errors.name, tooShort(form.name, 3))} className={cn(FIELD, "sm:col-span-2")}>
           <Input id="adv-name" value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Dr. Hanna Girma" className={CONTROL} />
         </FormField>
         <FormField label="Expertise area" htmlFor="adv-expertise" required className={FIELD}>
@@ -133,10 +138,10 @@ export function AddAdvisorModal({ onClose, onAdded }: { onClose: () => void; onA
       </Section>
 
       <Section title="Contact">
-        <FormField label="Mobile number" htmlFor="adv-phone" required hint={errors.phone} hintTone="error" className={FIELD}>
+        <FormField label="Mobile number" htmlFor="adv-phone" required {...note("Ethiopian mobile number, e.g. +251 91 234 5678.", errors.phone, breaks(form.phone, /^\+?251\s?9\d(\s?\d){7}$/))} className={FIELD}>
           <Input id="adv-phone" type="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="+251 91 234 5678" className={CONTROL} />
         </FormField>
-        <FormField label="Email" htmlFor="adv-email" required hint={errors.email} hintTone="error" className={FIELD}>
+        <FormField label="Email" htmlFor="adv-email" required {...note("A valid email address.", errors.email, breaks(form.email, /^\S+@\S+\.\S+$/))} className={FIELD}>
           <Input id="adv-email" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="name@moa.gov.et" className={CONTROL} />
         </FormField>
         <FormField label="Availability" htmlFor="adv-availability" className={cn(FIELD, "sm:col-span-2")}>

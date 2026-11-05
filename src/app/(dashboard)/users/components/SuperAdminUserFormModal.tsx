@@ -92,7 +92,9 @@ export function SuperAdminUserFormModal({ mode, initial, suggestedCode, onClose,
   const [errors, setErrors] = useState<Errors>({});
 
   const clear = (key: Field) => setErrors((e) => ({ ...e, [key]: undefined }));
-  const err = (key: Field) => ({ hint: errors[key], hintTone: "error" as const });
+  // The field's rule stays visible as its note; a failed Submit replaces it with the error.
+  const err = (key: Field, rule?: string, broken = false) => ({ hint: errors[key] ?? rule, hintTone: errors[key] || broken ? ("error" as const) : ("muted" as const) });
+  const today = new Date().toISOString().slice(0, 10);
 
   const zones = region ? Object.keys(GEOGRAPHY[region] ?? {}) : [];
   const woredas = region && zone ? (GEOGRAPHY[region]?.[zone] ?? []) : [];
@@ -186,19 +188,19 @@ export function SuperAdminUserFormModal({ mode, initial, suggestedCode, onClose,
       }
     >
       <Section title="Personal details" first>
-        <FormField label="User Name" htmlFor="su-name" required {...err("name")} className={FIELD}>
+        <FormField label="User Name" htmlFor="su-name" required {...err("name", "At least 3 characters.", name.trim().length > 0 && name.trim().length < 3)} className={FIELD}>
           <Input id="su-name" value={name} onChange={(e) => { setName(e.target.value); clear("name"); }} placeholder="Enter user name" />
         </FormField>
         <FormField label="User Code" htmlFor="su-code" className={FIELD}>
           <Input id="su-code" value={initial?.code ?? suggestedCode} disabled readOnly />
         </FormField>
-        <FormField label="Date of Birth" htmlFor="su-dob" required {...err("dob")} className={FIELD}>
+        <FormField label="Date of Birth" htmlFor="su-dob" required {...err("dob", "Cannot be in the future.", dob > today)} className={FIELD}>
           {/* Shows the placeholder like the other fields, and turns into the native date picker when clicked. */}
           <Input
             id="su-dob"
             type={dobFocused || dob ? "date" : "text"}
             value={dob}
-            max={new Date().toISOString().slice(0, 10)}
+            max={today}
             placeholder="Select date of birth"
             onFocus={() => setDobFocused(true)}
             onBlur={() => setDobFocused(false)}
@@ -213,10 +215,10 @@ export function SuperAdminUserFormModal({ mode, initial, suggestedCode, onClose,
         <FormField label="Gender" htmlFor="su-gender" required {...err("gender")} className={FIELD}>
           <Dropdown id="su-gender" value={gender} placeholder="Select gender" options={[...GENDERS]} onChange={(v) => { setGender(v); clear("gender"); }} />
         </FormField>
-        <FormField label="Email Id" htmlFor="su-email" required {...err("email")} className={FIELD}>
+        <FormField label="Email Id" htmlFor="su-email" required {...err("email", "A valid email address.", email.trim().length > 0 && !/^\S+@\S+\.\S+$/.test(email.trim()))} className={FIELD}>
           <Input id="su-email" type="email" value={email} onChange={(e) => { setEmail(e.target.value); clear("email"); }} placeholder="Enter email id" />
         </FormField>
-        <FormField label="Mobile Number" htmlFor="su-mobile" required {...err("mobile")} className={FIELD}>
+        <FormField label="Mobile Number" htmlFor="su-mobile" required {...err("mobile", "9 to 15 digits; may start with +.", mobile.trim().length > 0 && !/^\+?[0-9\s]{9,15}$/.test(mobile.trim()))} className={FIELD}>
           <Input id="su-mobile" type="tel" value={mobile} onChange={(e) => { setMobile(e.target.value); clear("mobile"); }} placeholder="Enter mobile number" />
         </FormField>
       </Section>
@@ -250,11 +252,11 @@ export function SuperAdminUserFormModal({ mode, initial, suggestedCode, onClose,
 
       <Section title="Services and registries">
         {/* Service takes the full row, Registry and Catalogue the one below. */}
-        <FormField label="Service" htmlFor="su-service-0" required {...err("service")} className={cn(FIELD, "sm:col-span-2 lg:col-span-4")}>
+        <FormField label="Service" htmlFor="su-service-0" required {...err("service", "Select at least one service.")} className={cn(FIELD, "sm:col-span-2 lg:col-span-4")}>
           <CheckGroup idPrefix="su-service" options={SERVICES} selected={service} onToggle={toggleService} className="sm:grid-cols-2 lg:grid-cols-4" />
         </FormField>
         {/* Each registry is a row: its checkbox on the left; once ticked, its Entities multi-select appears on the right. */}
-        <FormField label="Registry and Catalogue" htmlFor="su-registry-0" required hint={errors.registry ?? errors.entities} hintTone="error" className={cn(FIELD, "sm:col-span-2 lg:col-span-4")}>
+        <FormField label="Registry and Catalogue" htmlFor="su-registry-0" required hint={errors.registry ?? errors.entities ?? "Select at least one, with at least one entity under each."} hintTone={errors.registry || errors.entities ? "error" : "muted"} className={cn(FIELD, "sm:col-span-2 lg:col-span-4")}>
           <div role="group" className="flex flex-col gap-2">
             {REGISTRIES.map((r, i) => {
               const checked = registry.includes(r);

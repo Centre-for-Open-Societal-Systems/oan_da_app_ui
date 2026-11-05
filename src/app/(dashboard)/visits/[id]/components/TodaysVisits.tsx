@@ -1,21 +1,41 @@
+"use client";
+
+import { Banner } from "@/components/ui/Banner";
+import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
 import { cn } from "@/lib/utils";
-import { PLANNER_WEEK, TODAYS_VISITS } from "@/features/visits";
+import { canLogOutcome, canStartVisit, isOnPlanner, toTodaysVisit, toVisitRecord, type VisitRecord } from "@/features/visits";
 import { ARRIVAL_STYLES } from "./arrivalStyles";
-import { StartVisitButton } from "./StartVisitButton";
+import { longDate, todayIso, TODAY } from "./calendar";
+import { usePlannerVisits } from "./usePlannerVisits";
 import { VisitLocationsButton } from "./VisitLocationsButton";
 
-export function TodaysVisits({ visitId }: { visitId: string }) {
-  const next = TODAYS_VISITS.find((v) => v.state !== "done");
+interface TodaysVisitsProps {
+  daId?: string;
+  reload: number;
+  canAct: (visit: VisitRecord) => boolean;
+  onStart: (visit: VisitRecord) => void;
+  onLogOutcome: (visit: VisitRecord) => void;
+}
+
+export function TodaysVisits({ daId, reload, canAct, onStart, onLogOutcome }: TodaysVisitsProps) {
+  const { items, error, loading } = usePlannerVisits({ date: todayIso, da_id: daId }, reload);
+  const today = items.filter(isOnPlanner);
+  const visits = today.map(toTodaysVisit);
+  const records = today.map(toVisitRecord);
+  // In progress first: the visit under way has to be closed before the next one is started.
+  const next = records.find((r) => canAct(r) && canLogOutcome(r)) ?? records.find((r) => canAct(r) && canStartVisit(r));
+  const todayLabel = longDate(TODAY);
 
   return (
     <Card className="overflow-hidden p-0 shadow-card">
       <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
         <div>
           <h3 className="text-[15px] font-semibold text-ink">Today&apos;s visits</h3>
-          <p className="mt-0.5 text-[13.5px] text-ink-soft">Visits you&apos;ve arranged with farmers for {PLANNER_WEEK.todayLabel}</p>
+          <p className="mt-0.5 text-[13.5px] text-ink-soft">Visits you&apos;ve arranged with farmers for {todayLabel}</p>
         </div>
-        <VisitLocationsButton />
+        <VisitLocationsButton visits={visits} todayLabel={todayLabel} />
       </div>
 
       <div className="flex flex-col gap-4 p-4">
@@ -26,11 +46,15 @@ export function TodaysVisits({ visitId }: { visitId: string }) {
           <p>You arrange and order visits directly with farmers based on their availability - the app does not assign or optimise routes.</p>
         </div>
 
+        {error && <ErrorAlert message={error} />}
+        {loading && <p className="px-1 text-[13.5px] text-muted">Loading visits…</p>}
+        {!loading && !error && visits.length === 0 && <p className="px-1 text-[13.5px] text-muted">No visits planned for today.</p>}
+
         <ol className="flex flex-col gap-2 px-1">
-          {TODAYS_VISITS.map((v, index) => {
+          {visits.map((v, index) => {
             const style = ARRIVAL_STYLES[v.state];
             return (
-              <li key={v.farmerName} className="flex items-start gap-3 py-1 sm:items-center sm:gap-4">
+              <li key={v.id} className="flex items-start gap-3 py-1 sm:items-center sm:gap-4">
                 <span className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold", style.step)}>
                   {index + 1}
                 </span>
@@ -49,7 +73,22 @@ export function TodaysVisits({ visitId }: { visitId: string }) {
           })}
         </ol>
 
-        <StartVisitButton visitId={visitId} next={next} />
+        {next && canLogOutcome(next) && (
+          <Button type="button" variant="brand" onClick={() => onLogOutcome(next)} className="w-full gap-2">
+            Log outcome · {next.farmerName}
+          </Button>
+        )}
+        {next && !canLogOutcome(next) && (
+          <Button type="button" variant="brand" onClick={() => onStart(next)} className="w-full gap-2">
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8V4z" /></svg>
+            Start visit · {next.farmerName}
+          </Button>
+        )}
+        {!next && visits.length > 0 && visits.every((v) => v.state === "done") && (
+          <Banner tone="success" className="text-center font-medium">
+            All of today&apos;s visits are done.
+          </Banner>
+        )}
       </div>
     </Card>
   );

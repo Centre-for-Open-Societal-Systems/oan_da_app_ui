@@ -1,3 +1,4 @@
+import { farmerActivity } from "./filters";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuthStore } from "@/store/useAuthStore";
 import {
@@ -5,6 +6,7 @@ import {
   apiPlotToPlot,
   apiVisitToVisit,
   describeFarmerError,
+  fetchFarmerLivestock,
   fetchFarmerPlots,
   fetchFarmerProfile,
   fetchFarmerVisits,
@@ -87,6 +89,14 @@ describe("farmer calls", () => {
       "/api/v1/da-services/farmers/FRM-000103/plots",
     ]);
   });
+
+  it("reads the livestock of one farmer", async () => {
+    const animals = [{ animal: "cattle", count: 3 }];
+    fetchMock.mockResolvedValueOnce(json({ data: { livestock: animals } }));
+
+    await expect(fetchFarmerLivestock("FR-512145929324")).resolves.toEqual(animals);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/farmers/FR-512145929324/livestock");
+  });
 });
 
 describe("mapping", () => {
@@ -136,11 +146,12 @@ describe("mapping", () => {
     expect(Number.isNaN(plot.lat)).toBe(true);
 
     expect(apiVisitToVisit({ name: "DA-VIS-1", scheduled_at: "2026-10-15T16:30:00", physical_status: "Physical Visit Complete", visit_type: "Advisory", outcome: "Rust found", da_id: "DA-000003", completed_at: null }))
-      .toEqual({ title: "Advisory · Physical Visit Complete", summary: "Rust found", date: "15 Oct 2026", time: "16:30" });
+      .toEqual({ title: "Advisory · Completed", summary: "Rust found", date: "15 Oct 2026", time: "16:30" });
   });
 
-  it("sends the registry id for API farmers and the mock code for sample ones", () => {
-    expect(registryCode(apiFarmerToFarmer(row))).toBe("FRM-000103");
+  it("sends the Farmer ID for API farmers and the mock code for sample ones", () => {
+    expect(registryCode(apiFarmerToFarmer(row))).toBe("FR-88341");
+    expect(registryCode(apiFarmerToFarmer({ ...row, reg_id: null }))).toBe("FRM-000103");
     expect(registryCode(FARMERS[0])).toMatch(/^FR-\d{5}$/);
   });
 });
@@ -173,5 +184,13 @@ describe("mapping the collection's example responses", () => {
   it("words 503 and a 400's details as the integration guide says", () => {
     expect(describeFarmerError(new ApiError("x", 503))).toBe("Registry unavailable, try again.");
     expect(describeFarmerError(new ApiError("Validation failed", 400, { kebele: "Kebele is required", phone: "Invalid phone" }))).toBe("Kebele is required Invalid phone");
+  });
+});
+
+describe("farmerActivity", () => {
+  it("shows an approved farmer as Active and every other one as Inactive", () => {
+    expect(farmerActivity("Verified")).toBe("Active");
+    expect(farmerActivity("Pending")).toBe("Inactive");
+    expect(farmerActivity("Flagged")).toBe("Inactive");
   });
 });

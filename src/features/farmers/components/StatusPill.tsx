@@ -1,10 +1,12 @@
 import { cn } from "@/lib/utils";
 import { Pill, type PillTone } from "@/components/ui/Pill";
 import { Tooltip } from "@/components/ui/Tooltip";
-import type { CropOutcome, FarmerStatus } from "../types";
+import type { CropOutcome, FarmerActivity, FarmerStatus } from "../types";
 
-const TONES: Record<FarmerStatus | CropOutcome, PillTone> = {
+const TONES: Record<FarmerStatus | FarmerActivity | CropOutcome, PillTone> = {
   Verified: "green",
+  Active: "green",
+  Inactive: "slate",
   Successful: "green",
   Pending: "amber",
   "Below average": "amber",
@@ -13,7 +15,7 @@ const TONES: Record<FarmerStatus | CropOutcome, PillTone> = {
 };
 
 interface StatusPillProps {
-  status: FarmerStatus | CropOutcome;
+  status: FarmerStatus | FarmerActivity | CropOutcome;
   /** Shown in a hover tooltip — e.g. why a farmer is Pending or Flagged. */
   reason?: string;
   className?: string;

@@ -22,14 +22,14 @@ export function ProductionSummary({ farmer, crops, tabs }: { farmer: Farmer; cro
   const pick = (key: string, fallback?: string) => display[key] || fallback;
 
   return (
-    <SectionCard title="Production summary" className="rounded-t-none border-t-0">
+    <SectionCard title="Production summary" className="shadow-xs">
       <div className="grid grid-cols-1 gap-y-3 lg:grid-cols-2 lg:divide-x lg:divide-line">
         <dl className="flex flex-col gap-3 lg:pr-8">
           <Row label="Production ID" value={pick("production_id")} />
           <Row label="Production season" value={pick("production_season", fromIdentity("production_season"))} />
         </dl>
         <dl className="flex flex-col gap-3 lg:pl-8">
-          <Row label="Farmer ID" value={pick("farmer_id", farmer.regId ?? registryCode(farmer))} />
+          <Row label="Farmer ID" value={pick("farmer_id", registryCode(farmer))} />
           <Row label="Fayda FAN ID" value={pick("fayda_fan_id", fromIdentity("fayda_fan_id"))} />
           <Row label="Fayda FIN" value={pick("fayda_fin")} />
           <Row label="Farmer registry status" value={farmer.status} />

@@ -1,46 +1,97 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { Banner } from "@/components/ui/Banner";
-import { FARMERS, registryCode } from "@/features/farmers";
 import { cn } from "@/lib/utils";
-import { fetchGrievanceOptions, newClientOpId, submitGrievance, type GrievanceOptions, type SubmitGrievanceResult } from "../api";
+import { useAuthStore } from "@/store/useAuthStore";
+import {
+  fetchGrievanceOptions,
+  newClientOpId,
+  selfSubmitter,
+  submitGrievance,
+  toAdministrativeArea,
+  type GrievanceArea,
+  type GrievanceOptions,
+  type SubmitGrievanceResult,
+} from "../api";
+import { DaKebele, KebelePicker } from "./KebelePicker";
+import { VoiceRecorder } from "./VoiceRecorder";
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  /** Pre-selects "for a farmer" with this farmer (when launched from a farmer profile). */
+  /** Pre-selects "for a farmer" (when launched from a farmer profile). */
   farmerId?: string;
   /** Called after the Grievance Service accepted (or queued) the grievance, e.g. to reload a list. */
   onSubmitted?: (result: SubmitGrievanceResult) => void;
 }
 
+/** The rule of a minimum-length field as its visible note; red once what is typed falls short. */
+const minLengthNote = (value: string, min: number, prefix = "") => {
+  const length = value.trim().length;
+  return { hint: `${prefix}At least ${min} characters.`, hintTone: length > 0 && length < min ? ("error" as const) : ("muted" as const) };
+};
+
 type Result = { kind: "draft" } | { kind: "sent"; result: SubmitGrievanceResult };
+
+const DA_SUBMITTER_TYPE = "Development Agent";
+const SUBMITTER_TYPES_FALLBACK = ["Individual Farmer", "Cooperative", DA_SUBMITTER_TYPE, "FPO", "NGO", "Woreda/Kebele Body"];
+const PRIORITIES = ["Low", "Medium", "High", "Critical"];
+/** The Grievance Service's min_description_length. */
+const MIN_DESCRIPTION = 20;
 
 // FR-12 / FR-12a: native raise form → POST /grievances → external case ID. When the Grievance Service is down
 // DA Services queues the grievance and returns no ticket yet; it is forwarded once the service is back.
 export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: Props) {
+  const role = useAuthStore((s) => s.role);
+  const accountName = useAuthStore((s) => s.user?.name);
+  const agent = useAuthStore((s) => s.profile?.agent);
+  const self = useMemo(() => selfSubmitter(agent, accountName), [agent, accountName]);
+
   const [forWhom, setForWhom] = useState<"farmer" | "me">(farmerId ? "farmer" : "me");
-  const [farmer, setFarmer] = useState(farmerId ?? FARMERS[0].id);
+  // Fixed when launched from a farmer profile, otherwise typed in.
+  const [farmerRef, setFarmerRef] = useState(farmerId ?? "");
   const [options, setOptions] = useState<GrievanceOptions | null>(null);
   const [optionsError, setOptionsError] = useState<string | null>(null);
-  const [category, setCategory] = useState("");
-  const [subcategory, setSubcategory] = useState("");
+
+  // Submitter
+  const [submitterType, setSubmitterType] = useState(SUBMITTER_TYPES_FALLBACK[0]);
+  const [submitterName, setSubmitterName] = useState("");
+  const [contactMobile, setContactMobile] = useState("");
+
+  // Classification
+  const [serviceCategory, setServiceCategory] = useState("");
+  const [grievanceType, setGrievanceType] = useState("");
   const [priority, setPriority] = useState("Medium");
+
+  // Administrative area: picked from the Grievance Service's own list (KebelePicker).
+  const [kebeleCode, setKebeleCode] = useState("");
+  const [kebeleName, setKebeleName] = useState("");
+  const pickKebele = useCallback((kebele: GrievanceArea | null) => {
+    setKebeleCode(kebele?.code ?? "");
+    setKebeleName(kebele?.area_name ?? "");
+  }, []);
+
+  // Content
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
+  const [desiredOutcome, setDesiredOutcome] = useState("");
+  const [consent, setConsent] = useState(true);
+  const [anonymous, setAnonymous] = useState(false);
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [clientOpId, setClientOpId] = useState(newClientOpId);
 
-  // Dropdown values come from the Grievance Service; the first category is preselected once they arrive.
+  // Dropdown values + top geo level, loaded once the modal opens.
   useEffect(() => {
     if (!isOpen) return;
     let current = true;
@@ -48,7 +99,7 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
       .then((o) => {
         if (!current) return;
         setOptions(o);
-        setCategory((c) => c || o.categories[0]?.value || "");
+        setServiceCategory((c) => c || o.categories[0]?.value || "");
       })
       .catch((err: unknown) => current && setOptionsError(err instanceof Error ? err.message : "Could not load the grievance categories."));
     return () => {
@@ -56,16 +107,34 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
     };
   }, [isOpen]);
 
-  const subcategories = options?.categories.find((c) => c.value === category)?.subcategories ?? [];
-  const priorities = options?.priorities ?? ["Low", "Medium", "High", "Critical"];
-  const selectedFarmer = FARMERS.find((f) => f.id === farmer);
+  const grievanceTypes = useMemo(() => {
+    const sub = options?.categories.find((c) => c.value === serviceCategory)?.subcategories ?? [];
+    return sub.length > 0 ? sub : options?.grievanceTypes ?? [];
+  }, [options, serviceCategory]);
+
+  const submitterTypes = options?.submitterTypes?.length ? options.submitterTypes : SUBMITTER_TYPES_FALLBACK;
+
+  // A DA raising for themselves is the submitter: the type is fixed, and name and mobile come from their DA record.
+  // A value the record does not hold stays editable, so the form can still be completed.
+  const selfAsDa = forWhom === "me" && role === "DA";
+  const daType = submitterTypes.find((t) => /development agent/i.test(t)) ?? DA_SUBMITTER_TYPE;
+  const nameLocked = selfAsDa && !!self.name;
+  const mobileLocked = selfAsDa && !!self.mobile;
+  const effectiveType = selfAsDa ? daType : submitterType;
+  const effectiveName = nameLocked ? self.name : submitterName;
+  const effectiveMobile = mobileLocked ? self.mobile : contactMobile;
+
+  const chooseFor = (whom: "farmer" | "me") => {
+    setForWhom(whom);
+    pickKebele(null);
+  };
 
   const reset = () => {
-    setSubject("");
-    setDescription("");
-    setSubcategory("");
-    setError(null);
-    setResult(null);
+    setSubject(""); setDescription(""); setDesiredOutcome("");
+    setSubmitterName(""); setContactMobile(""); setFarmerRef(farmerId ?? "");
+    setGrievanceType(""); pickKebele(null);
+    setConsent(true); setAnonymous(false);
+    setError(null); setResult(null);
     setClientOpId(newClientOpId());
   };
 
@@ -76,12 +145,21 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
       const sent = await submitGrievance({
         subject: subject.trim(),
         description: description.trim(),
-        category,
-        ...(subcategory && { subcategory }),
         priority,
         raised_for: forWhom === "farmer" ? "Farmer" : "Self",
-        // Sample farmers carry no registry id yet; their mock registry code stands in until the farmers API is wired.
-        ...(forWhom === "farmer" && selectedFarmer && { farmer_id: registryCode(selectedFarmer) }),
+        farmer_id: forWhom === "farmer" ? farmerRef.trim() : undefined,
+
+        submitter_type: effectiveType,
+        submitter_name: effectiveName.trim(),
+        contact_mobile: effectiveMobile.trim(),
+        administrative_area: toAdministrativeArea(kebeleCode),
+        administrative_unit: kebeleName.trim(),
+        service_category: serviceCategory,
+        grievance_type: grievanceType,
+        desired_outcome: desiredOutcome.trim(),
+        consent_given: consent ? 1 : 0,
+        is_anonymous: anonymous ? 1 : 0,
+
         client_op_id: clientOpId,
       });
       setResult({ kind: "sent", result: sent });
@@ -98,8 +176,19 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
     onClose();
   };
 
-  const canSubmit = subject.trim().length >= 3 && description.trim().length >= 10 && !!category && !submitting;
-  const queued = result?.kind === "sent" && !result.result.ticket_id;
+  const canSubmit =
+    (forWhom !== "farmer" || !!farmerRef.trim()) &&
+    subject.trim().length >= 3 &&
+    description.trim().length >= MIN_DESCRIPTION &&
+    !!serviceCategory &&
+    !!grievanceType &&
+    effectiveName.trim().length >= 2 &&
+    effectiveMobile.trim().length >= 6 &&
+    !!kebeleCode &&
+    !!kebeleName &&
+    !submitting;
+  const reference = result?.kind === "sent" ? result.result.ticket_number ?? result.result.ticket_id : null;
+  const queued = result?.kind === "sent" && result.result.sync_state === "pending";
 
   return (
     <Modal isOpen={isOpen} onClose={close} title="Raise a Grievance" subtitle="Submitted to the external OAN Grievance Service — triage, response and closure happen there." size="lg"
@@ -121,12 +210,12 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
             </Banner>
           ) : (
             <Banner tone="success" title="Submitted to the Grievance Service">
-              External case ID {result.result.ticket_id}. Status is sourced from the Grievance Service; the submitter is notified by SMS on every change.
+              External case ID {reference}. Status is sourced from the Grievance Service; the submitter is notified on every change.
             </Banner>
           )}
           {result.kind === "sent" && (
             <p className="text-[13px] text-ink-soft">
-              Reference: <span className="font-mono font-medium text-ink">{result.result.ticket_id ?? result.result.queue_ref ?? "queued"}</span>
+              Reference: <span className="font-mono font-medium text-ink">{reference ?? result.result.queue_ref ?? "queued"}</span>
             </p>
           )}
         </div>
@@ -134,46 +223,82 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
         <div className="flex flex-col gap-4">
           {error && <Banner tone="error" title="Grievance not submitted">{error}</Banner>}
           {optionsError && <Banner tone="warning" title="Categories unavailable">{optionsError}</Banner>}
+
           <div className="grid grid-cols-2 gap-2 rounded-lg bg-slate-100 p-1">
             {(["farmer", "me"] as const).map((k) => (
-              <button key={k} type="button" onClick={() => setForWhom(k)} className={cn("h-9 rounded-md text-[13.5px] font-semibold transition-colors", forWhom === k ? "bg-white text-brand-green shadow-sm" : "text-ink-soft")}>
+              <button key={k} type="button" onClick={() => chooseFor(k)} className={cn("h-9 rounded-md text-[13.5px] font-semibold transition-colors", forWhom === k ? "bg-white text-brand-green shadow-sm" : "text-ink-soft")}>
                 {k === "farmer" ? "On behalf of a farmer" : "For myself"}
               </button>
             ))}
           </div>
+
           {forWhom === "farmer" && (
-            <FormField label="Farmer" htmlFor="grv-farmer" required>
-              <Select id="grv-farmer" value={farmer} onChange={(e) => setFarmer(e.target.value)}>{FARMERS.map((f) => <option key={f.id} value={f.id}>{f.name} — {f.kebele}</option>)}</Select>
-            </FormField>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <FormField label="Farmer ID" htmlFor="grv-farmer-id" required hint={farmerId ? "From the farmer's profile." : "Required, e.g. FR-675618129549."}>
+                <Input id="grv-farmer-id" value={farmerRef} disabled={!!farmerId} onChange={(e) => setFarmerRef(e.target.value)} placeholder="FR-…" />
+              </FormField>
+            </div>
           )}
+
+          {/* Submitter */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <FormField label="Category" htmlFor="grv-cat" required>
-              <Select id="grv-cat" value={category} disabled={!options} onChange={(e) => { setCategory(e.target.value); setSubcategory(""); }}>
-                {!options && <option value="">Loading…</option>}
-                {options?.categories.map((c) => <option key={c.value}>{c.value}</option>)}
+            <FormField label="Submitter type" htmlFor="grv-subtype" required>
+              <Select id="grv-subtype" value={effectiveType} disabled={selfAsDa} onChange={(e) => setSubmitterType(e.target.value)}>
+                {(selfAsDa ? [daType] : submitterTypes).map((t) => <option key={t}>{t}</option>)}
               </Select>
             </FormField>
-            <FormField label="Sub-category" htmlFor="grv-subcat">
-              <Select id="grv-subcat" value={subcategory} disabled={subcategories.length === 0} onChange={(e) => setSubcategory(e.target.value)}>
-                <option value="">—</option>
-                {subcategories.map((s) => <option key={s}>{s}</option>)}
+            <FormField label="Submitter name" htmlFor="grv-subname" required {...(nameLocked ? { hint: "From your DA record." } : minLengthNote(submitterName, 2))}>
+              <Input id="grv-subname" value={effectiveName} disabled={nameLocked} onChange={(e) => setSubmitterName(e.target.value)} placeholder="Full name" />
+            </FormField>
+            <FormField label="Contact mobile" htmlFor="grv-mobile" required {...(mobileLocked ? { hint: "From your DA record." } : minLengthNote(contactMobile, 6))}>
+              <Input id="grv-mobile" value={effectiveMobile} disabled={mobileLocked} onChange={(e) => setContactMobile(e.target.value)} placeholder="09xxxxxxxx" inputMode="tel" />
+            </FormField>
+          </div>
+
+          {/* Classification */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <FormField label="Service category" htmlFor="grv-cat" required>
+              <Select id="grv-cat" value={serviceCategory} disabled={!options} onChange={(e) => { setServiceCategory(e.target.value); setGrievanceType(""); }}>
+                {!options && <option value="">Loading…</option>}
+                {options?.categories.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </Select>
+            </FormField>
+            <FormField label="Grievance type" htmlFor="grv-type" required>
+              <Select id="grv-type" value={grievanceType} disabled={grievanceTypes.length === 0} onChange={(e) => setGrievanceType(e.target.value)}>
+                <option value="">{grievanceTypes.length === 0 ? "—" : "Select…"}</option>
+                {grievanceTypes.map((t) => <option key={t}>{t}</option>)}
               </Select>
             </FormField>
             <FormField label="Priority" htmlFor="grv-priority" required>
-              <Select id="grv-priority" value={priority} onChange={(e) => setPriority(e.target.value)}>{priorities.map((p) => <option key={p}>{p}</option>)}</Select>
+              <Select id="grv-priority" value={priority} onChange={(e) => setPriority(e.target.value)}>{PRIORITIES.map((p) => <option key={p}>{p}</option>)}</Select>
             </FormField>
           </div>
-          <FormField label="Subject" htmlFor="grv-subject" required>
+
+          {selfAsDa ? <DaKebele woredaCode={self.woredaCode} kebeleName={self.kebeleName} onChange={pickKebele} /> : <KebelePicker onChange={pickKebele} />}
+
+          <FormField label="Subject" htmlFor="grv-subject" required {...minLengthNote(subject, 3)}>
             <Input id="grv-subject" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Short title" />
           </FormField>
-          <FormField label="Description" htmlFor="grv-desc" required>
+          <FormField label="Description" htmlFor="grv-desc" required {...minLengthNote(description, MIN_DESCRIPTION)}>
             <Textarea id="grv-desc" rows={4} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What happened, where, and when" />
           </FormField>
-          <div className="rounded-lg border border-line bg-surface p-3 text-[12.5px] leading-relaxed text-ink-soft">
-            <p><span className="font-semibold text-ink">Shared with the Grievance Service:</span> your name and DA-ID, Woreda, the Farmer-ID when raised for a farmer, category, subject and description.</p>
-            <p className="mt-1"><span className="font-semibold text-ink">Withheld from woreda-level reports:</span> Fayda ID, phone number and household data — reports carry the case ID and category only.</p>
-            <p className="mt-1">If the Grievance Service is unavailable the grievance is queued and forwarded automatically.</p>
+          <VoiceRecorder />
+          <FormField label="Desired outcome" htmlFor="grv-outcome">
+            <Textarea id="grv-outcome" rows={2} value={desiredOutcome} onChange={(e) => setDesiredOutcome(e.target.value)} placeholder="What resolution the submitter is seeking" />
+          </FormField>
+
+          <div className="flex flex-col gap-2.5 rounded-lg border border-line bg-surface p-3">
+            <label className="flex items-center gap-2.5 text-[13.5px] text-ink">
+              <Checkbox checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+              The submitter consents to sharing this grievance with the Grievance Service.
+            </label>
+            <label className="flex items-center gap-2.5 text-[13.5px] text-ink">
+              <Checkbox checked={anonymous} onChange={(e) => setAnonymous(e.target.checked)} />
+              Submit anonymously (hide the submitter&rsquo;s identity in reports).
+            </label>
           </div>
+
+          {!canSubmit && !submitting && <p className="text-[12.5px] text-muted">Complete every field marked * to enable Submit.</p>}
         </div>
       )}
     </Modal>

@@ -1,5 +1,8 @@
 export type FarmerStatus = "Verified" | "Pending" | "Flagged";
 
+/** What the portal shows for a registry status: an approved farmer is Active, every other one Inactive. */
+export type FarmerActivity = "Active" | "Inactive";
+
 export interface Farmer {
   id: string;
   /** Farmer-ID shown to people ("FR-675618129549"); also works in every farmer URL. Absent on sample farmers. */

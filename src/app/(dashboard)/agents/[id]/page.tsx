@@ -1,17 +1,14 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
-import { getAgent } from "@/features/agents";
-import { AgentProfile } from "./components/AgentProfile";
+import { AgentProfileLoader } from "./components/AgentProfileLoader";
 
+// The record is read on the client (GET /da-services/agents/{da_id}) with the signed-in user's own token, so the
+// page itself only knows the DA-ID.
 export async function generateMetadata(props: PageProps<"/agents/[id]">): Promise<Metadata> {
   const { id } = await props.params;
-  const agent = getAgent(id);
-  return { title: agent ? `${agent.fullName} | OpenAgriNet` : "Agent not found | OpenAgriNet" };
+  return { title: `${id} | OpenAgriNet` };
 }
 
 export default async function AgentProfilePage(props: PageProps<"/agents/[id]">) {
   const { id } = await props.params;
-  const agent = getAgent(id);
-  if (!agent) notFound();
-  return <AgentProfile agent={agent} />;
+  return <AgentProfileLoader daId={id} />;
 }

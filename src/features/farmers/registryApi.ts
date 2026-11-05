@@ -12,11 +12,14 @@ export interface FieldOption {
   label: string;
 }
 
-/** GET /registries/farmer/field-options: {register: {field: [{value, label}]}}. */
+/** The registry's code lists: {register: {field: [{value, label}]}}. */
 export type FieldOptions = Record<string, Record<string, FieldOption[]>>;
 
+/** GET /registries/farmer/field-options. The lists sit under `options` (`{registry, options}`); a bare map is read too. */
 export async function fetchFieldOptions(): Promise<FieldOptions> {
-  return (await authRequest<{ data: FieldOptions }>(`${REGISTRY}/field-options`)).data ?? {};
+  const { data } = await authRequest<{ data?: FieldOptions | { options?: FieldOptions } }>(`${REGISTRY}/field-options`);
+  if (data && "options" in data) return (data.options as FieldOptions | undefined) ?? {};
+  return (data as FieldOptions | undefined) ?? {};
 }
 
 /** The choices for a field, from whichever register lists it; undefined when no register does. */

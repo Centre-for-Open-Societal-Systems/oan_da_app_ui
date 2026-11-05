@@ -63,7 +63,7 @@ export function SendToFarmersModal({ article, isOpen, onClose }: { article: Arti
               </FormField>
             </div>
             <fieldset>
-              <legend className="text-[14px] font-medium text-ink">Channels</legend>
+              <legend className="text-[14px] font-medium text-ink">Channels<span className="ml-1 text-danger">*</span></legend>
               <div className="mt-2 flex gap-5">
                 {(["SMS", "Telegram"] as Channel[]).map((c) => (
                   <label key={c} className="flex cursor-pointer items-center gap-2 text-[13.5px] text-slate-700">
@@ -72,6 +72,7 @@ export function SendToFarmersModal({ article, isOpen, onClose }: { article: Arti
                 ))}
               </div>
             </fieldset>
+            {(channels.size === 0 || text.trim().length === 0) && <p className="text-[12.5px] text-muted">Complete every field marked * to enable Send to {size} recipients.</p>}
           </div>
           <SmsPreview text={text} sender="OpenAgriNet" />
         </div>

@@ -45,13 +45,15 @@ export function GrievanceDetailModal({ grievance, onClose }: GrievanceDetailModa
 
   if (!mounted) return null;
 
-  const location = [grievance.woreda, grievance.region].filter(Boolean).join(", ");
+  const location = grievance.location || [grievance.woreda, grievance.region].filter(Boolean).join(", ");
+  const slaDue = data.sla.dueOn;
   const summary: { label: string; value: React.ReactNode }[] = [
     { label: "Ticket ID", value: grievance.ticketId },
     { label: "Submitted", value: grievance.submittedAt },
-    { label: "Category", value: grievance.category },
-    { label: "Submitted by", value: grievance.submitter },
+    { label: "Category", value: grievance.category || "—" },
+    ...(data.submitter.name && data.submitter.name !== "—" ? [{ label: "Submitted by", value: data.submitter.name }] : []),
     ...(location ? [{ label: "Location", value: location }] : []),
+    ...(slaDue && slaDue !== "—" ? [{ label: "SLA due", value: slaDue }] : []),
     { label: "Status", value: <GrievanceStatusPill status={grievance.status} className="px-2.5 py-0.5" /> },
   ];
 
@@ -72,7 +74,7 @@ export function GrievanceDetailModal({ grievance, onClose }: GrievanceDetailModa
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[13px] font-medium text-slate-600">{grievance.ticketId}</span>
-              <GrievancePriorityPill priority={grievance.priority} className="px-2.5 py-0.5" />
+              {grievance.priority && <GrievancePriorityPill priority={grievance.priority} className="px-2.5 py-0.5" />}
             </div>
             <h2 id="grievance-title" className="mt-2 text-[17px] font-semibold text-ink">{grievance.title}</h2>
             {loadError && <p className="mt-1 text-[13px] text-danger">{loadError}</p>}

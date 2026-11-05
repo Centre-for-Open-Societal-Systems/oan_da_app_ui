@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/Input";
 import { PersonAvatar } from "@/components/ui/PersonAvatar";
 import { Pill } from "@/components/ui/Pill";
 import { Textarea } from "@/components/ui/Textarea";
-import { cn } from "@/lib/utils";
+import { cn, todayIso } from "@/lib/utils";
 import {
   COACHING_AGENT,
   COACHING_PROGRESS,
@@ -246,8 +246,8 @@ export function SupervisorCoaching() {
                 </Block>
 
                 <div className="flex items-center justify-between border-t border-line pt-4 text-[13.5px]">
-                  <span className="font-medium text-ink-soft">Review date:</span>
-                  <input type="date" value={entry.reviewDate} onChange={(e) => patch({ reviewDate: e.target.value })} aria-label="Review date" className="rounded-md border border-line bg-white px-2.5 py-1.5 text-[13.5px] font-semibold text-ink outline-none focus:border-brand-green" />
+                  <span className="font-medium text-ink-soft">Review date (today or later):</span>
+                  <input type="date" min={todayIso()} value={entry.reviewDate} onChange={(e) => patch({ reviewDate: e.target.value })} aria-label="Review date" className="rounded-md border border-line bg-white px-2.5 py-1.5 text-[13.5px] font-semibold text-ink outline-none focus:border-brand-green" />
                 </div>
               </div>
 

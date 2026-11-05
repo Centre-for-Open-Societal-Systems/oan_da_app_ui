@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/Input";
 import { Dropdown } from "@/components/ui/Dropdown";
 import { Textarea } from "@/components/ui/Textarea";
 import { FormField } from "@/components/ui/FormField";
-import { cn } from "@/lib/utils";
+import { cn, todayIso } from "@/lib/utils";
 import { RESPONSE_TYPES } from "../data";
 
 export interface DeptResponseInput {
@@ -92,8 +92,8 @@ export function GrievanceResponsePanel({ onSubmitResponse, onAddNote }: Grievanc
             <FormField label="Response Type" htmlFor="responseType" required>
               <Dropdown id="responseType" value={responseType} onChange={setResponseType} options={RESPONSE_TYPES} placeholder="Select Response Type" />
             </FormField>
-            <FormField label="Proposed Closure Date" htmlFor="proposedClosure" required>
-              <Input id="proposedClosure" type="date" value={proposedClosure} onChange={(e) => setProposedClosure(e.target.value)} className={cn(!proposedClosure && "text-zinc-400")} />
+            <FormField label="Proposed Closure Date" htmlFor="proposedClosure" required hint="Today or later." hintTone={!!proposedClosure && proposedClosure < todayIso() ? "error" : "muted"}>
+              <Input id="proposedClosure" type="date" min={todayIso()} value={proposedClosure} onChange={(e) => setProposedClosure(e.target.value)} className={cn(!proposedClosure && "text-zinc-400")} />
             </FormField>
           </div>
 
@@ -137,6 +137,7 @@ export function GrievanceResponsePanel({ onSubmitResponse, onAddNote }: Grievanc
             />
           </div>
 
+          {!responseValid && <p className="text-[12.5px] text-muted">Complete every field marked * to enable Submit Response.</p>}
           <div className="flex justify-end">
             <Button type="submit" variant="brand" disabled={!responseValid} className="gap-2">
               {SendIcon}
@@ -149,7 +150,7 @@ export function GrievanceResponsePanel({ onSubmitResponse, onAddNote }: Grievanc
           <div className="flex flex-col gap-2">
             <label htmlFor="caseNote" className="flex items-center gap-1.5 text-[14px] font-medium text-ink">
               <span className="text-muted">{HiddenEyeIcon}</span>
-              Internal Notes <span className="text-[12.5px] font-normal text-muted">(not visible to submitter)</span>
+              Internal Notes <span className="text-danger">*</span> <span className="text-[12.5px] font-normal text-muted">(not visible to submitter)</span>
             </label>
             <Textarea
               id="caseNote"
@@ -160,6 +161,7 @@ export function GrievanceResponsePanel({ onSubmitResponse, onAddNote }: Grievanc
               className="border-amber-200/70 bg-amber-50 focus:border-amber-600 focus:ring-amber-600"
             />
           </div>
+          {!note.trim() && <p className="text-[12.5px] text-muted">Complete every field marked * to enable Add Note.</p>}
           <div className="flex justify-end">
             <Button type="submit" variant="brand" disabled={!note.trim()} className="gap-2">
               {SendIcon}

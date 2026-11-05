@@ -46,21 +46,18 @@ export function readVisitDetails() {
 
 export const FORM_ID = "plan-visit-form";
 
-// One entry per distinct farmer (the mock list repeats names to fill a page).
-export const FARMER_CHOICES = FARMERS.filter((f, i, all) => all.findIndex((o) => o.name === f.name) === i);
-
 /** Farmers whose name, phone or kebele contains the (lower-cased, trimmed) term; all of them when it is empty. */
-export const matchFarmers = (term: string, choices: Farmer[] = FARMER_CHOICES) =>
+export const matchFarmers = (term: string, choices: Farmer[]) =>
   term ? choices.filter((f) => `${f.name} ${f.phone} ${f.kebele}`.toLowerCase().includes(term)) : choices;
 
 const isSampleFarmer = (farmer: Farmer) => FARMERS.some((f) => f.id === farmer.id);
 
 /**
- * The farmer's registry id: a farmer from GET /farmers already carries it as its id; a sample farmer gets a mock
- * code derived from the record.
+ * The Farmer ID (`FR-…`, the API's reg_id) every farmer API call sends: the internal farmer_id only when a farmer has
+ * no reg_id. A sample farmer gets a mock code derived from the record.
  */
 export const registryCode = (farmer: Farmer) =>
-  isSampleFarmer(farmer) ? `FR-${(88000 + farmer.name.length * 31 + farmer.kebele.length * 7).toString().slice(0, 5)}` : farmer.id;
+  isSampleFarmer(farmer) ? `FR-${(88000 + farmer.name.length * 31 + farmer.kebele.length * 7).toString().slice(0, 5)}` : farmer.regId ?? farmer.id;
 
 /** Human-readable date/time from the (uncontrolled) date and time inputs. */
 export const readWhen = () => {

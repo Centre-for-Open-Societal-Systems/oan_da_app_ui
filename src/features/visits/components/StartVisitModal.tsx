@@ -115,8 +115,9 @@ export function StartVisitModal({ visit, onClose, onStarted }: StartVisitModalPr
 
       <label className="mt-4 flex cursor-pointer items-start gap-3 text-[13.5px] text-ink">
         <span className="pt-0.5"><Checkbox checked={farmerPresent} onChange={(e) => setFarmerPresent(e.target.checked)} /></span>
-        I am at the farm and {visit.farmerName} is present for this visit.
+        <span>I am at the farm and {visit.farmerName} is present for this visit.<span className="ml-1 text-danger">*</span></span>
       </label>
+      {!farmerPresent && <p className="mt-2 text-[12.5px] text-muted">Complete every field marked * to enable Check in.</p>}
     </Modal>
   );
 }

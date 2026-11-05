@@ -2,10 +2,8 @@ import type { FilterFieldConfig } from "@/components/ui/AdvancedFiltersDrawer";
 import type { FilterOption } from "@/components/ui/FilterDropdown";
 import type {
   EvidenceDocument,
-  PlannerDay,
   PriorityFarmer,
   SubmittedOutcome,
-  TodaysVisit,
   VisitRecord,
   VisitTimelineEntry,
 } from "./types";
@@ -165,41 +163,11 @@ export const RESCHEDULE_REASONS = [
 
 // ----- Visit planner -----
 
-export const PLANNER_WEEK = {
-  month: "June 2026",
-  range: "Week of 24-30 June 2026",
-  todayLabel: "Mon 24 June",
-};
-
-export const PLANNER_DAYS: PlannerDay[] = [
-  {
-    label: "MON",
-    dayOfMonth: 24,
-    isToday: true,
-    visits: [
-      { time: "08:30", farmerName: "Lelise Gudeta", kebele: "Bako Tibe", status: "scheduled" },
-      { time: "10:00", farmerName: "Abebe Kebede", kebele: "Gedo", status: "scheduled" },
-    ],
-  },
-  { label: "TUE", dayOfMonth: 25, visits: [] },
-  { label: "WED", dayOfMonth: 26, visits: [{ time: "09:00", farmerName: "Chaltu Dinkesa", kebele: "Lume", status: "completed" }] },
-  { label: "THU", dayOfMonth: 27, visits: [{ time: "14:00", farmerName: "Tadesse Alemu", kebele: "Dendi", status: "overdue" }] },
-  { label: "FRI", dayOfMonth: 28, visits: [] },
-  { label: "SAT", dayOfMonth: 29, visits: [] },
-  { label: "SUN", dayOfMonth: 30, visits: [] },
-];
-
 export const PRIORITY_LIST: PriorityFarmer[] = [
   { farmerId: "chaltu-dinkesa", name: "Chaltu Dinkesa", issue: "Armyworm infestation", level: "high", visitType: "Crop Survey" },
   { farmerId: "abebe-kebede", name: "Abebe Kebede", issue: "Soil salinity test", level: "medium", visitType: "Crop Survey" },
   { farmerId: "tadesse-alemu", name: "Tadesse Alemu", issue: "Irrigation audit", level: "low", visitType: "Services" },
   { farmerId: "lelise-gudeta", name: "Lelise Gudeta", issue: "Fertilizer delivery delay", level: "medium", visitType: "Follow-up" },
-];
-
-export const TODAYS_VISITS: TodaysVisit[] = [
-  { farmerName: "Lelise Gudeta", plannedArrival: "08:30", state: "done", note: "Confirmed · prefers morning", kebele: "Bako Tibe", parcel: "BT-0472", lat: 9.1236, lng: 37.0521 },
-  { farmerName: "Abebe Kebede", plannedArrival: "10:00", state: "tentative", note: "Tentative · reconfirm by SMS", kebele: "Gedo", parcel: "GD-0318", lat: 9.0164, lng: 37.4553 },
-  { farmerName: "Chaltu Dinkesa", plannedArrival: "13:30", state: "confirmed", note: "Confirmed · after 2 pm", kebele: "Lume", parcel: "LM-1127", lat: 8.7437, lng: 39.1203 },
 ];
 
 // ----- Visit outcome -----

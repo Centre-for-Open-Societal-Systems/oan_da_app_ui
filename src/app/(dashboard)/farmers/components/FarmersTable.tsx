@@ -11,11 +11,12 @@ import { SEGMENTS, segmentName, useBeneficiariesStore } from "@/features/benefic
 import { AdvancedFiltersButton } from "@/components/ui/AdvancedFiltersButton";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { useAuthStore } from "@/store/useAuthStore";
 import { ExportButton } from "@/components/ui/ExportButton";
 import { cn } from "@/lib/utils";
 import { ALL_FARMERS_SEARCH, apiFarmerToFarmer, describeFarmerError, listFarmers } from "@/features/farmers";
 import { FarmerAvatar } from "@/features/farmers";
-import { StatusPill } from "@/features/farmers";
+import { farmerActivity, StatusPill } from "@/features/farmers";
 import {
   applyFilters,
   countActiveFilters,
@@ -38,7 +39,7 @@ import type { Farmer } from "@/features/farmers";
 
 const SEARCH_DEBOUNCE_MS = 400;
 
-const STATUS_ORDER = ["Verified", "Pending", "Flagged"];
+const STATUS_ORDER = ["Active", "Inactive"];
 
 /** Filter options with counts from the loaded rows; `order` fixes the list, otherwise first-seen order. */
 const optionsOf = (values: string[], order?: string[]): FilterOption[] =>
@@ -58,8 +59,8 @@ const EXPORT_COLUMNS: CsvColumn<Farmer>[] = [
   { header: "Land (ha)", value: (f) => (f.landUnknown ? "" : f.landHa) },
   { header: "Livestock", value: (f) => f.livestock },
   { header: "Livestock (heads)", value: (f) => f.livestockHeads },
-  { header: "Registered date", value: (f) => `${f.registeredAt} ${f.registeredTime}` },
-  { header: "Status", value: (f) => f.status },
+  { header: "Approved Date", value: (f) => `${f.registeredAt} ${f.registeredTime}` },
+  { header: "Status", value: (f) => farmerActivity(f.status) },
   { header: "Status reason", value: (f) => f.statusReason ?? "" },
 ];
 
@@ -72,6 +73,7 @@ export function FarmersTable() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [segmentId, setSegmentId] = useState(SEGMENTS[0].id);
   const linkBeneficiaries = useBeneficiariesStore((s) => s.link);
+  const isDA = useAuthStore((s) => s.role) === "DA";
   // GET /farmers is scoped by the backend: a DA gets farmers in their kebele, a supervisor in their woreda, Admin all.
   // Search and paging run on the server; the column filters only narrow the page on screen.
   const [loaded, setLoaded] = useState<{ key: string; rows: Farmer[]; total: number; error: string | null } | null>(null);
@@ -104,7 +106,7 @@ export function FarmersTable() {
   const source = loading ? [] : loaded.rows;
 
   const kebeleOptions = optionsOf(source.map((f) => f.kebele));
-  const statusOptions = optionsOf(source.map((f) => f.status), STATUS_ORDER);
+  const statusOptions = optionsOf(source.map((f) => farmerActivity(f.status)), STATUS_ORDER);
   const filterFields: FilterFieldConfig[] = [
     { key: "kebele", label: "Kebele", allLabel: "All kebeles", placeholder: "All", options: kebeleOptions },
     { key: "status", label: "Status", allLabel: "All Status", placeholder: "All Status", options: statusOptions },
@@ -113,7 +115,7 @@ export function FarmersTable() {
   const selectedFarmers = source.filter((f) => selected.has(f.id));
 
   const addToBeneficiaries = () => {
-    const { added, skipped } = linkBeneficiaries([...selected], segmentId);
+    const { added, skipped } = linkBeneficiaries(selectedFarmers, segmentId);
     const parts = [
       added.length > 0 && `${added.length} farmer${added.length === 1 ? "" : "s"} added to “${segmentName(segmentId)}” — Pending verification.`,
       skipped.length > 0 && `Already in this segment: ${skipped.join(", ")}.`,
@@ -210,7 +212,7 @@ export function FarmersTable() {
               </th>
               <th className="px-4 py-3 font-semibold">Land</th>
               <th className="px-4 py-3 text-center font-semibold">Plots</th>
-              <th className="px-4 py-3 text-center font-semibold">Registered date</th>
+              <th className="px-4 py-3 text-center font-semibold">Approved Date</th>
               <th className="px-4 py-3 text-center font-semibold">
                 <FilterDropdown label="Status" allLabel="All Status" options={statusOptions} selected={filters.status} onApply={setColumnFilter("status")} />
               </th>
@@ -230,7 +232,7 @@ export function FarmersTable() {
               <tr>
                 <td colSpan={8} className="px-4 py-6">
                   {source.length === 0 ? (
-                    <EmptyState title={searchText && searchText !== ALL_FARMERS_SEARCH ? "No farmers match your search" : "No farmers in your area yet"} hint={searchText && searchText !== ALL_FARMERS_SEARCH ? "Try a name, a Farmer-ID or a phone number." : "Approved farmers in your scope appear here."} />
+                    <EmptyState title={searchText && searchText !== ALL_FARMERS_SEARCH ? "No farmers match your search" : isDA ? "No farmer assigned" : "No farmers in your area yet"} hint={searchText && searchText !== ALL_FARMERS_SEARCH ? "Try a name, a Farmer-ID or a phone number." : isDA ? "Farmers your supervisor assigns to you appear here." : "Approved farmers in your scope appear here."} />
                   ) : (
                     <EmptyState title="No farmers match the selected filters" hint="Clear a filter or try a different search." />
                   )}
@@ -275,7 +277,7 @@ export function FarmersTable() {
                     {farmer.registeredTime && <span className="text-slate-600">- {farmer.registeredTime}</span>}
                   </td>
                   <td className="px-4 py-3.5 text-center">
-                    <StatusPill status={farmer.status} reason={farmer.statusReason} />
+                    <StatusPill status={farmerActivity(farmer.status)} reason={farmer.statusReason} />
                   </td>
                   <td className="px-4 py-3.5 text-center">
                     <RowAction href={`/farmers/${farmer.regId ?? farmer.id}`} icon="view">View</RowAction>

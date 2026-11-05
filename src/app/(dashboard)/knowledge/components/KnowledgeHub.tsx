@@ -37,6 +37,10 @@ export function KnowledgeHub() {
   }, [articles, category, query]);
   const visibleVideos = KNOWLEDGE_VIDEOS.filter((v) => matchesQuery(query, v.title, v.category, v.summary));
 
+  const titleLength = draft.title.trim().length;
+  const snippetLength = draft.snippet.trim().length;
+  const canCreateSnippet = titleLength >= 3 && snippetLength >= 10;
+
   const create = () => {
     const id = `kb-${106 + articles.length - ARTICLES.length}`;
     setArticles((prev) => [{ id, title: draft.title, category: draft.category, summary: draft.snippet, body: [draft.snippet], snippet: draft.snippet, languages: ["en"], updatedAt: "Just now", author: "You", sends: 0 }, ...prev]);
@@ -183,12 +187,13 @@ export function KnowledgeHub() {
       </Card>
 
       <Modal isOpen={createOpen} onClose={() => setCreateOpen(false)} title="Create Snippet" subtitle="A short, SMS-ready knowledge snippet farmers can act on" size="lg"
-        footer={<><Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button><Button variant="brand" disabled={draft.title.trim().length < 3 || draft.snippet.trim().length < 10} onClick={create}>Create</Button></>}
+        footer={<><Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button><Button variant="brand" disabled={!canCreateSnippet} onClick={create}>Create</Button></>}
       >
         <div className="flex flex-col gap-4">
-          <FormField label="Title" htmlFor="kb-title" required><Input id="kb-title" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></FormField>
+          <FormField label="Title" htmlFor="kb-title" required hint="At least 3 characters." hintTone={titleLength > 0 && titleLength < 3 ? "error" : "muted"}><Input id="kb-title" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></FormField>
           <FormField label="Category" htmlFor="kb-cat" required><Select id="kb-cat" value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value as Article["category"] })}>{ARTICLE_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</Select></FormField>
-          <FormField label="Snippet" htmlFor="kb-snippet" required hint={`${draft.snippet.length} characters · keep to 160 for one SMS segment`}><Textarea id="kb-snippet" rows={4} value={draft.snippet} onChange={(e) => setDraft({ ...draft, snippet: e.target.value })} /></FormField>
+          <FormField label="Snippet" htmlFor="kb-snippet" required hint={`At least 10 characters · ${draft.snippet.length} characters · keep to 160 for one SMS segment`} hintTone={snippetLength > 0 && snippetLength < 10 ? "error" : "muted"}><Textarea id="kb-snippet" rows={4} value={draft.snippet} onChange={(e) => setDraft({ ...draft, snippet: e.target.value })} /></FormField>
+          {!canCreateSnippet && <p className="text-[12.5px] text-muted">Complete every field marked * to enable Create.</p>}
         </div>
       </Modal>
     </>

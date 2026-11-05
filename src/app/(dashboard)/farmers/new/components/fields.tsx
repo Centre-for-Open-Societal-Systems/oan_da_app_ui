@@ -9,17 +9,17 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { cn } from "@/lib/utils";
 import { optionsFor, type FieldOption, type FieldOptions } from "@/features/farmers";
-import { OPTION_LISTS, type OptionList } from "../registrySpec";
+import { FALLBACK_CHOICES, OPTION_LISTS, type OptionList } from "../registrySpec";
 
 // The inputs the Register Farmer steps are made of. Choices come from the registry's field-options lists only.
 
-/** The registry's choices for a list, trying the body's field name first; undefined when no register has it. */
+/** The registry's choices for a list, trying the body's field name first; the fallback, if any, when no register has it. */
 export function choicesFor(options: FieldOptions | null, list: OptionList): FieldOption[] | undefined {
   for (const field of OPTION_LISTS[list]) {
     const found = optionsFor(options, field);
     if (found) return found;
   }
-  return undefined;
+  return FALLBACK_CHOICES[list];
 }
 
 /** The label of a stored code, for the review; the code itself when the list does not have it. */
@@ -89,7 +89,7 @@ export function OptionField({ id, label, list, options, loading, value, onChange
   const hint = error ?? (loading ? "Loading the registry's list…" : missing ? `The registry sent no list for ${OPTION_LISTS[list][0]}.` : undefined);
   return (
     <FormField label={label} htmlFor={id} required={required} hint={hint} hintTone={error || missing ? "error" : "muted"}>
-      <Select id={id} value={value} onChange={(e) => onChange(e.target.value)} disabled={!choices} aria-invalid={error ? true : undefined}>
+      <Select id={id} value={value} onChange={(e) => onChange(e.target.value)} disabled={loading || !choices} aria-invalid={error ? true : undefined} className={cn(error && "border-danger")}>
         <option value="">{loading ? "Loading…" : `Select ${label.toLowerCase()}`}</option>
         {choices?.map((o) => (
           <option key={o.value} value={o.value}>

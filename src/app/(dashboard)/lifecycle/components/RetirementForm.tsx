@@ -1,5 +1,6 @@
 "use client";
 
+import { todayIso } from "@/lib/utils";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -10,7 +11,7 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
-import { DocumentPicker, FormSection, LockedField, PreviewCard, useSessionDraft } from "./InitiateTransition";
+import { DocumentPicker, FormSection, LockedField, PreviewCard, fromTodayNote, useSessionDraft } from "./InitiateTransition";
 import { coverLabel } from "./leave";
 import { LIFECYCLE_DA, SUCCESSOR_OPTIONS, transitionFor } from "./lifecycle";
 import { CLEARANCE_ITEMS, OPEN_CLEARANCE, RETIREMENT_FORM, RETIREMENT_TYPES, SERVICE_SINCE, lengthOfService } from "./retirement";
@@ -85,8 +86,8 @@ export function RetirementForm() {
                   {RETIREMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                 </Select>
               </FormField>
-              <FormField label="Last working day" htmlFor="lc-effective" required hint={error("effective")} hintTone="error">
-                <Input id="lc-effective" type="date" value={draft.effective} onChange={(e) => set("effective", e.target.value)} />
+              <FormField label="Last working day" htmlFor="lc-effective" required {...fromTodayNote(draft.effective, error("effective"))}>
+                <Input id="lc-effective" type="date" min={todayIso()} value={draft.effective} onChange={(e) => set("effective", e.target.value)} />
               </FormField>
               <LockedField id="lc-since" label="Service since" value={formatDate(SERVICE_SINCE)} />
               <LockedField id="lc-length" label="Length of service" value={draft.effective ? lengthOfService(draft.effective) : "Set the last working day"} />

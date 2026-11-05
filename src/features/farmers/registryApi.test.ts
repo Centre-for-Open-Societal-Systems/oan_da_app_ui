@@ -27,11 +27,17 @@ beforeEach(() => {
 describe("registration form data", () => {
   it("reads the field-options lists and finds a field in whichever register has it", async () => {
     const options = { farmer: { gender: [{ value: "male", label: "Male" }] }, land: { ownership: [{ value: "owner", label: "Owner" }] } };
-    fetchMock.mockResolvedValueOnce(json({ status: "success", data: options }));
+    fetchMock.mockResolvedValueOnce(json({ status: "success", data: { registry: "farmer", options } }));
     const read = await fetchFieldOptions();
     expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/registries/farmer/field-options");
     expect(optionsFor(read, "ownership")).toEqual([{ value: "owner", label: "Owner" }]);
     expect(optionsFor(read, "nope")).toBeUndefined();
+  });
+
+  it("reads the lists from under options, as the backend wraps them", async () => {
+    const gender = [{ value: "female", label: "Female" }];
+    fetchMock.mockResolvedValueOnce(json({ data: { registry: "farmer", options: { Farmer: { gender } } } }));
+    expect(optionsFor(await fetchFieldOptions(), "gender")).toEqual(gender);
   });
 
   it("asks for the places of a level under the chosen parent", async () => {

@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import { FARMERS } from "@/features/farmers";
-import { SEED_BENEFICIARIES, type Beneficiary } from "./data";
+import type { Farmer } from "@/features/farmers";
+import type { Beneficiary } from "./data";
 
 export interface LinkResult {
   added: string[];
@@ -11,22 +11,20 @@ export interface LinkResult {
 interface BeneficiariesState {
   rows: Beneficiary[];
   /** Links farmers to a segment as Pending verification; a farmer already in another segment moves to this one. */
-  link: (farmerIds: string[], segmentId: string) => LinkResult;
+  link: (farmers: Farmer[], segmentId: string) => LinkResult;
   /** Detaches the segment link only; the Farmer Registry record is never touched. */
   remove: (id: string) => void;
 }
 
 // Shared by My Farmers (bulk add) and Beneficiaries. In memory only: links reset on reload until the API lands.
 export const useBeneficiariesStore = create<BeneficiariesState>()((set, get) => ({
-  rows: SEED_BENEFICIARIES,
-  link: (farmerIds, segmentId) => {
+  rows: [],
+  link: (farmers, segmentId) => {
     const current = get().rows;
     const result: LinkResult = { added: [], skipped: [] };
     const fresh: Beneficiary[] = [];
-    for (const id of farmerIds) {
-      const f = FARMERS.find((x) => x.id === id);
-      if (!f) continue;
-      const existing = current.find((b) => b.id === id);
+    for (const f of farmers) {
+      const existing = current.find((b) => b.id === f.id);
       if (existing && existing.status !== "Removed" && existing.segmentId === segmentId) {
         result.skipped.push(f.name);
         continue;

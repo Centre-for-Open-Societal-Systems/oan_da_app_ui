@@ -12,7 +12,7 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { SegmentTabs } from "@/components/ui/SegmentTabs";
 import { FilterDropdown, type FilterOption } from "@/components/ui/FilterDropdown";
 import { AdvancedFiltersDrawer, type FilterFieldConfig, type FilterSelection } from "@/components/ui/AdvancedFiltersDrawer";
-import { WOREDAS } from "@/features/agents";
+import { areaLabel, areaNameMap, loadScopeAreas } from "@/features/assignments";
 import { createRbacAssignment, generatePassword, isAssignableRole, listRbacAssignments, registerUser, revokeRbacAssignment, toPortalRoleFromBackend, updateRbacAssignment, type RbacAssignmentRecord } from "@/features/users";
 import { ApiError } from "@/lib/api";
 import { ROLE_LABELS, ROLES, type Role } from "@/lib/rbac";
@@ -81,8 +81,8 @@ function toRow(r: RbacAssignmentRecord): RbacAssignment | null {
     role,
     daId: r.da_id ?? "",
     active: !!r.active,
-    regionScope: r.region_scope ?? "—",
-    woredaScope: r.woreda_scope ?? "—",
+    regionScope: r.region_scope ?? "",
+    woredaScope: r.woreda_scope ?? "",
     effectiveFrom: formatIso(r.effective_from),
     effectiveTo: formatIso(r.effective_to),
     assignedBy: r.assigned_by,
@@ -128,6 +128,21 @@ export function UsersRoles() {
       current = false;
     };
   }, [hasBackendSession]);
+  // Scopes are stored as area-master codes; the names make the table readable. Older rows that hold a name show as is.
+  const [areaNames, setAreaNames] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!hasBackendSession) return;
+    let current = true;
+    loadScopeAreas()
+      .then((areas) => current && setAreaNames(areaNameMap(areas)))
+      .catch(() => {
+        // Codes stay visible on their own.
+      });
+    return () => {
+      current = false;
+    };
+  }, [hasBackendSession]);
+  const scopeText = (code: string) => areaLabel(areaNames, code);
   const signedInName = `${useAuthStore((s) => s.user?.name) ?? "Admin"} (Admin)`;
   const [filters, setFilters] = useState<UserFilters>(EMPTY);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
@@ -137,8 +152,8 @@ export function UsersRoles() {
 
   const roleOptions = optionsOf(users.map((u) => u.role), ROLES, (r) => ROLE_LABELS[r as Role]);
   const activeOptions = optionsOf(users.map(activeLabel), ["Active", "Inactive"]);
-  const regionOptions = optionsOf(users.map((u) => u.regionScope));
-  const scopeOptions = optionsOf(users.map((u) => u.woredaScope));
+  const regionOptions = optionsOf(users.map((u) => u.regionScope), undefined, scopeText);
+  const scopeOptions = optionsOf(users.map((u) => u.woredaScope), undefined, scopeText);
   const filterFields: FilterFieldConfig[] = [
     { key: "role", label: "Role", allLabel: "All roles", placeholder: "All Roles", options: roleOptions },
     { key: "active", label: "Active", allLabel: "All users", placeholder: "All", options: activeOptions },
@@ -161,11 +176,28 @@ export function UsersRoles() {
       role,
       daId: draft.daId,
       regionScope: draft.regionScope,
-      // Region-wide roles ("All (read)") carry no Woreda.
-      woredaScope: WOREDAS.includes(draft.woredaScope) ? draft.woredaScope : undefined,
+      // Region-wide roles carry no Woreda (the form gives "").
+      woredaScope: draft.woredaScope || undefined,
       effectiveFrom: parseDisplayDate(draft.effectiveFrom),
       effectiveTo: effectiveTo || undefined,
     };
+
+    // A staff (SSO) account already exists: its first sign-in created it, so only the role and scope are assigned.
+    if (draft.existingUserId) {
+      const userId = draft.existingUserId;
+      let assignment: RbacAssignmentRecord;
+      try {
+        assignment = await createRbacAssignment(userId, newUser);
+      } catch (err) {
+        const reason = err instanceof ApiError ? err.message : "Something went wrong. Please try again.";
+        throw new Error(`${reason} If the account was not found, ask the user to sign in once with their staff account, then save again.`);
+      }
+      setUsers((prev) => [{ assignmentId: assignment.name, userId, faydaId: "", ...draft, name: draft.name || userId, active: true, assignedBy: signedInName }, ...prev]);
+      setAdding(false);
+      setTab("users");
+      setNotice(`${draft.name || userId} assigned ${ROLE_LABELS[role]} · ${scopeText(draft.woredaScope || draft.regionScope)}. They sign in with their staff account; the role applies at their next sign-in.`);
+      return;
+    }
 
     let account = registered.current?.email === draft.email ? registered.current : null;
     let assignment: RbacAssignmentRecord | undefined;
@@ -183,12 +215,12 @@ export function UsersRoles() {
     registered.current = null;
     const { userId, password } = account;
     // Fayda linking happens at first sign-in, so a new account starts without one
-    setUsers((prev) => [{ assignmentId: assignment?.name, userId, faydaId: "", ...draft, active: true, woredaScope: newUser.woredaScope ?? draft.woredaScope, assignedBy: signedInName }, ...prev]);
+    setUsers((prev) => [{ assignmentId: assignment?.name, userId, faydaId: "", ...draft, active: true, assignedBy: signedInName }, ...prev]);
     setAdding(false);
     setTab("users");
     setNotice(
       <>
-        {draft.name} added as {ROLE_LABELS[role]} · {draft.woredaScope}. They sign in with <span className="font-semibold">{draft.email}</span> and the temporary password{" "}
+        {draft.name} added as {ROLE_LABELS[role]} · {scopeText(draft.woredaScope || draft.regionScope)}. They sign in with <span className="font-semibold">{draft.email}</span> and the temporary password{" "}
         <code className="rounded bg-white/70 px-1.5 py-0.5 font-mono text-[13px] font-semibold">{password}</code>{" "}
         <button type="button" onClick={() => void navigator.clipboard?.writeText(password)} className="font-semibold underline underline-offset-2 hover:no-underline">Copy</button>
         . Share it with them now; it is not shown again.
@@ -214,8 +246,8 @@ export function UsersRoles() {
       if (values.active && !editing.active) throw new Error("A revoked assignment cannot be switched back on. Add a new assignment instead.");
       try {
         let record = await updateRbacAssignment(editing.assignmentId, {
-          region_scope: values.regionScope,
-          ...(WOREDAS.includes(values.woredaScope) && { woreda_scope: values.woredaScope }),
+          ...(values.regionScope && { region_scope: values.regionScope }),
+          ...(values.woredaScope && { woreda_scope: values.woredaScope }),
           ...(parseDisplayDate(values.effectiveFrom) && { effective_from: parseDisplayDate(values.effectiveFrom) }),
           ...(parseDisplayDate(values.effectiveTo) && { effective_to: parseDisplayDate(values.effectiveTo) }),
         });
@@ -226,14 +258,14 @@ export function UsersRoles() {
       }
     }
     setUsers((prev) => prev.map((u) => (u.userId === editing.userId && u.assignmentId === editing.assignmentId ? { ...u, ...values, ...saved, name: u.name, assignedBy: saved.assignedBy ?? "Yonas Haile (Admin)" } : u)));
-    setNotice(`${values.name} (${editing.userId}) updated — ${ROLE_LABELS[values.role]} · ${values.woredaScope} · ${values.active ? "Active" : "Inactive"}. Recorded in the audit log with your identity and timestamp.`);
+    setNotice(`${values.name} (${editing.userId}) updated — ${ROLE_LABELS[values.role]} · ${scopeText(values.woredaScope || values.regionScope)} · ${values.active ? "Active" : "Inactive"}. Recorded in the audit log with your identity and timestamp.`);
     setEditing(null);
   };
 
   const columns: Column<RbacAssignment>[] = [
     { key: "user", header: "User", cell: (u) => <span><span className="font-medium text-ink">{u.name}</span><span className="block font-mono text-[12px] text-muted">{u.userId} · {u.faydaId ? `Fayda ${u.faydaId}` : "Fayda not linked yet"}</span></span> },
     { key: "role", header: <FilterDropdown label="Role" allLabel="All roles" options={roleOptions} selected={filters.role} onApply={setFilter("role")} />, cell: (u) => <Pill tone={ROLE_TONE[u.role]}>{ROLE_LABELS[u.role]}</Pill> },
-    { key: "scope", header: <FilterDropdown label="Scope" allLabel="All woreda scopes" options={scopeOptions} selected={filters.scope} onApply={setFilter("scope")} />, cell: (u) => <span className="text-[13px]">{u.regionScope}<span className="block text-[12px] text-muted">{u.woredaScope}</span></span> },
+    { key: "scope", header: <FilterDropdown label="Scope" allLabel="All woreda scopes" options={scopeOptions} selected={filters.scope} onApply={setFilter("scope")} />, cell: (u) => <span className="text-[13px]">{scopeText(u.regionScope)}<span className="block text-[12px] text-muted">{scopeText(u.woredaScope)}</span></span> },
     { key: "active", header: <FilterDropdown label="Active" allLabel="All users" options={activeOptions} selected={filters.active} onApply={setFilter("active")} />, cell: (u) => <Pill tone={u.active ? "green" : "slate"} dot>{u.active ? "Active" : "Inactive"}</Pill> },
     { key: "eff", header: "Effective", cell: (u) => <span className="text-[13px] text-muted">{u.effectiveFrom} → {u.effectiveTo}</span> },
     { key: "by", header: "Assigned by", cell: (u) => <span className="text-[13px] text-muted">{u.assignedBy}</span> },

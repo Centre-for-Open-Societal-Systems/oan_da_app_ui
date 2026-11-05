@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type ChangeEvent } from "react";
+import { todayIso } from "@/lib/utils";
+import { useEffect, useState, type ChangeEvent } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
@@ -8,8 +9,9 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
-import { newClientOpId, NEXT_ACTION_TYPES, submitVisitOutcome, type ApiVisit, type NextActionType } from "../api";
+import { canAddEvidence, fetchVisit, newClientOpId, NEXT_ACTION_TYPES, submitVisitOutcome, type ApiVisit, type ApiVisitDetail, type NextActionType } from "../api";
 import type { VisitRecord } from "../types";
+import { VisitEvidence } from "./VisitEvidence";
 
 interface LogOutcomeModalProps {
   visit: VisitRecord;
@@ -27,6 +29,19 @@ export function LogOutcomeModal({ visit, onClose, onSubmitted }: LogOutcomeModal
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clientOpId] = useState(newClientOpId);
+  const [attachments, setAttachments] = useState<ApiVisitDetail["attachments"]>();
+
+  // Evidence already on the visit, listed in the Evidence section; uploading works without it.
+  useEffect(() => {
+    if (!canAddEvidence(visit)) return;
+    let live = true;
+    fetchVisit(visit.id)
+      .then((detail) => live && setAttachments(detail.attachments))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [visit]);
 
   const set = (key: keyof Values) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setValues((v) => ({ ...v, [key]: e.target.value }));
   const hasNext = values.nextType !== "None";
@@ -87,7 +102,7 @@ export function LogOutcomeModal({ visit, onClose, onSubmitted }: LogOutcomeModal
           </FormField>
         </div>
 
-        <FormField label="What was observed" htmlFor="lo-observed" required>
+        <FormField label="What was observed" htmlFor="lo-observed" required hint="Required. This becomes the visit's outcome.">
           <Textarea id="lo-observed" rows={2} value={values.observed} onChange={set("observed")} placeholder="Crop stage, pests, plot condition…" />
         </FormField>
 
@@ -111,11 +126,13 @@ export function LogOutcomeModal({ visit, onClose, onSubmitted }: LogOutcomeModal
                 <Input id="lo-next-note" value={values.nextNote} onChange={set("nextNote")} placeholder="What to follow up" className="h-10" />
               </FormField>
               <FormField label="Date" htmlFor="lo-next-date">
-                <Input id="lo-next-date" type="date" value={values.nextDate} onChange={set("nextDate")} className="h-10" />
+                <Input id="lo-next-date" type="date" min={todayIso()} value={values.nextDate} onChange={set("nextDate")} className="h-10" />
               </FormField>
             </>
           )}
         </div>
+
+        {canAddEvidence(visit) && <VisitEvidence visitId={visit.id} existing={attachments} />}
 
         <p className="text-[12.5px] text-muted">Submitting closes the visit. A follow-up visit or task is added to your plan when you choose one.</p>
       </div>

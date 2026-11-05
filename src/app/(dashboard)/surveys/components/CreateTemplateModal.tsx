@@ -8,6 +8,7 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Checkbox } from "@/components/ui/Checkbox";
+import { todayIso } from "@/lib/utils";
 import {
   QUESTION_TYPES,
   SURVEY_LANGUAGES,
@@ -33,15 +34,15 @@ const blankQuestion = (id: number): TemplateQuestion => ({ id, prompt: "", type:
 export function CreateTemplateModal({ isOpen, onClose, onCreated }: CreateTemplateModalProps) {
   const created = useSurveyTemplatesStore((s) => s.created);
   const addSurvey = useSurveyTemplatesStore((s) => s.add);
-  const [draft, setDraft] = useState<TemplateInput>({
+  const [draft, setDraft] = useState<TemplateInput>(() => ({
     name: "",
     type: SURVEY_TYPES[0],
-    open: "",
+    open: todayIso(),
     close: "",
     languages: ["English", "Amharic"],
     targetFarmers: 20,
     questions: [blankQuestion(1)],
-  });
+  }));
   const [showErrors, setShowErrors] = useState(false);
   const errors = templateErrors(draft);
 
@@ -83,7 +84,7 @@ export function CreateTemplateModal({ isOpen, onClose, onCreated }: CreateTempla
         )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <FormField label="Template name" htmlFor="tpl-name" required>
+          <FormField label="Template name" htmlFor="tpl-name" required hint="At least 3 characters." hintTone={draft.name.trim().length > 0 && draft.name.trim().length < 3 ? "error" : "muted"}>
             <Input id="tpl-name" className="h-10" value={draft.name} onChange={(e) => patch({ name: e.target.value })} placeholder="e.g. Meher input satisfaction" />
           </FormField>
           <FormField label="Survey type" htmlFor="tpl-type" required>
@@ -94,13 +95,13 @@ export function CreateTemplateModal({ isOpen, onClose, onCreated }: CreateTempla
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <FormField label="Opens" htmlFor="tpl-open" required>
-            <Input id="tpl-open" type="date" className="h-10" value={draft.open} onChange={(e) => patch({ open: e.target.value })} />
+          <FormField label="Opens" htmlFor="tpl-open" required hint="Today or later." hintTone={draft.open !== "" && draft.open < todayIso() ? "error" : "muted"}>
+            <Input id="tpl-open" type="date" min={todayIso()} className="h-10" value={draft.open} onChange={(e) => patch({ open: e.target.value })} />
           </FormField>
-          <FormField label="Closes" htmlFor="tpl-close" required>
+          <FormField label="Closes" htmlFor="tpl-close" required hint="On or after the Opens date." hintTone={draft.close !== "" && draft.close < draft.open ? "error" : "muted"}>
             <Input id="tpl-close" type="date" className="h-10" value={draft.close} min={draft.open || undefined} onChange={(e) => patch({ close: e.target.value })} />
           </FormField>
-          <FormField label="Farmers per DA" htmlFor="tpl-target" required>
+          <FormField label="Farmers per DA" htmlFor="tpl-target" required hint="At least 1.">
             <Input id="tpl-target" type="number" min={1} className="h-10" value={draft.targetFarmers || ""} onChange={(e) => patch({ targetFarmers: Number(e.target.value) })} />
           </FormField>
         </div>
@@ -144,7 +145,7 @@ export function CreateTemplateModal({ isOpen, onClose, onCreated }: CreateTempla
                     </Select>
                   </FormField>
                   {hasOptions && (
-                    <FormField label="Choices" htmlFor={`tpl-qo-${q.id}`} hint="Separate choices with commas">
+                    <FormField label="Choices" htmlFor={`tpl-qo-${q.id}`} required hint="At least two; separate choices with commas">
                       <Input id={`tpl-qo-${q.id}`} className="h-10 bg-white" value={q.options} onChange={(e) => patchQuestion(q.id, { options: e.target.value })} placeholder="Yes, Partly, No" />
                     </FormField>
                   )}

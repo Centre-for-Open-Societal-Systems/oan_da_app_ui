@@ -39,3 +39,15 @@ export const OPTION_LISTS = {
 } as const;
 
 export type OptionList = keyof typeof OPTION_LISTS;
+
+/**
+ * Used when the registry's list cannot be read, so these required details can still be chosen. The backend matches a
+ * value to the registry's code by code or display name (intake.code_for), so these words reach the right code.
+ */
+export const FALLBACK_CHOICES: Partial<Record<OptionList, { value: string; label: string }[]>> = {
+  gender: [{ value: "male", label: "Male" }, { value: "female", label: "Female" }],
+  marital_status: [{ value: "Single", label: "Single" }, { value: "Married", label: "Married" }, { value: "Widowed", label: "Widowed" }, { value: "Divorced", label: "Divorced" }],
+  education_level: [{ value: "Illiterate", label: "Illiterate" }, { value: "Can read and write", label: "Can read and write" }, { value: "Primary", label: "Primary" }, { value: "Higher education", label: "Higher education" }],
+  // The backend's own synonyms for SOURCE_OF_INCOME (intake.SYNONYMS).
+  income_sources: [{ value: "crop", label: "Crop production" }, { value: "livestock", label: "Livestock production" }, { value: "govngo", label: "Government / NGO support" }, { value: "other", label: "Others" }],
+};

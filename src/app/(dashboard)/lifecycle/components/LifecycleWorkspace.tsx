@@ -11,7 +11,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { downloadCsv, fileDate } from "@/lib/download";
-import { cn } from "@/lib/utils";
+import { cn, todayIso } from "@/lib/utils";
 import {
   LIFECYCLE_DA,
   SERVICE_SNAPSHOT,
@@ -210,14 +210,16 @@ export function StepsCard() {
   );
 }
 
+const blankDraft = (): InitiateDraft => ({ ...EMPTY_DRAFT, effective: todayIso() });
+
 function InitiateModal({ transition, onClose, onSubmit }: { transition: LifecycleTransition | null; onClose: () => void; onSubmit: (event: LifecycleEvent) => void }) {
-  const [draft, setDraft] = useState<InitiateDraft>(EMPTY_DRAFT);
+  const [draft, setDraft] = useState<InitiateDraft>(blankDraft);
   const [submitted, setSubmitted] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const set = <K extends keyof InitiateDraft>(key: K, value: InitiateDraft[K]) => setDraft((d) => ({ ...d, [key]: value }));
 
   const close = () => {
-    setDraft(EMPTY_DRAFT);
+    setDraft(blankDraft());
     setSubmitted(false);
     setConfirming(false);
     onClose();
@@ -278,8 +280,8 @@ function InitiateModal({ transition, onClose, onSubmit }: { transition: Lifecycl
           <Input id="lc-target" type={transition.code === "LV" ? "date" : "text"} value={draft.target} onChange={(e) => set("target", e.target.value)} />
         </FormField>
       )}
-      <FormField label="Effective date" htmlFor="lc-effective" required hint={error("effective")} hintTone="error">
-        <Input id="lc-effective" type="date" value={draft.effective} onChange={(e) => set("effective", e.target.value)} />
+      <FormField label="Effective date" htmlFor="lc-effective" required hint={error("effective") ?? "Today or later."} hintTone={error("effective") || (!!draft.effective && draft.effective < todayIso()) ? "error" : "muted"}>
+        <Input id="lc-effective" type="date" min={todayIso()} value={draft.effective} onChange={(e) => set("effective", e.target.value)} />
       </FormField>
       {transition.handover && (
         <FormField label="Successor DA" htmlFor="lc-successor" required hint={error("successor") ?? "Takes over the DA's farmers during the handover"} hintTone={error("successor") ? "error" : "muted"}>

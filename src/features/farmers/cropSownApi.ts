@@ -140,6 +140,9 @@ export async function listFarmerCrops(farmerId: string): Promise<ApiFarmerCrop[]
   return (await authRequest<{ data: { crops: ApiFarmerCrop[] } }>(farmerCrops(farmerId))).data.crops;
 }
 
+/** 404 on the crops list: a farmer the registries do not know, which for a profile simply means no crops. */
+export const isCropsNotFound = (err: unknown): boolean => err instanceof ApiError && err.status === 404;
+
 /** The text to show for a failed Crop Sown call. */
 export function describeCropSownError(err: unknown): string {
   if (!(err instanceof ApiError)) return err instanceof Error ? err.message : "Could not reach the Crop Sown service.";

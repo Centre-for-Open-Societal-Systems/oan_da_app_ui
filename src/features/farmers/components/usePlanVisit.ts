@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { Farmer } from "../types";
 import { useAdvisoryStore } from "../advisoryStore";
 import { planVisit } from "../visitsApi";
-import { apiFarmerToFarmer, listFarmers } from "../farmersApi";
+import { apiFarmerToFarmer, describeFarmerError, listFarmers } from "../farmersApi";
 import { ADVISORY_VISIT, durationMinutes, matchFarmers, readVisitDetails, readWhen, registryCode, splitPriority, VISIT_TYPES, type AdvisoryQa, type PlanVisitResult, type VisitPreset } from "./planVisit";
 
 // randomUUID needs a secure context (https or localhost); a plain-http deployment falls back to time + random.
@@ -21,22 +21,22 @@ export function usePlanVisit(farmer: Farmer | undefined, preset: VisitPreset | u
   // One id per open form: a retry after a timeout returns the visit already created instead of a duplicate.
   const [clientOpId] = useState(newOpId);
 
-  // The caller's farmers from GET /farmers; the sample list stays the choice when the API cannot be reached.
+  // The caller's farmers from GET /farmers: for a DA, the farmers assigned to them.
   const [apiFarmers, setApiFarmers] = useState<Farmer[] | null>(null);
+  const [farmersError, setFarmersError] = useState<string | null>(null);
   useEffect(() => {
     let current = true;
     listFarmers({ pageSize: 500 })
       .then(({ items }) => current && setApiFarmers(items.map(apiFarmerToFarmer)))
-      .catch(() => {
-        // Keep the sample farmers.
-      });
+      .catch((err: unknown) => current && setFarmersError(describeFarmerError(err)));
     return () => {
       current = false;
     };
   }, []);
 
   const term = query.trim().toLowerCase();
-  const matches = matchFarmers(term, apiFarmers ?? undefined);
+  const matches = matchFarmers(term, apiFarmers ?? []);
+  const emptyText = farmersError ?? (apiFarmers ? "No farmer assigned" : "Loading farmers…");
 
   // Search button / Enter: show the results list (even if a farmer was already picked); a single hit is picked straight away.
   const runSearch = () => {
@@ -101,5 +101,5 @@ export function usePlanVisit(farmer: Farmer | undefined, preset: VisitPreset | u
     setResult({ kind, farmer: selected?.name, when, visitId });
   };
 
-  return { selected, setSelected, visitType, setVisitType, advisoryQa, setAdvisoryQa, query, changeQuery, searched, term, matches, runSearch, result, finish, submitting, error };
+  return { selected, setSelected, visitType, setVisitType, advisoryQa, setAdvisoryQa, query, changeQuery, searched, term, matches, emptyText, runSearch, result, finish, submitting, error };
 }

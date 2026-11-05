@@ -135,6 +135,7 @@ export function PerformanceTiers() {
       >
         <div className="flex flex-col gap-4">
           {error && <Banner tone="error">{error}</Banner>}
+          <p className="text-[12.5px] text-muted">Every threshold is a number from 0 to 100. Quality thresholds step down: T1 &gt; T2 &gt; T3. The T4 training floor cannot be above the T2 training threshold.</p>
           {THRESHOLD_FIELDS.map(({ tier: code, fields }) => {
             const tier = PERFORMANCE_TIERS.find((t) => t.code === code)!;
             return (
