@@ -89,7 +89,7 @@ export function OptionField({ id, label, list, options, loading, value, onChange
   const hint = error ?? (loading ? "Loading the registry's list…" : missing ? `The registry sent no list for ${OPTION_LISTS[list][0]}.` : undefined);
   return (
     <FormField label={label} htmlFor={id} required={required} hint={hint} hintTone={error || missing ? "error" : "muted"}>
-      <Select id={id} value={value} onChange={(e) => onChange(e.target.value)} disabled={loading || !choices} aria-invalid={error ? true : undefined}>
+      <Select id={id} value={value} onChange={(e) => onChange(e.target.value)} disabled={loading || !choices} aria-invalid={error ? true : undefined} className={cn(error && "border-danger")}>
         <option value="">{loading ? "Loading…" : `Select ${label.toLowerCase()}`}</option>
         {choices?.map((o) => (
           <option key={o.value} value={o.value}>
