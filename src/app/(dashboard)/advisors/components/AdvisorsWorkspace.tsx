@@ -6,7 +6,6 @@ import { BackLink } from "@/components/ui/BackLink";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useAdvisorsStore } from "@/features/communication";
 import { useAuthStore } from "@/store/useAuthStore";
-import { AdvisorStats } from "./AdvisorStats";
 import { AdvisorDirectory } from "./AdvisorDirectory";
 import { AddAdvisorModal } from "./AddAdvisorModal";
 
@@ -40,7 +39,6 @@ export function AdvisorsWorkspace() {
         }
       />
       {notice && <Banner tone="success" onDismiss={() => setNotice(null)}>{notice}</Banner>}
-      <AdvisorStats advisors={advisors} />
       <AdvisorDirectory advisors={advisors} />
 
       {adding && (
