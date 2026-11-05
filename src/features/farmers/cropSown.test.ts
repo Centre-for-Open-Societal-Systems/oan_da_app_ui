@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CROP_SOWN_FORM, CROP_SOWN_TABS, findFarmersById, getCropSownDetails, getCropSownPrefill, getCropSownRecord, registryCode, valueKey } from "./cropSown";
+import { CROP_SOWN_FORM, CROP_SOWN_TABS, cropSownTabs, findFarmersById, getCropSownPrefill, getCropSownRecord, registryCode, valueKey } from "./cropSown";
 import { FARMERS } from "./data";
 
 describe("Crop Sown form", () => {
@@ -47,7 +47,7 @@ describe("sample record", () => {
   });
 
   it("formats GC and EC dates for display", () => {
-    const planning = getCropSownDetails(FARMERS[0]).find((t) => t.key === "planning")!.sections.find((s) => s.title === "Crop Planning Details")!.fields;
+    const planning = cropSownTabs(getCropSownRecord(FARMERS[0])).find((t) => t.key === "planning")!.sections.find((s) => s.title === "Crop Planning Details")!.fields;
     expect(planning.find((f) => f.key === "planned_date")?.value).toBe("18 Jun 2025");
     expect(planning.find((f) => f.key === "planned_date_ec")?.value).toBe("11 Sene 2017");
   });

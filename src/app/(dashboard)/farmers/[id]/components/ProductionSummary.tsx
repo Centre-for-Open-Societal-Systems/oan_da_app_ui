@@ -29,7 +29,7 @@ export function ProductionSummary({ farmer, crops, tabs }: { farmer: Farmer; cro
           <Row label="Production season" value={pick("production_season", fromIdentity("production_season"))} />
         </dl>
         <dl className="flex flex-col gap-3 lg:pl-8">
-          <Row label="Farmer ID" value={pick("farmer_id", farmer.regId ?? registryCode(farmer))} />
+          <Row label="Farmer ID" value={pick("farmer_id", registryCode(farmer))} />
           <Row label="Fayda FAN ID" value={pick("fayda_fan_id", fromIdentity("fayda_fan_id"))} />
           <Row label="Fayda FIN" value={pick("fayda_fin")} />
           <Row label="Farmer registry status" value={farmer.status} />

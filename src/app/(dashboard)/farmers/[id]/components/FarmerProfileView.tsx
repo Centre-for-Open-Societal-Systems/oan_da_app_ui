@@ -13,7 +13,6 @@ import {
   fetchFarmerProfile,
   fetchFarmerUpdateStatus,
   fetchFarmerVisits,
-  getCropSownDetails,
   getLivestockReportDetails,
   profileToFarmer,
   type Farmer,
@@ -48,8 +47,10 @@ export function FarmerProfileView({ id }: { id: string }) {
     (async () => {
       try {
         const profile = await fetchFarmerProfile(id);
+        // The page may be open on either id; the calls after the profile use the Farmer ID.
+        const code = profile.reg_id ?? id;
         // Plots and visits are tabs; one failing still leaves a usable profile.
-        const [plots, visits, updates, photo] = await Promise.allSettled([fetchFarmerPlots(id), fetchFarmerVisits(id), fetchFarmerUpdateStatus(id), fetchFarmerPhoto(id)]);
+        const [plots, visits, updates, photo] = await Promise.allSettled([fetchFarmerPlots(code), fetchFarmerVisits(code), fetchFarmerUpdateStatus(code), fetchFarmerPhoto(code)]);
         const plotRows = plots.status === "fulfilled" ? plots.value.map(apiPlotToPlot) : [];
         const visitRows = visits.status === "fulfilled" ? visits.value.items.map(apiVisitToVisit) : [];
         const notes = [plots.status === "rejected" && "plots", visits.status === "rejected" && "visit history"].filter((x): x is string => !!x);
@@ -100,7 +101,7 @@ export function FarmerProfileView({ id }: { id: string }) {
         panels={{
           Overview: <ProfileOverview />,
           Holdings: fromApi ? <HoldingsSection plots={loaded.plots} /> : <HoldingsSection />,
-          "Crop Sown Details": <CropSownSection farmer={farmer} tabs={getCropSownDetails(farmer)} />,
+          "Crop Sown Details": <CropSownSection farmer={farmer} />,
           "Livestock Details": <LivestockDetailsSection tabs={getLivestockReportDetails(farmer)} />,
           "Livestock history": <LivestockHistorySection />,
           "Visit history": fromApi ? <VisitHistorySection visits={loaded.visits} /> : <VisitHistorySection />,

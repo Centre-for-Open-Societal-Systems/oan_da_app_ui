@@ -93,7 +93,7 @@ export function ProfileActionStrip({ farmer }: { farmer: Farmer }) {
       {openModal === "visit" && <PlanVisitModal farmer={farmer} isOpen onClose={close} />}
       {openModal === "correction" && <RequestUpdateModal farmer={farmer} isOpen onClose={close} />}
       {openModal === "consent" && <ConsentWithdrawalModal farmer={farmer} isOpen onClose={close} />}
-      {openModal === "grievance" && <RaiseGrievanceModal isOpen onClose={close} farmerId={farmer.id} />}
+      {openModal === "grievance" && <RaiseGrievanceModal isOpen onClose={close} farmerId={farmer.regId ?? farmer.id} />}
     </>
   );
 }

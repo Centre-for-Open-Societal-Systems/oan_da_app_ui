@@ -3,51 +3,40 @@
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { SegmentTabs } from "@/components/ui/SegmentTabs";
 import { AdvancedFiltersButton } from "@/components/ui/AdvancedFiltersButton";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { RowAction } from "@/components/ui/RowAction";
-import { AdvancedFiltersDrawer, type FilterSelection } from "@/components/ui/AdvancedFiltersDrawer";
-import { FilterDropdown } from "@/components/ui/FilterDropdown";
-import { GRIEVANCE_BUCKETS, GRIEVANCE_PAGE_MAX, grievanceFilterOptions, grievanceStatsFor, listGrievances, toGrievance } from "@/features/grievances";
+import { AdvancedFiltersDrawer, type FilterFieldConfig, type FilterSelection } from "@/components/ui/AdvancedFiltersDrawer";
+import { FilterDropdown, type FilterOption } from "@/components/ui/FilterDropdown";
+import { TablePagination } from "@/components/ui/TablePagination";
+import { fetchGrievanceSummary, GRIEVANCE_PAGE_MAX, listGrievances, toGrievance, type GrievanceSummaryCard } from "@/features/grievances";
 import { GrievanceStatusPill } from "@/features/grievances";
 import { GrievanceDetailModal } from "@/features/grievances";
 import type { Grievance } from "@/features/grievances";
-import { GrievanceStats, type StatKey } from "./GrievanceStats";
+import { GrievanceStats, type GrievanceStatCard } from "./GrievanceStats";
 import { RaiseGrievanceButton } from "./RaiseGrievanceButton";
 import { ServiceStatusBanner } from "./ServiceStatusBanner";
 import { matchesQuery, searchPlaceholder } from "@/lib/search";
-import { TablePagination } from "@/components/ui/TablePagination";
 
-const SEARCH_PLACEHOLDER = searchPlaceholder(["Ticket ID", "Details", "Category", "Status", "Submitted"]);
-
-type RaisedBy = "All" | Grievance["raisedBy"];
-
-const RAISED_BY_TABS: { key: RaisedBy; label: string }[] = [
-  { key: "All", label: "All" },
-  { key: "OnBehalf", label: "On behalf of Farmers" },
-  { key: "Farmer", label: "Raised by Farmers" },
-  { key: "DA", label: "Raised for DAs" },
-];
-
-// Table heading follows the active "Raised by" tab.
-const RAISED_BY_HEADINGS: Record<RaisedBy, { title: string; description: string }> = {
-  All: { title: "All Grievances", description: "Track and manage all reported grievances." },
-  OnBehalf: { title: "On behalf of Farmers", description: "Grievances you raised on behalf of a farmer." },
-  Farmer: { title: "Raised by Farmers", description: "Grievances farmers raised directly." },
-  DA: { title: "Raised for DAs", description: "Grievances you raised for yourself as a DA." },
-};
+const SEARCH_PLACEHOLDER = searchPlaceholder(["Ticket ID", "Details", "Category", "Status", "Location"]);
 
 interface Filters extends FilterSelection {
   category: Set<string>;
   status: Set<string>;
-  region: Set<string>;
+  location: Set<string>;
 }
 
-const EMPTY: Filters = { category: new Set(), status: new Set(), region: new Set() };
+const EMPTY: Filters = { category: new Set(), status: new Set(), location: new Set() };
 
-type Loaded = { reload: number; rows: Grievance[]; total: number; error: string | null; at: Date };
+/** Count by key over a list → filter-dropdown options (value = label). */
+function toOptions(values: string[]): FilterOption[] {
+  const counts = new Map<string, number>();
+  for (const v of values) if (v) counts.set(v, (counts.get(v) ?? 0) + 1);
+  return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([value, count]) => ({ value, label: value, count }));
+}
+
+type Loaded = { reload: number; rows: Grievance[]; total: number; cards: GrievanceSummaryCard[]; error: string | null; at: Date };
 
 export function GrievancesTable() {
   // GET /grievances is scoped by DA Services: a DA gets their own tickets, a Supervisor their Woreda's.
@@ -56,26 +45,22 @@ export function GrievancesTable() {
 
   useEffect(() => {
     let current = true;
-    // One page at the API's maximum; the table filters and pages it here.
-    listGrievances({ page: 1, pageSize: GRIEVANCE_PAGE_MAX })
-      .then(({ items, total }) => current && setLoaded({ reload, rows: items.map(toGrievance), total, error: null, at: new Date() }))
-      .catch((err: unknown) => current && setLoaded((prev) => ({ reload, rows: prev?.rows ?? [], total: prev?.total ?? 0, error: err instanceof Error ? err.message : "Could not load grievances.", at: new Date() })));
+    // One page at the API's maximum; the table searches, filters and pages it here. Stat cards come from the
+    // summary endpoint (whole-dataset counts), falling back to the fetched page's counts if that call fails.
+    Promise.all([listGrievances({ page: 1, pageSize: GRIEVANCE_PAGE_MAX }), fetchGrievanceSummary().catch(() => [] as GrievanceSummaryCard[])])
+      .then(([list, cards]) => current && setLoaded({ reload, rows: list.items.map(toGrievance), total: list.total, cards, error: null, at: new Date() }))
+      .catch((err: unknown) => current && setLoaded((prev) => ({ reload, rows: prev?.rows ?? [], total: prev?.total ?? 0, cards: prev?.cards ?? [], error: err instanceof Error ? err.message : "Could not load grievances.", at: new Date() })));
     return () => {
       current = false;
     };
   }, [reload]);
 
   const loading = loaded?.reload !== reload;
-  const fetched = loaded?.rows ?? [];
-  // The table only lists the statuses that have a card / filter option; anything else the service returns stays out.
-  const all = fetched.filter((g) => (GRIEVANCE_BUCKETS as string[]).includes(g.status));
-  const options = grievanceFilterOptions(all);
+  const all = loaded?.rows ?? [];
   const refresh = () => setReload((r) => r + 1);
 
   const [filters, setFilters] = useState<Filters>(EMPTY);
   const [query, setQuery] = useState("");
-  // FR-12 raised-by filter: on behalf of a farmer, farmer-originated, or for the DA (external service records all three)
-  const [raisedBy, setRaisedBy] = useState<RaisedBy>("All");
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [selected, setSelected] = useState<Grievance | null>(null);
   const [page, setPage] = useState(1);
@@ -88,19 +73,33 @@ export function GrievancesTable() {
     setPage(1);
   };
 
-  // Every filter except status: the stat cards count these rows, so each card's number is exactly
-  // what the table shows once that card (or the matching Status filter) is selected.
+  // Filter options: statuses from the summary cards (the service's own vocabulary); category / location from rows.
+  const categoryOptions = toOptions(all.map((g) => g.category));
+  const locationOptions = toOptions(all.map((g) => g.location ?? "").filter(Boolean));
+  const statusOptions: FilterOption[] = (loaded?.cards ?? [])
+    .filter((c) => c.status !== "All")
+    .map((c) => ({ value: c.status, label: c.label, count: c.count }));
+  const filterFields: FilterFieldConfig[] = [
+    { key: "category", label: "Category", allLabel: "All categories", placeholder: "All Categories", options: categoryOptions },
+    ...(statusOptions.length > 0 ? [{ key: "status", label: "Status", allLabel: "All statuses", placeholder: "All Statuses", options: statusOptions }] : []),
+    ...(locationOptions.length > 0 ? [{ key: "location", label: "Location", allLabel: "All locations", placeholder: "All Locations", options: locationOptions }] : []),
+  ];
+
+  // Every filter except status: so each stat card's number matches the table once that status is picked.
   const scoped = all.filter(
     (g) =>
-      (raisedBy === "All" || g.raisedBy === raisedBy) &&
       (filters.category.size === 0 || filters.category.has(g.category)) &&
-      (filters.region.size === 0 || filters.region.has(g.region)) &&
+      (filters.location.size === 0 || filters.location.has(g.location ?? "")) &&
       matchesQuery(query, g),
   );
   const rows = scoped.filter((g) => filters.status.size === 0 || filters.status.has(g.status));
-  const stats = grievanceStatsFor(scoped);
-  // The cards and the Status filter share one selection; a multi-status filter highlights no single card.
-  const activeCard: StatKey = filters.status.size === 0 ? "All" : filters.status.size === 1 ? ([...filters.status][0] as StatKey) : "All";
+
+  // Cards: the summary endpoint when it answered, else counts of the fetched rows with a leading "All".
+  const cards: GrievanceStatCard[] =
+    (loaded?.cards ?? []).length > 0
+      ? (loaded?.cards ?? []).map((c) => ({ status: c.status, label: c.label, count: c.count }))
+      : [{ status: "All", label: "All", count: all.length }, ...toOptions(all.map((g) => g.status)).map((o) => ({ status: o.value, label: o.label, count: o.count ?? 0 }))];
+  const activeCard = filters.status.size === 1 ? [...filters.status][0] : "All";
 
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -109,53 +108,41 @@ export function GrievancesTable() {
   return (
     <>
       <PageHeader
-        tabBar={
-          <SegmentTabs<RaisedBy>
-            label="Raised by"
-            tabs={RAISED_BY_TABS}
-            active={raisedBy}
-            onChange={(k) => { setRaisedBy(k); setPage(1); }}
-          />
-        }
         title="Grievances"
         description="Raise and track grievances for yourself or on behalf of a farmer. Triage and resolution happen in the external Grievance Service - this surface is read-only for case handling."
         actions={<RaiseGrievanceButton onSubmitted={refresh} className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-md bg-brand-green px-5 text-[14px] font-semibold text-white transition-colors hover:bg-brand-green-dark" />}
       />
-      <ServiceStatusBanner loading={loading} error={loaded?.error ?? null} lastLoaded={loaded?.at ?? null} total={loaded?.total ?? 0} shown={fetched.length} onRetry={refresh} />
+      <ServiceStatusBanner loading={loading} error={loaded?.error ?? null} lastLoaded={loaded?.at ?? null} total={loaded?.total ?? 0} shown={all.length} onRetry={refresh} />
       <GrievanceStats
+        cards={cards}
         active={activeCard}
-        counts={stats}
-        onSelect={(key) => setFilter("status")(key === "All" ? new Set() : new Set([key]))}
+        onSelect={(status) => setFilter("status")(status === "All" ? new Set() : new Set([status]))}
       />
 
       <Card className="overflow-hidden p-0 shadow-card">
         {/* Toolbar */}
         <div className="flex flex-col gap-3 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 className="text-[16px] font-semibold text-ink">{RAISED_BY_HEADINGS[raisedBy].title}</h2>
-            <p className="mt-0.5 text-[13px] text-ink-soft">{RAISED_BY_HEADINGS[raisedBy].description}</p>
+            <h2 className="text-[16px] font-semibold text-ink">All Grievances</h2>
+            <p className="mt-0.5 text-[13px] text-ink-soft">Track and manage all reported grievances.</p>
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end">
-            <SearchInput value={query} onChange={(value) => {
-                setQuery(value);
-                setPage(1);
-              }} placeholder={SEARCH_PLACEHOLDER} />
-
+            <SearchInput value={query} onChange={(value) => { setQuery(value); setPage(1); }} placeholder={SEARCH_PLACEHOLDER} />
             <AdvancedFiltersButton activeCount={activeFilterCount} onClick={() => setIsFiltersOpen(true)} />
           </div>
         </div>
 
         {/* Table */}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1120px] table-fixed border-collapse text-left">
+          <table className="w-full min-w-[960px] table-fixed border-collapse text-left">
             <colgroup>
-              <col className="w-[180px]" />
+              <col className="w-[190px]" />
               <col />
-              <col className="w-[120px]" />
               <col className="w-[150px]" />
-              <col className="w-[135px]" />
-              <col className="w-[160px]" />
+              <col className="w-[180px]" />
+              <col className="w-[150px]" />
+              <col className="w-[150px]" />
               <col className="w-[110px]" />
             </colgroup>
             <thead>
@@ -163,12 +150,12 @@ export function GrievancesTable() {
                 <th className="whitespace-nowrap px-4 py-3 font-semibold">Ticket ID</th>
                 <th className="px-4 py-3 font-semibold">Details</th>
                 <th className="px-4 py-3 font-semibold">
-                  <FilterDropdown label="Category" allLabel="All categories" options={options.category} selected={filters.category} onApply={setFilter("category")} />
+                  <FilterDropdown label="Category" allLabel="All categories" options={categoryOptions} selected={filters.category} onApply={setFilter("category")} />
                 </th>
                 <th className="px-4 py-3 font-semibold">Location</th>
                 <th className="px-4 py-3 font-semibold">Submitted</th>
                 <th className="px-4 py-3 font-semibold">
-                  <FilterDropdown label="Status" allLabel="All statuses" options={options.status} selected={filters.status} onApply={setFilter("status")} />
+                  <FilterDropdown label="Status" allLabel="All statuses" options={statusOptions} selected={filters.status} onApply={setFilter("status")} />
                 </th>
                 <th className="px-4 py-3 text-center font-semibold">Actions</th>
               </tr>
@@ -195,35 +182,11 @@ export function GrievancesTable() {
                   <td className="whitespace-nowrap px-3 py-4 text-[13px] font-semibold text-ink">{g.ticketId}</td>
                   <td className="px-4 py-4">
                     <p className="truncate text-[14.5px] font-semibold text-ink" title={g.title}>{g.title}</p>
-                    <p className="mt-1 text-[13px] text-muted">
-                      {[g.submitter, [g.region, g.woreda].filter(Boolean).join(", ")].filter(Boolean).join(" · ")}
-                    </p>
+                    {g.submitter && <p className="mt-1 truncate text-[13px] text-muted" title={g.submitter}>{g.submitter}</p>}
                     {g.type && <p className="mt-0.5 text-[13px] text-muted">{g.type}</p>}
-                    <p className="mt-1 flex items-center gap-3 text-[12px] text-muted">
-                      <span className="inline-flex items-center gap-1">
-                        <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21.4 11.05l-9.2 9.2a6 6 0 01-8.5-8.5l9.2-9.2a4 4 0 015.7 5.7l-9.2 9.2a2 2 0 01-2.8-2.8l8.5-8.5" />
-                        </svg>
-                        {g.attachments}
-                      </span>
-                      {g.responses > 0 && (
-                        <span className="font-medium text-brand-green">
-                          {g.responses} response{g.responses > 1 ? "s" : ""}
-                        </span>
-                      )}
-                    </p>
                   </td>
-                  <td className="px-4 py-4 text-[13.5px]">{g.category}</td>
-                  <td className="px-4 py-4 text-[13px] leading-snug">
-                    {g.woreda || g.region ? (
-                      <>
-                        {g.woreda && <p className="text-slate-700">{g.woreda}</p>}
-                        {g.region && <p className="text-muted">{g.region}</p>}
-                      </>
-                    ) : (
-                      <span className="text-muted">-</span>
-                    )}
-                  </td>
+                  <td className="px-4 py-4 text-[13.5px]">{g.category || "-"}</td>
+                  <td className="px-4 py-4 text-[13px] leading-snug text-slate-700">{g.location || <span className="text-muted">-</span>}</td>
                   <td className="whitespace-nowrap px-4 py-4 text-[13px] leading-snug text-slate-700">
                     {g.submittedAt.split(", ").slice(0, 2).join(", ")},
                     <br />
@@ -247,23 +210,20 @@ export function GrievancesTable() {
           pageSize={pageSize}
           total={rows.length}
           onPageChange={setPage}
-          onPageSizeChange={(size) => {
-            setPageSize(size);
-            setPage(1);
-          }}
+          onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
         />
       </Card>
 
       <AdvancedFiltersDrawer
         isOpen={isFiltersOpen}
         onClose={() => setIsFiltersOpen(false)}
-        fields={options.fields}
+        fields={filterFields}
         filters={filters}
         onApply={(next) => {
           setFilters({
             category: next.category ?? new Set(),
             status: next.status ?? new Set(),
-            region: next.region ?? new Set(),
+            location: next.location ?? new Set(),
           });
           setPage(1);
         }}

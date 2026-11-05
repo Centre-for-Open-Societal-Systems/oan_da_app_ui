@@ -20,11 +20,15 @@ export interface Grievance {
   submitter: string;
   region: string;
   woreda: string;
+  /** Free-text location label from the Grievance Service list (e.g. a Kebele name). */
+  location?: string;
   type: string;
   /** A sample category, or the Grievance Service category name (e.g. "Supply Chain") for API records. */
   category: string;
-  status: GrievanceStatus;
-  priority: GrievancePriority;
+  /** The Grievance Service status code/label (its own vocabulary); sample rows use the names below. */
+  status: string;
+  /** The service list carries no priority, so this is set only on sample rows and from the detail. */
+  priority?: GrievancePriority;
   submittedAt: string; // e.g. "May 28, 2026, 10:42 AM"
   attachments: number;
   responses: number;

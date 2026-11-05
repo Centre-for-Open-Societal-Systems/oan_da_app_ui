@@ -38,8 +38,11 @@ export function toFormValue(raw: unknown, def: CropSownFieldDef, api: ApiIntakeF
   return String(raw);
 }
 
-/** The form values behind one stage's section records. Geo ids and the lookup's Fayda FIN have no field to land in. */
-export function stageValues(tab: string, sections: { sectionId: string; rows: Row[] }[], intake: ApiIntakeForm | null): CropSownValues {
+/**
+ * The form values behind one stage's section records. Geo ids and the lookup's Fayda FIN have no field to land in.
+ * With `display`, for reading rather than editing, read-only fields and the coordinates count too.
+ */
+export function stageValues(tab: string, sections: { sectionId: string; rows: Row[] }[], intake: ApiIntakeForm | null, display = false): CropSownValues {
   const plan = STAGE_PLANS[tab];
   const values: CropSownValues = {};
   if (!plan) return values;
@@ -49,7 +52,7 @@ export function stageValues(tab: string, sections: { sectionId: string; rows: Ro
     if (!row) return;
     const ui = CROP_SOWN_FORM.find((t) => t.key === tab)?.sections.find((s) => s.id === uiSectionId);
     for (const def of ui?.fields ?? []) {
-      if (def.readOnly && def.key !== "farmer_id") continue;
+      if (display ? def.type === "geo" : def.readOnly && def.key !== "farmer_id") continue;
       const value = toFormValue(row[def.key], def, fieldsOf(sectionId)?.find((f) => f.field_name === def.key));
       if (value !== "") values[valueKey(uiSectionId, def.key)] = value;
     }
@@ -60,7 +63,7 @@ export function stageValues(tab: string, sections: { sectionId: string; rows: Ro
     else if (sectionId === "crop_farmer_lookup") take("identity", sectionId, rows[0]);
     else {
       const target = plan.sections.find((s) => s.sectionId === sectionId);
-      if (target && target.sectionId !== "cropsown_cropsown_location_section_03") take(target.ui[0], sectionId, rows[0]);
+      if (target && (display || target.sectionId !== "cropsown_cropsown_location_section_03")) take(target.ui[0], sectionId, rows[0]);
     }
   }
   return values;
@@ -95,6 +98,15 @@ export function summaryValues(summary: Record<string, string>): CropSownValues {
   return values;
 }
 
+/** The summary for reading: any crop year, and the location names in the address card's one location field. */
+export function summaryDisplay(summary: Record<string, string>): CropSownValues {
+  const values = summaryValues(summary);
+  if (summary.crop_year) values[valueKey("identity", "crop_year")] = summary.crop_year;
+  const place = [summary.region_name, summary.zone_name, summary.woreda_name, summary.kebele_name].filter(Boolean).join(", ");
+  if (place) values[valueKey("address", "geo_code_hierarchy_json")] = place;
+  return values;
+}
+
 export interface LoadedCropDetails {
   values: CropSownValues;
   /** The stages that had an earlier submission. */
@@ -103,8 +115,11 @@ export interface LoadedCropDetails {
   total: number;
 }
 
-/** Reads the farmer's earlier Crop Sown submissions and turns them into form values. `listed` is the list when the caller already has it. */
-export async function loadCropDetails(farmerCode: string, listed?: ApiFarmerCrop[]): Promise<LoadedCropDetails> {
+/**
+ * Reads the farmer's earlier Crop Sown submissions and turns them into form values. `listed` is the list when the caller
+ * already has it; `display` keeps what only a read-only view shows (see stageValues).
+ */
+export async function loadCropDetails(farmerCode: string, listed?: ApiFarmerCrop[], { display = false } = {}): Promise<LoadedCropDetails> {
   const crops = listed ?? (await listFarmerCrops(farmerCode));
   if (crops.length === 0) return { values: {}, stages: [], total: 0 };
   const submissions = submissionsOf(crops);
@@ -117,7 +132,7 @@ export async function loadCropDetails(farmerCode: string, listed?: ApiFarmerCrop
       if (!latest?.submission_id) return { form, mine: {} as CropSownValues };
       try {
         const detail = (await fetchFarmerCrop(farmerCode, latest.submission_id)) as { sections?: unknown; tabs?: unknown; section_payloads?: unknown };
-        return { form, mine: stageValues(form, sectionRows([detail.sections, detail.tabs, detail.section_payloads]), intake) };
+        return { form, mine: stageValues(form, sectionRows([detail.sections, detail.tabs, detail.section_payloads]), intake, display) };
       } catch {
         // One unreadable submission must not hide the rest.
         return { form, mine: {} as CropSownValues };
@@ -127,7 +142,7 @@ export async function loadCropDetails(farmerCode: string, listed?: ApiFarmerCrop
 
   // The list's summaries first; what a stage's own sections hold wins. Identity is shared by the four tabs: the first stage
   // (in stage order) to give a value wins.
-  const values: CropSownValues = { ...summaryValues(summaryOf(crops)) };
+  const values: CropSownValues = (display ? summaryDisplay : summaryValues)(summaryOf(crops));
   const stages: CropSownForm[] = [];
   const taken = new Set<string>();
   for (const { form, mine } of perStage) {

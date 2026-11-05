@@ -1,5 +1,5 @@
 import { authRequest } from "@/features/auth";
-import type { VisitRecord, VisitStatus } from "./types";
+import type { PlannerStatus, VisitRecord, VisitStatus } from "./types";
 
 /** One row of GET /api/v1/da-services/visits (the fields the portal reads). */
 export interface ApiVisit {
@@ -19,6 +19,13 @@ export interface ApiVisit {
   physical_status: string;
   /** Planned / Confirmed / Completed / Missed, or a raw physical status (Cancelled, Rescheduled …). */
   ui_status: string;
+  /** The planner's card colour, derived by the backend. */
+  planner_status?: PlannerStatus;
+  /** Unknown, Confirmed, Tentative or Declined. */
+  farmer_confirmation?: string | null;
+  confirmation_note?: string | null;
+  location_lat?: number | null;
+  location_lng?: number | null;
 }
 
 export interface VisitQuery {
@@ -28,11 +35,13 @@ export interface VisitQuery {
   to?: string;
   /** Planned / Confirmed / Completed / Missed or a physical status. */
   status?: string;
+  /** Only this DA's visits. Without it a DA gets every visit in their assigned Kebeles. */
+  da_id?: string;
   limit?: number;
   start?: number;
 }
 
-/** GET /api/v1/da-services/visits: visits the caller may see (a DA: their own), earliest first. */
+/** GET /api/v1/da-services/visits: visits the caller may see, earliest first. */
 export async function listVisits(q: VisitQuery = {}): Promise<{ items: ApiVisit[]; total: number }> {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(q)) if (value !== undefined && value !== "") query.set(key, String(value));
@@ -65,6 +74,9 @@ export function toVisitRecord(v: ApiVisit): VisitRecord {
     physicalStatus: v.physical_status,
   };
 }
+
+/** A DA acts only on their own visits; an unknown DA id (/me not read yet) counts as not theirs. Officers are not limited here. */
+export const canActOnVisit = (v: Pick<VisitRecord, "agent">, isDA: boolean, daId: string | null | undefined) => !isDA || v.agent === daId;
 
 /** Only these can be checked in; anything else gets "Only a Planned or Confirmed visit can be started." */
 export const canStartVisit = (v: Pick<VisitRecord, "physicalStatus">) => v.physicalStatus === "Planned" || v.physicalStatus === "Confirmed";
