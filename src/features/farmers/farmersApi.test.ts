@@ -5,6 +5,7 @@ import {
   apiPlotToPlot,
   apiVisitToVisit,
   describeFarmerError,
+  fetchFarmerLivestock,
   fetchFarmerPlots,
   fetchFarmerProfile,
   fetchFarmerVisits,
@@ -86,6 +87,14 @@ describe("farmer calls", () => {
       "/api/v1/da-services/farmers/FRM-000103/visits?limit=50&start=0",
       "/api/v1/da-services/farmers/FRM-000103/plots",
     ]);
+  });
+
+  it("reads the livestock of one farmer", async () => {
+    const animals = [{ animal: "cattle", count: 3 }];
+    fetchMock.mockResolvedValueOnce(json({ data: { livestock: animals } }));
+
+    await expect(fetchFarmerLivestock("FR-512145929324")).resolves.toEqual(animals);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/farmers/FR-512145929324/livestock");
   });
 });
 

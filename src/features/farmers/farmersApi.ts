@@ -136,6 +136,18 @@ export async function fetchFarmerPlots(farmerId: string): Promise<ApiPlot[]> {
   return res.data.plots;
 }
 
+/**
+ * One row of GET /farmers/{id}/livestock: a `kind: "submission"` with its `sections`, or a `kind: "record"` of a register.
+ * Each register has its own columns; livestockRecords.ts reads them.
+ */
+export type ApiFarmerLivestock = Record<string, unknown>;
+
+/** GET /farmers/{id}/livestock: every livestock submission and register record of the farmer. Takes the FR-… Farmer ID. */
+export async function fetchFarmerLivestock(farmerId: string): Promise<ApiFarmerLivestock[]> {
+  const res = await authRequest<{ data: { livestock: ApiFarmerLivestock[] } }>(farmerPath(farmerId, "livestock"));
+  return res.data.livestock;
+}
+
 // ---- Edit permission, queued updates and DA links ----
 
 /** GET /farmers/{id}/permissions: whether the caller may act on this farmer. */

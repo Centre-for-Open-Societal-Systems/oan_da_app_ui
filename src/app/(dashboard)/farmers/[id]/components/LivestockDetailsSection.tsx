@@ -26,9 +26,11 @@ export function LivestockDetailsSection({ tabs }: { tabs: LivestockDetailsTab[] 
               key={section.title}
               title={section.title}
               collapsible
-              defaultOpen={true}
+              // A flock's hatch can add dozens of records: the first few stay open, the rest one click away.
+              defaultOpen={index < 3}
               className={index === 0 ? "rounded-t-none rounded-b-xl border-t-0" : undefined}
             >
+              {section.note && <p className="mb-4 text-[13px] text-muted">{section.note}</p>}
               <dl className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
                 {section.fields.map((field) => (
                   <div key={`${field.key}-${field.label}`} className="min-w-0">

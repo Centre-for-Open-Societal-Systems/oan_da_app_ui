@@ -3,7 +3,7 @@ import { LivestockReportForm } from "./components/LivestockReportForm";
 
 export const metadata: Metadata = {
   title: "Submit Livestock Report | OpenAgriNet",
-  description: "Record a farmer's herd composition, animal health and vaccination, feeding and water, production and sales.",
+  description: "Record a farmer's animals, health events, vaccinations, breeding and vital events.",
 };
 
 export default function LivestockReportPage() {
