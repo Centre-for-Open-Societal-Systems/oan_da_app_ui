@@ -16,7 +16,7 @@ import { ExportButton } from "@/components/ui/ExportButton";
 import { cn } from "@/lib/utils";
 import { ALL_FARMERS_SEARCH, apiFarmerToFarmer, describeFarmerError, listFarmers } from "@/features/farmers";
 import { FarmerAvatar } from "@/features/farmers";
-import { StatusPill } from "@/features/farmers";
+import { farmerActivity, StatusPill } from "@/features/farmers";
 import {
   applyFilters,
   countActiveFilters,
@@ -39,7 +39,7 @@ import type { Farmer } from "@/features/farmers";
 
 const SEARCH_DEBOUNCE_MS = 400;
 
-const STATUS_ORDER = ["Verified", "Pending", "Flagged"];
+const STATUS_ORDER = ["Active", "Inactive"];
 
 /** Filter options with counts from the loaded rows; `order` fixes the list, otherwise first-seen order. */
 const optionsOf = (values: string[], order?: string[]): FilterOption[] =>
@@ -59,8 +59,8 @@ const EXPORT_COLUMNS: CsvColumn<Farmer>[] = [
   { header: "Land (ha)", value: (f) => (f.landUnknown ? "" : f.landHa) },
   { header: "Livestock", value: (f) => f.livestock },
   { header: "Livestock (heads)", value: (f) => f.livestockHeads },
-  { header: "Registered date", value: (f) => `${f.registeredAt} ${f.registeredTime}` },
-  { header: "Status", value: (f) => f.status },
+  { header: "Approved Date", value: (f) => `${f.registeredAt} ${f.registeredTime}` },
+  { header: "Status", value: (f) => farmerActivity(f.status) },
   { header: "Status reason", value: (f) => f.statusReason ?? "" },
 ];
 
@@ -106,7 +106,7 @@ export function FarmersTable() {
   const source = loading ? [] : loaded.rows;
 
   const kebeleOptions = optionsOf(source.map((f) => f.kebele));
-  const statusOptions = optionsOf(source.map((f) => f.status), STATUS_ORDER);
+  const statusOptions = optionsOf(source.map((f) => farmerActivity(f.status)), STATUS_ORDER);
   const filterFields: FilterFieldConfig[] = [
     { key: "kebele", label: "Kebele", allLabel: "All kebeles", placeholder: "All", options: kebeleOptions },
     { key: "status", label: "Status", allLabel: "All Status", placeholder: "All Status", options: statusOptions },
@@ -212,7 +212,7 @@ export function FarmersTable() {
               </th>
               <th className="px-4 py-3 font-semibold">Land</th>
               <th className="px-4 py-3 text-center font-semibold">Plots</th>
-              <th className="px-4 py-3 text-center font-semibold">Registered date</th>
+              <th className="px-4 py-3 text-center font-semibold">Approved Date</th>
               <th className="px-4 py-3 text-center font-semibold">
                 <FilterDropdown label="Status" allLabel="All Status" options={statusOptions} selected={filters.status} onApply={setColumnFilter("status")} />
               </th>
@@ -277,7 +277,7 @@ export function FarmersTable() {
                     {farmer.registeredTime && <span className="text-slate-600">- {farmer.registeredTime}</span>}
                   </td>
                   <td className="px-4 py-3.5 text-center">
-                    <StatusPill status={farmer.status} reason={farmer.statusReason} />
+                    <StatusPill status={farmerActivity(farmer.status)} reason={farmer.statusReason} />
                   </td>
                   <td className="px-4 py-3.5 text-center">
                     <RowAction href={`/farmers/${farmer.regId ?? farmer.id}`} icon="view">View</RowAction>

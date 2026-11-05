@@ -1,10 +1,12 @@
 import { Card } from "@/components/ui/Card";
 import { Pill } from "@/components/ui/Pill";
 import type { Farmer } from "@/features/farmers";
-import { FarmerAvatar } from "@/features/farmers";
+import { FarmerAvatar, farmerActivity } from "@/features/farmers";
 import { ProfileActionStrip } from "./ProfileActions";
 
 export function ProfileHeader({ farmer }: { farmer: Farmer }) {
+  const activity = farmerActivity(farmer.status);
+
   return (
     <Card className="overflow-hidden p-0 shadow-card">
       <div className="px-4 py-5">
@@ -16,11 +18,11 @@ export function ProfileHeader({ farmer }: { farmer: Farmer }) {
               <h1 className="text-[20px] font-semibold tracking-tight text-ink sm:text-[22px]">
                 Farmer profile - {farmer.name}
               </h1>
-              <Pill tone="green">
+              <Pill tone={activity === "Active" ? "green" : "slate"}>
                 <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                   <path d="M12 2l7 3v6c0 5-3.4 9.3-7 11-3.6-1.7-7-6-7-11V5l7-3zm-1 13.2l5-5-1.4-1.4-3.6 3.6-1.6-1.6L8 12.2l3 3z" />
                 </svg>
-                Active
+                {activity}
               </Pill>
             </div>
 
@@ -47,7 +49,7 @@ export function ProfileHeader({ farmer }: { farmer: Farmer }) {
                   <rect x="3" y="5" width="18" height="14" rx="2" />
                   <path d="M3 7l9 6 9-6" />
                 </svg>
-                {farmer.email}
+                {farmer.email || "NA"}
               </span>
             </div>
           </div>
