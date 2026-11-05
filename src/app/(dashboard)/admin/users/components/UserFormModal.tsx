@@ -99,7 +99,7 @@ export function UserFormModal({ mode, initial, subtitle, onClose, onSave }: User
   // The picked codes; "" means "not picked yet", which resolves to the first option once the areas are loaded.
   const [region, setRegion] = useState(initial?.regionScope ?? "");
   const [woreda, setWoreda] = useState(initial?.woredaScope ?? "");
-  const [effectiveFrom, setEffectiveFrom] = useState(initial ? parseDisplayDate(initial.effectiveFrom) : "");
+  const [effectiveFrom, setEffectiveFrom] = useState(initial ? parseDisplayDate(initial.effectiveFrom) : today);
   const [effectiveTo, setEffectiveTo] = useState(initial ? parseDisplayDate(initial.effectiveTo) : "");
   const [errors, setErrors] = useState<Errors>({});
 

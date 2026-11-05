@@ -38,6 +38,8 @@ export function FarmerPicker({ selected, onSelect, matches, query, showCount, on
             Change
           </button>
         </div>
+      ) : matches.length === 0 && !query.trim() ? (
+        <p className="rounded-lg border border-dashed border-slate-300 bg-surface px-4 py-5 text-center text-[14px] font-semibold text-ink">No farmer assigned</p>
       ) : matches.length === 0 ? (
         <div className="flex flex-col items-center gap-1 rounded-lg border border-dashed border-slate-300 bg-surface px-4 py-5 text-center">
           <p className="text-[14px] font-semibold text-ink">No farmers match &ldquo;{query.trim()}&rdquo;</p>

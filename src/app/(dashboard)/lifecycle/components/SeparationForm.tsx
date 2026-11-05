@@ -1,5 +1,6 @@
 "use client";
 
+import { todayIso } from "@/lib/utils";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -87,7 +88,7 @@ export function SeparationForm() {
                 </Select>
               </FormField>
               <FormField label="Last working day" htmlFor="lc-effective" required hint={error("effective")} hintTone="error">
-                <Input id="lc-effective" type="date" value={draft.effective} onChange={(e) => set("effective", e.target.value)} />
+                <Input id="lc-effective" type="date" min={todayIso()} value={draft.effective} onChange={(e) => set("effective", e.target.value)} />
               </FormField>
               <SegmentedField id="lc-notice" label="Notice period" options={NOTICE_OPTIONS} value={draft.notice ?? ""} onChange={(v) => set("notice", v)} tone={transition.tone} />
             </FormSection>

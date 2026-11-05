@@ -145,7 +145,7 @@ describe("mapping", () => {
     expect(Number.isNaN(plot.lat)).toBe(true);
 
     expect(apiVisitToVisit({ name: "DA-VIS-1", scheduled_at: "2026-10-15T16:30:00", physical_status: "Physical Visit Complete", visit_type: "Advisory", outcome: "Rust found", da_id: "DA-000003", completed_at: null }))
-      .toEqual({ title: "Advisory · Physical Visit Complete", summary: "Rust found", date: "15 Oct 2026", time: "16:30" });
+      .toEqual({ title: "Advisory · Completed", summary: "Rust found", date: "15 Oct 2026", time: "16:30" });
   });
 
   it("sends the Farmer ID for API farmers and the mock code for sample ones", () => {

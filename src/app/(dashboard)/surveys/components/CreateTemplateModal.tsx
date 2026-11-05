@@ -8,6 +8,7 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Checkbox } from "@/components/ui/Checkbox";
+import { todayIso } from "@/lib/utils";
 import {
   QUESTION_TYPES,
   SURVEY_LANGUAGES,
@@ -33,15 +34,15 @@ const blankQuestion = (id: number): TemplateQuestion => ({ id, prompt: "", type:
 export function CreateTemplateModal({ isOpen, onClose, onCreated }: CreateTemplateModalProps) {
   const created = useSurveyTemplatesStore((s) => s.created);
   const addSurvey = useSurveyTemplatesStore((s) => s.add);
-  const [draft, setDraft] = useState<TemplateInput>({
+  const [draft, setDraft] = useState<TemplateInput>(() => ({
     name: "",
     type: SURVEY_TYPES[0],
-    open: "",
+    open: todayIso(),
     close: "",
     languages: ["English", "Amharic"],
     targetFarmers: 20,
     questions: [blankQuestion(1)],
-  });
+  }));
   const [showErrors, setShowErrors] = useState(false);
   const errors = templateErrors(draft);
 
@@ -95,7 +96,7 @@ export function CreateTemplateModal({ isOpen, onClose, onCreated }: CreateTempla
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <FormField label="Opens" htmlFor="tpl-open" required>
-            <Input id="tpl-open" type="date" className="h-10" value={draft.open} onChange={(e) => patch({ open: e.target.value })} />
+            <Input id="tpl-open" type="date" min={todayIso()} className="h-10" value={draft.open} onChange={(e) => patch({ open: e.target.value })} />
           </FormField>
           <FormField label="Closes" htmlFor="tpl-close" required>
             <Input id="tpl-close" type="date" className="h-10" value={draft.close} min={draft.open || undefined} onChange={(e) => patch({ close: e.target.value })} />

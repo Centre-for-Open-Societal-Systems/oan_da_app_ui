@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuthStore } from "@/store/useAuthStore";
 import { ApiError } from "@/lib/api";
-import { describeCropSownError, fetchGeoLevelValues, fetchIntakeForm, listFarmerCrops, saveFarmerCrop } from "./cropSownApi";
+import { describeCropSownError, fetchGeoLevelValues, fetchIntakeForm, isCropsNotFound, listFarmerCrops, saveFarmerCrop } from "./cropSownApi";
 
 // Minimal in-memory Storage so the persisted auth store runs under Node.
 class MemoryStorage implements Storage {
@@ -60,5 +60,13 @@ describe("Crop Sown API", () => {
   it("words the error for the status", () => {
     expect(describeCropSownError(new ApiError("x", 404))).toBe("Farmer or submission not found.");
     expect(describeCropSownError(new ApiError("bad field", 400))).toBe("bad field");
+  });
+});
+
+describe("isCropsNotFound", () => {
+  it("is true only for a 404", () => {
+    expect(isCropsNotFound(new ApiError("Farmer not found.", 404))).toBe(true);
+    expect(isCropsNotFound(new ApiError("Registry down", 503))).toBe(false);
+    expect(isCropsNotFound(new Error("offline"))).toBe(false);
   });
 });

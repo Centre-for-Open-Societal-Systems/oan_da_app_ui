@@ -1,5 +1,6 @@
 "use client";
 
+import { todayIso } from "@/lib/utils";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
@@ -248,7 +249,7 @@ export function AssignmentsWorkspace() {
     openForm({ daId: r.daId, woreda: r.woredaCode ?? "", kebele: r.kebeleCode ?? "", effectiveDate: isoToday(), reason: "", mode: r.mode ?? "Automatic" });
 
   // Header "Assign agent": every field starts empty and the officer fills it in, agent included.
-  const openNewAssign = () => openForm({ daId: "", woreda: rows.find((r) => r.woredaCode)?.woredaCode ?? "", kebele: "", effectiveDate: "", reason: "", mode: "", pickAgent: true });
+  const openNewAssign = () => openForm({ daId: "", woreda: rows.find((r) => r.woredaCode)?.woredaCode ?? "", kebele: "", effectiveDate: isoToday(), reason: "", mode: "", pickAgent: true });
 
   const draftAgent = draft ? rows.find((r) => r.daId === draft.daId) : undefined;
   const draftKebeles = kebeles && kebeles.woreda === draft?.woreda ? kebeles : null;
@@ -480,7 +481,7 @@ export function AssignmentsWorkspace() {
               </Select>
             </FormField>
             <FormField label="Effective date" htmlFor="as-date" required>
-              <Input id="as-date" type="date" value={draft.effectiveDate} onChange={(e) => setDraft({ ...draft, effectiveDate: e.target.value })} />
+              <Input id="as-date" type="date" min={todayIso()} value={draft.effectiveDate} onChange={(e) => setDraft({ ...draft, effectiveDate: e.target.value })} />
             </FormField>
             <FormField label="Farmer association" htmlFor="as-mode" required hint={draft.mode === "Automatic" ? "Farmers in the kebele task list are linked automatically." : draft.mode === "Manual" ? "You select the farmers after commit." : undefined}>
               <Select id="as-mode" value={draft.mode} onChange={(e) => setDraft({ ...draft, mode: e.target.value as AssociationMode | "" })}><option value="">Select farmer association</option><option>Automatic</option><option>Manual</option></Select>

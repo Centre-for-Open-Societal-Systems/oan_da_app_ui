@@ -1,5 +1,6 @@
 "use client";
 
+import { todayIso } from "@/lib/utils";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -86,7 +87,7 @@ export function RetirementForm() {
                 </Select>
               </FormField>
               <FormField label="Last working day" htmlFor="lc-effective" required hint={error("effective")} hintTone="error">
-                <Input id="lc-effective" type="date" value={draft.effective} onChange={(e) => set("effective", e.target.value)} />
+                <Input id="lc-effective" type="date" min={todayIso()} value={draft.effective} onChange={(e) => set("effective", e.target.value)} />
               </FormField>
               <LockedField id="lc-since" label="Service since" value={formatDate(SERVICE_SINCE)} />
               <LockedField id="lc-length" label="Length of service" value={draft.effective ? lengthOfService(draft.effective) : "Set the last working day"} />
