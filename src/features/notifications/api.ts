@@ -61,24 +61,24 @@ export interface BroadcastResult {
   duplicate: boolean;
   /** How many DAs received it. */
   recipients: number;
-  /** The Woreda it went to (its name). */
-  woreda: string;
+  /** The code of the Woreda it went to; show the name on screen. */
+  woredaCode: string;
 }
 
 /**
  * POST /da-services/notifications/broadcast — send an in-app broadcast to every DA in a Woreda.
  *
- * Roles: DA / Communications Officer / Admin, and the Woreda must be inside the caller's scope.
+ * Roles: Communications Officer / Admin, and the Woreda must be inside the caller's scope.
  *
- * scope_value is the Woreda NAME (e.g. "Bako Tibe"): the caller's RBAC woreda_scope is stored by name,
- * so the area CODE from GET /master/areas (e.g. "ET04-W01") is rejected with 403. client_op_id makes the
+ * scope_value is the Woreda CODE from Master Data (e.g. "ET120205"), never its name: RBAC woreda_scope holds area
+ * codes, and recipients are matched on them exactly. A Woreda with no active DA is a 400. client_op_id makes the
  * call idempotent — the same id returns the first result with duplicate=true instead of sending again.
  */
 export async function broadcastToWoreda(input: {
   title: string;
   body?: string;
   href?: string;
-  woreda: string;
+  woredaCode: string;
   clientOpId?: string;
 }): Promise<BroadcastResult> {
   interface Resp {
@@ -91,9 +91,9 @@ export async function broadcastToWoreda(input: {
       body: input.body ?? "",
       href: input.href ?? "/notifications",
       scope: "woreda",
-      scope_value: input.woreda,
+      scope_value: input.woredaCode,
       client_op_id: input.clientOpId ?? crypto.randomUUID(),
     },
   });
-  return { broadcastId: res.data.broadcast_id, duplicate: res.data.duplicate, recipients: res.data.recipients, woreda: res.data.scope_value };
+  return { broadcastId: res.data.broadcast_id, duplicate: res.data.duplicate, recipients: res.data.recipients, woredaCode: res.data.scope_value };
 }

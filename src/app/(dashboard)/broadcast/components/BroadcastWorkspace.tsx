@@ -10,13 +10,29 @@ import { Textarea } from "@/components/ui/Textarea";
 import { Select } from "@/components/ui/Select";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { SmsPreview } from "@/features/communication";
-import { BROADCAST_WOREDAS, RECIPIENT_GROUPS, SIGNALS, audienceSize, type RecipientGroup, type SignalSource } from "@/features/communication";
+import { RECIPIENT_GROUPS, SIGNALS, type RecipientGroup, type SignalSource } from "@/features/communication";
+import { useGeoCascade, type GeoField, type GeoLevel } from "@/features/assignments";
 import { broadcastToWoreda } from "@/features/notifications";
 import { useAuthStore } from "@/store/useAuthStore";
 import { FileDropInput } from "@/components/ui/FileDropInput";
 import { ReceivedBroadcasts } from "./ReceivedBroadcasts";
 
 const SOURCES: SignalSource[] = ["Knowledge", "Emergency", "Weather", "Informational"];
+
+function GeoSelect({ field, label, level, hint, onSelect, onRetry }: { field: GeoField; label: string; level: GeoLevel; hint?: string; onSelect: (code: string) => void; onRetry: () => void }) {
+  const id = `bc-${field}`;
+  const failed = level.status === "error";
+  const placeholder = level.status === "loading" ? "Loading…" : failed ? "Could not load" : `Select ${label}`;
+  return (
+    <FormField label={label} htmlFor={id} required hint={level.error ?? hint} hintTone={failed ? "error" : "muted"}>
+      <Select id={id} value={level.selected?.code ?? ""} disabled={level.status !== "ready"} onChange={(e) => onSelect(e.target.value)}>
+        <option value="">{placeholder}</option>
+        {level.options.map((o) => <option key={o.code} value={o.code}>{o.name}</option>)}
+      </Select>
+      {failed && <button type="button" onClick={onRetry} className="self-start text-[12.5px] font-medium text-brand-green hover:underline">Retry</button>}
+    </FormField>
+  );
+}
 
 // FR-10 / §4.4: Communications Officer crafts a message, picks audience + channels, dispatches.
 // In-app (POST /notifications/broadcast → the DAs' bell) is the only live channel; SMS/Telegram are
@@ -29,9 +45,9 @@ export function BroadcastWorkspace() {
 
   const [title, setTitle] = useState(signal ? signal.title : "");
   const [source, setSource] = useState<SignalSource>(signal?.source ?? "Informational");
-  const [message, setMessage] = useState(signal ? `${signal.detail} — Bako Tibe Woreda` : "");
+  const [message, setMessage] = useState(signal ? signal.detail : "");
   // Audience is always a whole Woreda. A DA (and any weather/emergency signal) defaults to farmers; officers default to the DA network.
-  const [woreda, setWoreda] = useState(BROADCAST_WOREDAS[0]);
+  const { geo, select, retry } = useGeoCascade();
   const [group, setGroup] = useState<RecipientGroup>(signal?.source === "Weather" || signal?.source === "Emergency" || role === "DA" ? "Farmers" : "Development Agents");
   // In-app = the real notification-bell broadcast. Checked by default; SMS/Telegram are disabled stubs.
   const [inApp, setInApp] = useState(true);
@@ -41,7 +57,8 @@ export function BroadcastWorkspace() {
   const [evidence, setEvidence] = useState<File[]>([]);
 
   const toDAs = group === "Development Agents";
-  const size = audienceSize(group, woreda);
+  const woreda = geo.woreda.selected;
+  const woredaLabel = woreda ? `${woreda.name} Woreda` : "the selected Woreda";
 
   const dispatch = async () => {
     setError(null);
@@ -51,24 +68,25 @@ export function BroadcastWorkspace() {
       setError("In-app delivery reaches Development Agents only. Choose “All Development Agents”, or wait for SMS / Telegram.");
       return;
     }
+    if (!woreda) return;
     setSending(true);
     try {
-      const res = await broadcastToWoreda({ title: title.trim(), body: message.trim(), href: "/notifications", woreda });
+      const res = await broadcastToWoreda({ title: title.trim(), body: message.trim(), href: "/notifications", woredaCode: woreda.code });
       setNotice(
         res.duplicate
-          ? `Already sent to ${woreda} Woreda — no duplicate created.`
-          : `Broadcast delivered to ${res.recipients} Development Agent${res.recipients === 1 ? "" : "s"} in ${woreda} Woreda — it is now in their notification bell.`,
+          ? `Already sent to ${woreda.name} Woreda — no duplicate created.`
+          : `Broadcast delivered to ${res.recipients} Development Agent${res.recipients === 1 ? "" : "s"} in ${woreda.name} Woreda — it is now in their notification bell.`,
       );
       setTitle(""); setMessage(""); setEvidence([]);
     } catch (err) {
-      // ApiError.message already carries the backend's reason (e.g. "Woreda X is not in your scope").
+      // ApiError.message already carries the backend's reason (e.g. "Woreda X is not in your scope", or no DA is assigned there).
       setError(err instanceof Error ? err.message : "Could not send the broadcast. Try again.");
     } finally {
       setSending(false);
     }
   };
 
-  const canSend = canDispatch && !sending && inApp && title.trim().length >= 3 && message.trim().length >= 5;
+  const canSend = canDispatch && Boolean(woreda) && !sending && inApp && title.trim().length >= 3 && message.trim().length >= 5;
 
   return (
     <>
@@ -85,10 +103,10 @@ export function BroadcastWorkspace() {
               <Select id="bc-source" value={source} onChange={(e) => setSource(e.target.value as SignalSource)}>{SOURCES.map((s) => <option key={s}>{s}</option>)}</Select>
             </FormField>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FormField label="Woreda" htmlFor="bc-woreda" required hint="Broadcasts reach a whole Woreda.">
-                <Select id="bc-woreda" value={woreda} onChange={(e) => setWoreda(e.target.value)}>{BROADCAST_WOREDAS.map((w) => <option key={w} value={w}>{w}</option>)}</Select>
-              </FormField>
-              <FormField label="Recipients" htmlFor="bc-group" required hint={`${size.toLocaleString()} ${toDAs ? "Development Agents" : "farmers"} in ${woreda} Woreda${toDAs ? "" : ". In-app delivery reaches Development Agents only."}`}>
+              <GeoSelect field="region" label="Region" level={geo.region} onSelect={(code) => select("region", code)} onRetry={() => retry("region")} />
+              <GeoSelect field="zone" label="Zone" level={geo.zone} onSelect={(code) => select("zone", code)} onRetry={() => retry("zone")} />
+              <GeoSelect field="woreda" label="Woreda" level={geo.woreda} hint="Broadcasts reach a whole Woreda." onSelect={(code) => select("woreda", code)} onRetry={() => retry("woreda")} />
+              <FormField label="Recipients" htmlFor="bc-group" required hint={`${toDAs ? "Development Agents" : "Farmers"} in ${woredaLabel}${toDAs ? "" : ". In-app delivery reaches Development Agents only."}`}>
                 <Select id="bc-group" value={group} onChange={(e) => setGroup(e.target.value as RecipientGroup)}>{RECIPIENT_GROUPS.map((g) => <option key={g} value={g}>{g === "Farmers" ? "All farmers" : "All Development Agents"}</option>)}</Select>
               </FormField>
             </div>
@@ -113,16 +131,16 @@ export function BroadcastWorkspace() {
               <p className="mt-1.5 text-[12px] text-muted">In-app delivers to the Development Agents&apos; notification bell (live). SMS / Telegram are not wired yet.</p>
             </fieldset>
             <FileDropInput label="Evidence" actionLabel="Upload evidence" hint="Field photos or documents · PDF, JPG or PNG up to 5 MB each" files={evidence} onChange={setEvidence} />
-            {canDispatch && !canSend && !sending && <p className="text-right text-[12.5px] text-muted">Complete every field marked * to enable Send to {size.toLocaleString()}.</p>}
+            {canDispatch && !canSend && !sending && <p className="text-right text-[12.5px] text-muted">Complete every field marked * to enable Send.</p>}
             <div className="flex items-center justify-end gap-2">
               <button type="button" onClick={() => { setTitle(""); setMessage(""); setEvidence([]); }} className="inline-flex shrink-0 whitespace-nowrap h-10 items-center rounded-md border border-zinc-200 bg-white px-4 text-[14px] font-medium text-ink-soft hover:bg-zinc-50">Clear</button>
               <button type="button" disabled={!canSend} onClick={dispatch} className="inline-flex shrink-0 whitespace-nowrap h-10 items-center gap-2 rounded-md bg-brand-green px-4 text-[14px] font-semibold text-white hover:bg-brand-green-dark disabled:opacity-50">
                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" /></svg>
-                {sending ? "Sending…" : `Send to ${size.toLocaleString()}`}
+                {sending ? "Sending…" : "Send"}
               </button>
             </div>
           </div>
-          <SmsPreview text={message} sender={source === "Knowledge" ? "OpenAgriNet" : `${woreda} Woreda`} />
+          <SmsPreview text={message} sender={source === "Knowledge" ? "OpenAgriNet" : woreda ? `${woreda.name} Woreda` : "Woreda"} />
         </div>
       </Card>
 
