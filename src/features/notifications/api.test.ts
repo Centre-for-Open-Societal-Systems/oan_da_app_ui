@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuthStore } from "@/store/useAuthStore";
-import { listNotifications, markAllNotificationsRead, markNotificationRead } from "./api";
+import { broadcastToWoreda, listNotifications, markAllNotificationsRead, markNotificationRead } from "./api";
 
 // Minimal in-memory Storage so the persisted auth store runs under Node.
 class MemoryStorage implements Storage {
@@ -51,5 +51,16 @@ describe("notifications api", () => {
       ["/api/v1/da-services/notifications/DA-NOTIF-0001/read", "POST"],
       ["/api/v1/da-services/notifications/read-all", "POST"],
     ]);
+  });
+
+  it("broadcasts to a Woreda by its code", async () => {
+    fetchMock.mockResolvedValueOnce(json(200, { data: { broadcast_id: "B-1", duplicate: false, recipients: 3, scope: "woreda", scope_value: "ET120205" } }));
+
+    const result = await broadcastToWoreda({ title: "Title", body: "Message", woredaCode: "ET120205", clientOpId: "op-1" });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/da-services/notifications/broadcast");
+    expect(JSON.parse(String(init?.body))).toMatchObject({ scope: "woreda", scope_value: "ET120205", client_op_id: "op-1" });
+    expect(result).toEqual({ broadcastId: "B-1", duplicate: false, recipients: 3, woredaCode: "ET120205" });
   });
 });
