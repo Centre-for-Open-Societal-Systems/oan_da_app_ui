@@ -6,17 +6,19 @@ import { useSidebar } from "@/contexts/SidebarContext";
 import { cn } from "@/lib/utils";
 import { UserProfile } from "@/components/layout/UserProfile";
 import { LanguageSelector } from "@/components/layout/LanguageSelector";
-import { SearchModal, type FarmerSearchHit } from "@/components/layout/SearchModal";
+import { SearchModal, type SearchFn } from "@/components/layout/SearchModal";
 import { pageTitleFor } from "@/lib/rbac";
 
 interface HeaderProps {
   /** The notification bell; it talks to the backend, so the layout passes it in (components never import features). */
   notifications?: ReactNode;
-  /** Global search's farmer lookup; the layout passes it in for the same reason. */
-  searchFarmers?: (searchText: string) => Promise<FarmerSearchHit[]>;
+  /** Global search's farmer, agent and kebele lookups; the layout passes them in for the same reason. */
+  searchFarmers?: SearchFn;
+  searchAgents?: SearchFn;
+  searchKebeles?: SearchFn;
 }
 
-export function Header({ notifications, searchFarmers }: HeaderProps) {
+export function Header({ notifications, searchFarmers, searchAgents, searchKebeles }: HeaderProps) {
   const { toggle, isOpen, toggleMobile } = useSidebar();
   const pathname = usePathname();
   const pageTitle = pageTitleFor(pathname);
@@ -80,7 +82,7 @@ export function Header({ notifications, searchFarmers }: HeaderProps) {
           </svg>
         </button>
 
-        <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} searchFarmers={searchFarmers} />
+        <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} searchFarmers={searchFarmers} searchAgents={searchAgents} searchKebeles={searchKebeles} />
 
         {/* Notifications */}
         {notifications}

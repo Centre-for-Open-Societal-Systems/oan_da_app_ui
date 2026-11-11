@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Banner } from "@/components/ui/Banner";
@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/Checkbox";
 import { SmsPreview } from "@/features/communication";
 import { BROADCAST_WOREDAS, RECIPIENT_GROUPS, SIGNALS, audienceSize, type RecipientGroup, type SignalSource } from "@/features/communication";
 import { broadcastToWoreda } from "@/features/notifications";
+import { loadScopeAreas } from "@/features/assignments";
 import { useAuthStore } from "@/store/useAuthStore";
 import { FileDropInput } from "@/components/ui/FileDropInput";
 import { ReceivedBroadcasts } from "./ReceivedBroadcasts";
@@ -23,7 +24,11 @@ const SOURCES: SignalSource[] = ["Knowledge", "Emergency", "Weather", "Informati
 // shown but disabled until a gateway is wired.
 export function BroadcastWorkspace() {
   const role = useAuthStore((s) => s.role);
-  const canDispatch = role === "CommsOfficer" || role === "Admin" || role === "DA";
+  const canDispatch = role === "CommsOfficer" || role === "Admin" || role === "DA" || role === "Supervisor";
+  // A Supervisor broadcasts to their own Woreda only (the Woreda on their /me scope).
+  const isSupervisor = role === "Supervisor";
+  const supervisorWoreda = useAuthStore((s) => (s.role === "Supervisor" ? (s.profile?.scope?.woredas?.[0] ?? null) : null));
+  const [supervisorWoredaName, setSupervisorWoredaName] = useState<string | null>(null);
   const params = useSearchParams();
   const signal = SIGNALS.find((s) => s.id === params.get("signal"));
 
@@ -31,7 +36,20 @@ export function BroadcastWorkspace() {
   const [source, setSource] = useState<SignalSource>(signal?.source ?? "Informational");
   const [message, setMessage] = useState(signal ? `${signal.detail} — Bako Tibe Woreda` : "");
   // Audience is always a whole Woreda. A DA (and any weather/emergency signal) defaults to farmers; officers default to the DA network.
-  const [woreda, setWoreda] = useState(BROADCAST_WOREDAS[0]);
+  const [pickedWoreda, setWoreda] = useState(BROADCAST_WOREDAS[0]);
+  // A Supervisor's Woreda is fixed: their own code is what goes out.
+  const woreda = isSupervisor && supervisorWoreda ? supervisorWoreda : pickedWoreda;
+  useEffect(() => {
+    if (!supervisorWoreda) return;
+    let live = true;
+    loadScopeAreas()
+      .then(({ woredas }) => live && setSupervisorWoredaName(woredas.find((w) => w.code === supervisorWoreda)?.name_en ?? null))
+      .catch(() => undefined); // The code is shown when the name cannot be read.
+    return () => {
+      live = false;
+    };
+  }, [supervisorWoreda]);
+  const woredaLabel = isSupervisor && supervisorWoreda ? (supervisorWoredaName ?? supervisorWoreda) : woreda;
   const [group, setGroup] = useState<RecipientGroup>(signal?.source === "Weather" || signal?.source === "Emergency" || role === "DA" ? "Farmers" : "Development Agents");
   // In-app = the real notification-bell broadcast. Checked by default; SMS/Telegram are disabled stubs.
   const [inApp, setInApp] = useState(true);
@@ -42,6 +60,8 @@ export function BroadcastWorkspace() {
 
   const toDAs = group === "Development Agents";
   const size = audienceSize(group, woreda);
+  // The sample audience counts know only the demo Woredas; a Supervisor's real Woreda has no count yet.
+  const sizeText = isSupervisor ? "all" : size.toLocaleString();
 
   const dispatch = async () => {
     setError(null);
@@ -56,8 +76,8 @@ export function BroadcastWorkspace() {
       const res = await broadcastToWoreda({ title: title.trim(), body: message.trim(), href: "/notifications", woreda });
       setNotice(
         res.duplicate
-          ? `Already sent to ${woreda} Woreda — no duplicate created.`
-          : `Broadcast delivered to ${res.recipients} Development Agent${res.recipients === 1 ? "" : "s"} in ${woreda} Woreda — it is now in their notification bell.`,
+          ? `Already sent to ${woredaLabel} Woreda — no duplicate created.`
+          : `Broadcast delivered to ${res.recipients} Development Agent${res.recipients === 1 ? "" : "s"} in ${woredaLabel} Woreda — it is now in their notification bell.`,
       );
       setTitle(""); setMessage(""); setEvidence([]);
     } catch (err) {
@@ -68,7 +88,7 @@ export function BroadcastWorkspace() {
     }
   };
 
-  const canSend = canDispatch && !sending && inApp && title.trim().length >= 3 && message.trim().length >= 5;
+  const canSend = canDispatch && (!isSupervisor || !!supervisorWoreda) && !sending && inApp && title.trim().length >= 3 && message.trim().length >= 5;
 
   return (
     <>
@@ -78,17 +98,23 @@ export function BroadcastWorkspace() {
 
       <Card className="shadow-card">
         <h2 className="text-[15px] font-semibold text-ink">Compose</h2>
-        {!canDispatch && <p className="mt-1 text-[12.5px] text-muted">Only a Development Agent, Communications Officer or Administrator can dispatch. You can preview.</p>}
+        {!canDispatch && <p className="mt-1 text-[12.5px] text-muted">Only a Development Agent, Supervisor, Communications Officer or Administrator can dispatch. You can preview.</p>}
         <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_280px]">
           <div className="flex flex-col gap-4">
             <FormField label="Signal source" htmlFor="bc-source" required hint="Weather appears only as a source feeding this engine.">
               <Select id="bc-source" value={source} onChange={(e) => setSource(e.target.value as SignalSource)}>{SOURCES.map((s) => <option key={s}>{s}</option>)}</Select>
             </FormField>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FormField label="Woreda" htmlFor="bc-woreda" required hint="Broadcasts reach a whole Woreda.">
-                <Select id="bc-woreda" value={woreda} onChange={(e) => setWoreda(e.target.value)}>{BROADCAST_WOREDAS.map((w) => <option key={w} value={w}>{w}</option>)}</Select>
-              </FormField>
-              <FormField label="Recipients" htmlFor="bc-group" required hint={`${size.toLocaleString()} ${toDAs ? "Development Agents" : "farmers"} in ${woreda} Woreda${toDAs ? "" : ". In-app delivery reaches Development Agents only."}`}>
+              {isSupervisor ? (
+                <FormField label="Woreda" htmlFor="bc-woreda" required hint={supervisorWoreda ? "Supervisors broadcast to their own Woreda." : "No Woreda on your account yet."}>
+                  <Input id="bc-woreda" value={supervisorWoreda ? woredaLabel : ""} readOnly disabled />
+                </FormField>
+              ) : (
+                <FormField label="Woreda" htmlFor="bc-woreda" required hint="Broadcasts reach a whole Woreda.">
+                  <Select id="bc-woreda" value={woreda} onChange={(e) => setWoreda(e.target.value)}>{BROADCAST_WOREDAS.map((w) => <option key={w} value={w}>{w}</option>)}</Select>
+                </FormField>
+              )}
+              <FormField label="Recipients" htmlFor="bc-group" required hint={`${sizeText} ${toDAs ? "Development Agents" : "farmers"} in ${woredaLabel} Woreda${toDAs ? "" : ". In-app delivery reaches Development Agents only."}`}>
                 <Select id="bc-group" value={group} onChange={(e) => setGroup(e.target.value as RecipientGroup)}>{RECIPIENT_GROUPS.map((g) => <option key={g} value={g}>{g === "Farmers" ? "All farmers" : "All Development Agents"}</option>)}</Select>
               </FormField>
             </div>
@@ -113,16 +139,16 @@ export function BroadcastWorkspace() {
               <p className="mt-1.5 text-[12px] text-muted">In-app delivers to the Development Agents&apos; notification bell (live). SMS / Telegram are not wired yet.</p>
             </fieldset>
             <FileDropInput label="Evidence" actionLabel="Upload evidence" hint="Field photos or documents · PDF, JPG or PNG up to 5 MB each" files={evidence} onChange={setEvidence} />
-            {canDispatch && !canSend && !sending && <p className="text-right text-[12.5px] text-muted">Complete every field marked * to enable Send to {size.toLocaleString()}.</p>}
+            {canDispatch && !canSend && !sending && <p className="text-right text-[12.5px] text-muted">Complete every field marked * to enable Send to {sizeText}.</p>}
             <div className="flex items-center justify-end gap-2">
               <button type="button" onClick={() => { setTitle(""); setMessage(""); setEvidence([]); }} className="inline-flex shrink-0 whitespace-nowrap h-10 items-center rounded-md border border-zinc-200 bg-white px-4 text-[14px] font-medium text-ink-soft hover:bg-zinc-50">Clear</button>
               <button type="button" disabled={!canSend} onClick={dispatch} className="inline-flex shrink-0 whitespace-nowrap h-10 items-center gap-2 rounded-md bg-brand-green px-4 text-[14px] font-semibold text-white hover:bg-brand-green-dark disabled:opacity-50">
                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" /></svg>
-                {sending ? "Sending…" : `Send to ${size.toLocaleString()}`}
+                {sending ? "Sending…" : `Send to ${sizeText}`}
               </button>
             </div>
           </div>
-          <SmsPreview text={message} sender={source === "Knowledge" ? "OpenAgriNet" : `${woreda} Woreda`} />
+          <SmsPreview text={message} sender={source === "Knowledge" ? "OpenAgriNet" : `${woredaLabel} Woreda`} />
         </div>
       </Card>
 

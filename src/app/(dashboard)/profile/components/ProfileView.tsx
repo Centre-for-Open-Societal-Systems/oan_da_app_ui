@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { PageLoader } from "@/components/ui/PageLoader";
 import { AGENT_PROFILE } from "@/features/farmers";
 import { cancelChangeRequest, changedFields, describeProfileError, fetchMyProfile, submitChangeRequest, type ChangeRequest, type DaProfile, type MyProfile, type ProfileChanges } from "@/features/profile";
+import { ROLE_LABELS } from "@/lib/rbac";
 import { useAuthStore } from "@/store/useAuthStore";
 import { AgentHeader, type AgentHeaderInfo } from "./AgentHeader";
 import { AgentStats } from "./AgentStats";
@@ -96,11 +97,21 @@ export function ProfileView() {
   };
 
   const my = loaded?.data ?? null;
-  // A DA whose registry profile could not be read still sees their own identity from /me, never the sample.
+  // A DA whose registry profile could not be read still sees their own identity from /me, never the sample. Other
+  // signed-in roles (a Supervisor, …) see their own name with their designation from /me too.
   const headerInfo: AgentHeaderInfo = my
     ? headerFromProfile(my.profile)
-    : isDa
-      ? { name: authUser?.name ?? "—", role: "Development Agent", agentId: authProfile?.daId ?? "—", location: authProfile?.scopeLabel ?? "—", email: authUser?.email ?? "—", phone: "—", joinedOn: "—", status: "Active" }
+    : isDa || authUser
+      ? {
+          name: authUser?.name ?? "—",
+          role: isDa ? "Development Agent" : (authProfile?.roleLabel ?? ROLE_LABELS[role]),
+          agentId: authProfile?.daId ?? authUser?.id ?? "—",
+          location: authProfile?.scopeLabel ?? "—",
+          email: authUser?.email ?? "—",
+          phone: "—",
+          joinedOn: "—",
+          status: "Active",
+        }
       : AGENT_PROFILE;
   const openRequests = my?.pending_requests ?? [];
 

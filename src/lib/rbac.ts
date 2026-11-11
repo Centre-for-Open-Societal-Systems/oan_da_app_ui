@@ -90,8 +90,9 @@ export const NAV_GROUPS: NavGroup[] = [
     title: "Communication",
     items: [
       { title: "Knowledge Base", href: "/knowledge", roles: ALL, part: 1 },
-      { title: "Broadcast", href: "/broadcast", roles: ["DA", "CommsOfficer", "Admin"], part: 1 },
-      { title: "Alerts", href: "/alerts", roles: ["CommsOfficer", "Admin", "Supervisor"], part: 1 },
+      { title: "Broadcast", href: "/broadcast", roles: ["DA", "Supervisor", "CommsOfficer", "Admin"], part: 1 },
+      // The Supervisor broadcasts to their Woreda from Broadcast instead of triaging Alerts.
+      { title: "Alerts", href: "/alerts", roles: ["CommsOfficer", "Admin"], part: 1 },
       // Admin maintains the directory; DAs open it from My Teams.
       { title: "Advisors", href: "/advisors", roles: ["Admin"], part: 1 },
     ],
@@ -175,6 +176,7 @@ export const PAGE_TITLES: { prefix: string; title: string }[] = [
   { prefix: "/performance", title: "My Performance" },
   { prefix: "/reviews/history", title: "Review History" },
   { prefix: "/reviews", title: "Reviews" },
+  { prefix: "/surveys/templates/", title: "Survey Template" },
   { prefix: "/surveys/", title: "Survey Capture" },
   { prefix: "/surveys", title: "Surveys" },
   { prefix: "/training/agents", title: "Agent Training" },

@@ -54,6 +54,8 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
   const accountName = useAuthStore((s) => s.user?.name);
   const agent = useAuthStore((s) => s.profile?.agent);
   const self = useMemo(() => selfSubmitter(agent, accountName), [agent, accountName]);
+  // A Supervisor's grievance is in their own Woreda: Region, Zone and Woreda come from the /me scope.
+  const supervisorWoreda = useAuthStore((s) => (s.role === "Supervisor" ? (s.profile?.scope?.woredas?.[0] ?? null) : null));
 
   const [forWhom, setForWhom] = useState<"farmer" | "me">(farmerId ? "farmer" : "me");
   // Fixed when launched from a farmer profile, otherwise typed in.
@@ -274,7 +276,7 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
             </FormField>
           </div>
 
-          {selfAsDa ? <DaKebele woredaCode={self.woredaCode} kebeleName={self.kebeleName} onChange={pickKebele} /> : <KebelePicker onChange={pickKebele} />}
+          {selfAsDa ? <DaKebele woredaCode={self.woredaCode} kebeleName={self.kebeleName} onChange={pickKebele} /> : <KebelePicker onChange={pickKebele} woredaCode={supervisorWoreda} />}
 
           <FormField label="Subject" htmlFor="grv-subject" required {...minLengthNote(subject, 3)}>
             <Input id="grv-subject" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Short title" />
