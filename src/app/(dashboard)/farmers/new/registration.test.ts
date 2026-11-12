@@ -86,6 +86,25 @@ describe("validateStep", () => {
     expect(validateStep("household", { ...filled, household_size: "" })).toEqual({ household_size: "Household size is required when members are listed." });
   });
 
+  it("needs the household size to equal the farmer plus the members listed, as the registry does", () => {
+    expect(validateStep("household", filled)).toEqual({});
+    expect(validateStep("household", { ...filled, household_size: "4", members: [] })).toEqual({
+      household_size: "Household size is 4, but 1 person is listed (the farmer plus each member). Add every member, or change the size to 1.",
+    });
+    expect(validateStep("household", { ...filled, household_size: "1", members: [] })).toEqual({});
+    expect(validateStep("household", { ...filled, household_size: "", members: [] })).toEqual({});
+  });
+
+  it("needs all five details of a listed member, as the registry does", () => {
+    const member = { first_name: "Almaz", grandfather_name: "", gender: "", date_of_birth: "", relationship: "" };
+    expect(validateStep("household", { ...filled, household_size: "2", members: [member] })).toEqual({
+      "members.0.grandfather_name": "Grandfather's name is required.",
+      "members.0.gender": "Gender is required.",
+      "members.0.date_of_birth": "Date of birth is required.",
+      "members.0.relationship": "Relationship is required.",
+    });
+  });
+
   it("needs the uploaded ID document", () => {
     expect(validateStep("document", { ...filled, document: null })).toEqual({ document: "Upload the farmer's ID document." });
   });

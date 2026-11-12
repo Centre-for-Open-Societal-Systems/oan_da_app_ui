@@ -265,8 +265,9 @@ export function LivestockReportForm() {
           <LivestockFieldInput
             key={id}
             id={id}
-            field={field}
-            value={field.readOnly ? readOnlyValue(field, row) : (row[field.key] ?? "")}
+            // Farmer ID comes from the search even when the live form does not mark it read-only: shown, never typed.
+            field={field.fromUrl ? { ...field, readOnly: true } : field}
+            value={field.readOnly || field.fromUrl ? readOnlyValue(field, row) : (row[field.key] ?? "")}
             onChange={(v) => setRow(section.id, index, { [field.key]: v })}
             error={errors[id]}
             animals={animals}

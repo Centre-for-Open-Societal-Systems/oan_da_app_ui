@@ -35,7 +35,8 @@ interface WizardDraft {
   savedAt: string;
 }
 
-type Notice = { tone: "success" | "info" | "error"; text: string; restored?: boolean };
+/** `fields`: the notice only says some fields are wrong, so it goes once the last of them is corrected. */
+type Notice = { tone: "success" | "info" | "error"; text: string; restored?: boolean; fields?: boolean };
 
 const formatTime = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 
@@ -100,13 +101,16 @@ export function RegisterFarmerWizard() {
     setErrors((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !cleared(k))));
   };
 
+  // Nothing left to fix: a "fields need attention" banner would only mislead (e.g. after the ID document uploads).
+  const shownNotice = notice?.fields && Object.keys(errors).length === 0 ? null : notice;
+
   const goToStep = (n: number) => setCurrentStep(Math.min(Math.max(n, 1), TOTAL_STEPS));
 
   const goNext = () => {
     const found = validateStep(step.key, form);
     setErrors(found);
     if (Object.keys(found).length > 0) {
-      setNotice({ tone: "error", text: `${Object.keys(found).length} field${Object.keys(found).length === 1 ? "" : "s"} need attention on this step.` });
+      setNotice({ tone: "error", text: `${Object.keys(found).length} field${Object.keys(found).length === 1 ? "" : "s"} need attention on this step.`, fields: true });
       return;
     }
     setNotice(null);
@@ -141,7 +145,7 @@ export function RegisterFarmerWizard() {
     const found = validateStep("review", form);
     setErrors(found);
     if (Object.keys(found).length > 0) {
-      setNotice({ tone: "error", text: "Some details are missing or wrong. Fix them before submitting." });
+      setNotice({ tone: "error", text: "Some details are missing or wrong. Fix them before submitting.", fields: true });
       return;
     }
     setConfirming(true);
@@ -163,6 +167,10 @@ export function RegisterFarmerWizard() {
         setNotice({ tone: "error", text: `The registry did not accept the registration: ${Object.values(err.details).join(" ")}` });
         const at = firstStepWith(found);
         if (at) goToStep(at);
+      } else if (err instanceof ApiError && err.code === "FARMER_REGISTRY_REJECTED") {
+        // The registry answered and refused the registration (a 502 from the backend): its own reason is in the message, so
+        // show that rather than "Registry unavailable", which would send the DA retrying something that cannot pass.
+        setNotice({ tone: "error", text: err.message });
       } else {
         setNotice({ tone: "error", text: describeFarmerError(err) });
       }
@@ -207,10 +215,10 @@ export function RegisterFarmerWizard() {
           {describeFarmerError(optionsError)} Some dropdowns use a basic list or stay empty until they load; reload the page to try again.
         </Banner>
       )}
-      {notice && (
-        <Banner tone={notice.tone} onDismiss={() => setNotice(null)}>
-          {notice.text}
-          {notice.restored && (
+      {shownNotice && (
+        <Banner tone={shownNotice.tone} onDismiss={() => setNotice(null)}>
+          {shownNotice.text}
+          {shownNotice.restored && (
             <button type="button" onClick={() => startOver("Draft discarded, starting a new registration.")} className="ml-2 font-semibold underline">
               Discard draft
             </button>

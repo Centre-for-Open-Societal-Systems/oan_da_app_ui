@@ -180,8 +180,19 @@ export function validateStep(step: StepKey, form: RegistrationForm): FormErrors 
     const members = form.members.filter((m) => !isBlank(m));
     if (size && (!wholeNumber(size) || Number(size) < 1)) errors.household_size = "Household size must be a whole number of 1 or more.";
     if (!size && members.length) errors.household_size = "Household size is required when members are listed.";
+    // The registry counts the farmer plus each member listed and refuses a size that differs.
+    const people = 1 + members.length;
+    if (!errors.household_size && size && Number(size) !== people) {
+      errors.household_size = `Household size is ${Number(size)}, but ${people} ${people === 1 ? "person is" : "people are"} listed (the farmer plus each member). Add every member, or change the size to ${people}.`;
+    }
     form.members.forEach((m, i) => {
-      if (!isBlank(m) && !m.first_name.trim()) errors[`members.${i}.first_name`] = "First name is required.";
+      if (isBlank(m)) return;
+      // The registry takes a member only with all five details (HouseholdMemberItem in the backend).
+      if (!m.first_name.trim()) errors[`members.${i}.first_name`] = "First name is required.";
+      if (!m.grandfather_name.trim()) errors[`members.${i}.grandfather_name`] = "Grandfather's name is required.";
+      if (!m.gender) errors[`members.${i}.gender`] = "Gender is required.";
+      if (!m.date_of_birth) errors[`members.${i}.date_of_birth`] = "Date of birth is required.";
+      if (!m.relationship) errors[`members.${i}.relationship`] = "Relationship is required.";
       if (m.date_of_birth && m.date_of_birth > today()) errors[`members.${i}.date_of_birth`] = "Date of birth cannot be in the future.";
     });
   }
