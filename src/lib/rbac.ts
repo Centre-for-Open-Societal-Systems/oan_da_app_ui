@@ -108,7 +108,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { title: "Reviews", href: "/reviews", roles: ["Supervisor", "Admin"], part: 1 },
       { title: "Coaching", href: "/coaching", roles: ["Supervisor"], part: 1 },
       { title: "Recognition", href: "/recognition", roles: ["Supervisor"], part: 2 },
-      { title: "Surveys", href: "/surveys", roles: ["DA", "Supervisor"], part: 1 },
+      { title: "Surveys", href: "/surveys", roles: ["DA", "Supervisor", "Executive", "Admin"], part: 1 },
     ],
   },
   {
