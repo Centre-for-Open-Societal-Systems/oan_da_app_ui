@@ -283,7 +283,7 @@ export function LivestockReportForm() {
       {!isEditing && (
         <>
           <Card className="px-5 py-5 shadow-card">
-            <h1 className="text-[20px] font-bold tracking-tight text-ink sm:text-[22px]">Submit Livestock Report</h1>
+            <h1 className="text-[20px] font-bold tracking-tight text-ink sm:text-[22px]">Livestock Survey</h1>
             <p className="mt-1 text-[13.5px] text-ink-soft">Find the farmer by Farmer ID, record their animals, health, vaccination, breeding and vital events, and send the report for approval.</p>
           </Card>
 
@@ -355,7 +355,7 @@ export function LivestockReportForm() {
           <form onSubmit={openConfirm} className="flex flex-col gap-4">
             <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-card">
               <div className="border-b border-line">
-                <SegmentTabs label="Livestock report stages" className="rounded-none border-0 shadow-none" tabs={form.map((t) => ({ key: t.key, label: t.label }))} active={tab} onChange={setTab} />
+                <SegmentTabs label="Livestock Survey stages" className="rounded-none border-0 shadow-none" tabs={form.map((t) => ({ key: t.key, label: t.label }))} active={tab} onChange={setTab} />
               </div>
 
               <div key={current.key} className="flex animate-fade-in flex-col gap-5 p-5">
@@ -437,7 +437,7 @@ export function LivestockReportForm() {
                 </Button>
                 {isLast ? (
                   <Button type="submit" variant="brand" className="px-6 py-2.5 font-semibold">
-                    Submit Livestock Report →
+                    Submit Livestock Survey →
                   </Button>
                 ) : (
                   <Button type="button" variant="brand" onClick={saveAndNext} className="px-6 py-2.5 font-semibold">
@@ -454,7 +454,7 @@ export function LivestockReportForm() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs animate-fade-in">
           <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-line bg-white shadow-2xl animate-scale-in">
             <div className="border-b border-line px-6 py-5">
-              <h3 className="text-[17px] font-bold text-ink sm:text-[18px]">Submit livestock report for {farmer.name}?</h3>
+              <h3 className="text-[17px] font-bold text-ink sm:text-[18px]">Submit Livestock Survey for {farmer.name}?</h3>
               <p className="mt-0.5 text-[13px] text-muted">It goes for approval and can no longer be changed here.</p>
             </div>
             <div className="p-6">
@@ -487,7 +487,7 @@ export function LivestockReportForm() {
       {mounted && reference !== undefined && farmer && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs animate-fade-in">
           <div className="w-full max-w-sm overflow-hidden rounded-2xl border border-line bg-white p-6 text-center shadow-2xl animate-scale-in">
-            <h3 className="text-[20px] font-bold text-ink">Livestock report submitted</h3>
+            <h3 className="text-[20px] font-bold text-ink">Livestock Survey submitted</h3>
             <p className="mt-2 px-2 text-[13.5px] leading-relaxed text-muted">
               The report for {farmer.name} ({farmer.code}) has been sent for approval.{reference ? ` Reference: ${reference}.` : ""}
             </p>

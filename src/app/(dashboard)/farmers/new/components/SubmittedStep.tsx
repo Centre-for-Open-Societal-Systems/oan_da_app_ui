@@ -16,7 +16,7 @@ const statusLabel = (status: string) => status.charAt(0) + status.slice(1).toLow
 export function SubmittedHeader() {
   return (
     <PageHeader
-      title="Register a farmer"
+      title="Farmer Registration"
       titleAddon={<Pill tone="green" dot>Submitted</Pill>}
       description="The registration is with your supervisor for approval."
     />

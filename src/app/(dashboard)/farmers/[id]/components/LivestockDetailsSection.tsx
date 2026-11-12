@@ -13,7 +13,7 @@ export function LivestockDetailsSection({ tabs }: { tabs: LivestockDetailsTab[] 
   return (
     <div className="flex flex-col gap-0">
       <SegmentTabs
-        label="Livestock report stages"
+        label="Livestock Survey stages"
         tabs={tabs.map(({ key, label }) => ({ key, label }))}
         active={active}
         onChange={setActive}

@@ -199,7 +199,7 @@ export function RegisterFarmerWizard() {
     <div className="flex w-full flex-col gap-4">
       {currentStep > 1 ? <BackLink onClick={() => goToStep(currentStep - 1)} /> : <BackLink href="/farmers" />}
 
-      <PageHeader title="Register a farmer" description={`Step ${currentStep} of ${TOTAL_STEPS} - ${step.label}`} />
+      <PageHeader title="Farmer Registration" description={`Step ${currentStep} of ${TOTAL_STEPS} - ${step.label}`} />
       <Stepper currentStep={currentStep} />
 
       {optionsError !== null && (
