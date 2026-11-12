@@ -88,6 +88,8 @@ describe("pageTitleFor", () => {
     ["/admin/users", "Users & Roles"],
     ["/my-teams", "My Teams"],
     ["/performance/teams", "My Teams"],
+    ["/notifications", "Notifications"],
+    ["/404-error", "Page not found"],
     ["/nowhere", "Dashboard"],
   ])("%s → %s", (path, title) => {
     expect(pageTitleFor(path)).toBe(title);

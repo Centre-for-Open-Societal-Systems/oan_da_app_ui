@@ -165,6 +165,8 @@ export const PAGE_TITLES: { prefix: string; title: string }[] = [
   { prefix: "/knowledge", title: "Knowledge Base" },
   { prefix: "/broadcast", title: "Broadcast" },
   { prefix: "/alerts", title: "Alerts" },
+  { prefix: "/notifications", title: "Notifications" },
+  { prefix: "/404-error", title: "Page not found" },
   { prefix: "/advisors", title: "Advisors" },
   { prefix: "/performance/kpi-entry", title: "KPI Entry" },
   { prefix: "/performance/teams/targets", title: "Set Targets" },
