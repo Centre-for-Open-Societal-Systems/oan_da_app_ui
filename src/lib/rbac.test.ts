@@ -75,7 +75,7 @@ describe("pageTitleFor", () => {
   it.each([
     ["/dashboard", "Dashboard"],
     ["/farmers", "My Farmers"],
-    ["/farmers/new", "Register Farmer"],
+    ["/farmers/new", "Farmer Registration"],
     ["/farmers/f-1", "Farmer Profile"],
     ["/farmers/f-1/services", "Farmer Services"],
     ["/visits/v-1/outcome", "Visit Outcome"],
