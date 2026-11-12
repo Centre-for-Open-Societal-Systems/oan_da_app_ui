@@ -163,6 +163,10 @@ export function RegisterFarmerWizard() {
         setNotice({ tone: "error", text: `The registry did not accept the registration: ${Object.values(err.details).join(" ")}` });
         const at = firstStepWith(found);
         if (at) goToStep(at);
+      } else if (err instanceof ApiError && err.code === "FARMER_REGISTRY_REJECTED") {
+        // The registry answered and refused the registration (a 502 from the backend): its own reason is in the message, so
+        // show that rather than "Registry unavailable", which would send the DA retrying something that cannot pass.
+        setNotice({ tone: "error", text: err.message });
       } else {
         setNotice({ tone: "error", text: describeFarmerError(err) });
       }
