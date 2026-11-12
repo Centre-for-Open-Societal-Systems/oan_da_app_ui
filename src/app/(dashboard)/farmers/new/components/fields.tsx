@@ -17,7 +17,8 @@ import { FALLBACK_CHOICES, OPTION_LISTS, type OptionList } from "../registrySpec
 export function choicesFor(options: FieldOptions | null, list: OptionList): FieldOption[] | undefined {
   for (const field of OPTION_LISTS[list]) {
     const found = optionsFor(options, field);
-    if (found) return found;
+    // The farmer is always the head of the household, so a member is never "Head of household" (SELF).
+    if (found) return list === "relationship" ? found.filter((o) => o.value.toUpperCase() !== "SELF") : found;
   }
   return FALLBACK_CHOICES[list];
 }
