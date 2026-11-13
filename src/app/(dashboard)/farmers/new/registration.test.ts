@@ -72,6 +72,9 @@ describe("validateStep", () => {
     expect(Object.keys(validateStep("farmer", EMPTY_FORM)).sort()).toEqual(["date_of_birth", "father_name", "first_name", "gender", "grandfather_name", "national_id", "phone"]);
     const wrong = validateStep("farmer", { ...filled, phone: "12345", national_id: "123", date_of_birth: "2999-01-01" });
     expect(wrong.phone).toContain("+251");
+    // Nine digits are not enough: a mobile number starts with 9 (or 7), which the registry checks.
+    expect(validateStep("farmer", { ...filled, phone: "+251123456789" }).phone).toContain("Ethiopian mobile number");
+    expect(validateStep("farmer", { ...filled, phone: "912345678" }).phone).toBeUndefined();
     expect(wrong.national_id).toContain("12-digit FIN or the 16-digit FAN");
     expect(wrong.date_of_birth).toContain("future");
   });
