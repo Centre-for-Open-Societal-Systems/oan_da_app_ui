@@ -9,3 +9,6 @@ export * from "./components/GrievanceResponsePanel";
 export * from "./components/GrievanceThread";
 export * from "./components/RaiseGrievanceModal";
 export * from "./api";
+export * from "./evidence";
+export * from "./components/UploadEvidenceModal";
+export * from "./components/UploadEvidenceButton";

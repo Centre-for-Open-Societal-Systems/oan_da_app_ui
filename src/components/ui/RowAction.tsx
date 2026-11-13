@@ -3,7 +3,7 @@ import type { MouseEvent, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 export type RowActionTone = "brand" | "solid" | "neutral" | "danger" | "warning";
-export type RowActionIcon = "view" | "edit" | "retry" | "check" | "remove" | "calendar" | "none";
+export type RowActionIcon = "view" | "edit" | "retry" | "check" | "remove" | "calendar" | "upload" | "none";
 
 const TONES: Record<RowActionTone, string> = {
   // The default table action (View, Review, Edit) — green outline pill.
@@ -22,6 +22,7 @@ const ICONS: Record<Exclude<RowActionIcon, "none">, ReactNode> = {
   check: <path d="M5 13l4 4L19 7" />,
   remove: <><path d="M18 6L6 18" /><path d="M6 6l12 12" /></>,
   calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M8 3v4M16 3v4M3 10h18" /></>,
+  upload: <><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><path d="M17 8l-5-5-5 5" /><path d="M12 3v12" /></>,
 };
 
 interface RowActionProps {
