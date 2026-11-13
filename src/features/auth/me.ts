@@ -36,8 +36,9 @@ const isRole = (code: string): code is Role => (ROLES as readonly string[]).incl
 /** The /me payload as the session stores it. Null when the backend names a role the portal does not know. */
 export function toMeSession({ data }: MeResponse): MeSession | null {
   if (!isRole(data.role)) return null;
+  const fullName = typeof data.agent?.full_name === "string" ? data.agent.full_name.trim() : "";
   return {
-    user: { id: data.user.id, name: data.user.name, email: data.user.email },
+    user: { id: data.user.id, name: fullName || data.user.name, email: data.user.email },
     role: data.role,
     profile: {
       roleLabel: data.role_label,

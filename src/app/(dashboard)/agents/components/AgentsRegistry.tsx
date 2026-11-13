@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
@@ -11,21 +11,21 @@ import { Pill } from "@/components/ui/Pill";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Switch } from "@/components/ui/Switch";
 import { Banner } from "@/components/ui/Banner";
-import { Modal } from "@/components/ui/Modal";
-import { Button } from "@/components/ui/Button";
 import { ExportButton } from "@/components/ui/ExportButton";
 import { FilterDropdown, type FilterOption } from "@/components/ui/FilterDropdown";
 import { AdvancedFiltersDrawer, type FilterFieldConfig, type FilterSelection } from "@/components/ui/AdvancedFiltersDrawer";
+import { PAGE_SIZES, TablePagination } from "@/components/ui/TablePagination";
 import { useAuthStore } from "@/store/useAuthStore";
-import { ACTIVE_TONE, AGENTS, APPROVAL_TONE, FAYDA_TONE, KEBELES, WOREDAS } from "@/features/agents";
-import { matchesQuery, searchPlaceholder } from "@/lib/search";
-import { downloadTemplate, fileDate, type CsvColumn } from "@/lib/download";
+import { ACTIVE_TONE, APPROVAL_TONE, BulkImportsPanel, FAYDA_TONE, apiAgentToAgent, describeAgentError, importStatusLabel, listAgents, type Agent, type AgentImport } from "@/features/agents";
+import { searchPlaceholder } from "@/lib/search";
+import { fileDate, type CsvColumn } from "@/lib/download";
 import { downloadTable, formatLabel } from "@/lib/export";
-import type { Agent } from "@/features/agents";
+import { ImportAgentsModal } from "./ImportAgentsModal";
 
+const SEARCH_DEBOUNCE_MS = 400;
 const FAYDA = ["Verified", "Pending", "Mismatch"];
 const ACTIVE = ["Active", "On-leave", "Separated", "Unassigned"];
-const TIERS = ["Certificate", "Diploma", "Degree", "Masters"];
+const TIERS = ["Certificate", "Diploma", "Degree", "Masters", "MSc", "PhD"];
 const APPROVALS = ["Draft", "Awaiting review", "Changes requested", "Approved", "Published", "Rejected"];
 const UNASSIGNED = "—";
 
@@ -44,24 +44,16 @@ const CSV_COLUMNS: CsvColumn<Agent>[] = [
   { header: "Last Updated", value: (a) => a.updatedAt },
 ];
 
-// Import template v3: the registry's input columns (DA-ID is minted and statuses computed on import).
-const downloadImportTemplate = () =>
-  downloadTemplate(
-    "da-import-template-v3.csv",
-    ["Full Name", "Fayda ID", "Phone", "Education Tier", "Specialisation", "Region", "Woreda", "Assigned Kebele"],
-    ["Abebe Kebede", "3512 0000 1234", "+251 91 234 5678", "Diploma", "Crop production", "Oromia", "Bako Tibe", "Bako 01"],
-  );
+const importNotice = (imported: AgentImport) =>
+  `${imported.file_name ?? "The file"} was handed to the DA Registry (${imported.rows ?? "?"} agents, ${importStatusLabel(imported.status).toLowerCase()}${imported.registry_import_id ? `, registry import ${imported.registry_import_id}` : ""}). Rows it accepts wait for its two-stage approval; rows it refuses appear under Import exceptions.`;
 
-const SEARCH_PLACEHOLDER = searchPlaceholder(["DA-ID", "Full Name", "Fayda ID", "Fayda Status", "Active Status", "Education Tier", "Assigned Kebele", "Approval Status"]);
+// The backend searches DA-ID and name; the column filters narrow the loaded page on screen.
+const SEARCH_PLACEHOLDER = searchPlaceholder(["DA-ID", "Full Name"]);
+
+const unique = (values: string[]) => [...new Set(values.filter((v) => v !== ""))].sort();
 
 const optionsOf = (values: string[], order: readonly string[], label?: (v: string) => string): FilterOption[] =>
   order.map((value) => ({ value, label: label ? label(value) : value, count: values.filter((v) => v === value).length }));
-
-const WOREDA_OPTIONS = optionsOf(AGENTS.map((a) => a.woreda), WOREDAS);
-const FAYDA_OPTIONS = optionsOf(AGENTS.map((a) => a.faydaStatus), FAYDA);
-const ACTIVE_OPTIONS = optionsOf(AGENTS.map((a) => a.activeStatus), ACTIVE);
-const TIER_OPTIONS = optionsOf(AGENTS.map((a) => a.educationTier), TIERS);
-const APPROVAL_OPTIONS = optionsOf(AGENTS.map((a) => a.approvalStatus), APPROVALS);
 
 interface Filters extends FilterSelection {
   woreda: Set<string>;
@@ -73,12 +65,6 @@ interface Filters extends FilterSelection {
 }
 const EMPTY: Filters = { woreda: new Set(), kebele: new Set(), fayda: new Set(), active: new Set(), tier: new Set(), approval: new Set() };
 
-// Kebeles under the selected woredas (every kebele when no woreda is picked), plus the unassigned bucket.
-const kebelesFor = (woredas: Set<string>) => [
-  ...(woredas.size === 0 ? Object.values(KEBELES).flat() : [...woredas].flatMap((w) => KEBELES[w] ?? [])),
-  UNASSIGNED,
-];
-
 // "14 Sep 2026, 09:12" → ["14 Sep 2026,", "09:12 AM"] for the two-line Last Updated cell.
 const splitStamp = (stamp: string): [string, string] => {
   const [date, time = ""] = stamp.split(", ");
@@ -87,63 +73,107 @@ const splitStamp = (stamp: string): [string, string] => {
   return [`${date},`, `${String(h % 12 || 12).padStart(2, "0")}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`];
 };
 
-// Drops kebele selections that no longer belong to the chosen woredas.
-const pruneKebeles = (next: Filters): Filters => {
-  const allowed = new Set(kebelesFor(next.woreda));
-  return { ...next, kebele: new Set([...next.kebele].filter((k) => allowed.has(k))) };
-};
-
-// FR-02 §3.2.1–3.2.2: 11 literal columns, combinable/resettable filters, search by DA-ID or name.
+// FR-02 §3.2.1–3.2.2: 11 literal columns, combinable/resettable filters, search by DA-ID or name. Rows come from
+// the DA Registry through GET /da-services/agents, already limited to the caller's scope (Supervisor: Woreda,
+// Executive: Region, Admin: all); search and paging run on the server.
 export function AgentsRegistry() {
   const router = useRouter();
   const role = useAuthStore((s) => s.role);
   const canEdit = role === "Supervisor" || role === "Admin";
+  // Bulk import needs the registry's Intake Officer role, which only the OAN Administrator holds.
+  const canImport = role === "Admin";
   const [query, setQuery] = useState("");
+  const [searchText, setSearchText] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZES[PAGE_SIZES.length - 1]);
+  const [attempt, setAttempt] = useState(0);
+  const [loaded, setLoaded] = useState<{ key: string; rows: Agent[]; total: number; error: string | null } | null>(null);
   const [filters, setFilters] = useState<Filters>(EMPTY);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
-  // Registry access switched off from the Action column (mock: kept in memory until the API exists).
+  /** Bumped after each import so the imports and exceptions panels below reload. */
+  const [importsVersion, setImportsVersion] = useState(0);
+  // Registry access switched off from the Action column (kept in memory until the API exists).
   const [disabledIds, setDisabledIds] = useState<Set<string>>(new Set());
 
+  // One request per pause in typing, not per key press.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchText(query.trim());
+      setPage(1);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const requestKey = `${searchText}|${page}|${pageSize}|${attempt}`;
+  useEffect(() => {
+    let current = true;
+    listAgents({ search: searchText || undefined, limit: pageSize, start: (page - 1) * pageSize })
+      .then(({ agents, total }) => current && setLoaded({ key: requestKey, rows: agents.map(apiAgentToAgent), total, error: null }))
+      .catch((err: unknown) => current && setLoaded({ key: requestKey, rows: [], total: 0, error: describeAgentError(err) }));
+    return () => {
+      current = false;
+    };
+  }, [searchText, page, pageSize, attempt, requestKey]);
+
+  // The registry reads every DA's record, so a page can take a few seconds on the first load.
+  const loading = loaded === null || loaded.key !== requestKey;
+  const source = useMemo(() => (loading || !loaded ? [] : loaded.rows), [loading, loaded]);
+
   const activeFilterCount = Object.values(filters).filter((set) => set.size > 0).length;
+
+  // Kebeles under the selected woredas (every kebele when no woreda is picked), from the loaded rows.
+  const kebelesFor = (woredas: Set<string>) => [
+    ...unique(source.filter((a) => woredas.size === 0 || woredas.has(a.woreda)).map((a) => a.kebele)).filter((k) => k !== UNASSIGNED),
+    UNASSIGNED,
+  ];
+  // Drops kebele selections that no longer belong to the chosen woredas.
+  const pruneKebeles = (next: Filters): Filters => {
+    const allowed = new Set(kebelesFor(next.woreda));
+    return { ...next, kebele: new Set([...next.kebele].filter((k) => allowed.has(k))) };
+  };
   const setFilter = (key: keyof Filters) => (next: Set<string>) => setFilters((prev) => pruneKebeles({ ...prev, [key]: next }));
 
-  const inWoredas = AGENTS.filter((a) => filters.woreda.size === 0 || filters.woreda.has(a.woreda));
+  const woredaOptions = optionsOf(source.map((a) => a.woreda), unique(source.map((a) => a.woreda)));
+  const faydaOptions = optionsOf(source.map((a) => a.faydaStatus), FAYDA);
+  const activeOptions = optionsOf(source.map((a) => a.activeStatus), ACTIVE);
+  const tierOptions = optionsOf(source.map((a) => a.educationTier), unique([...TIERS, ...source.map((a) => a.educationTier)]));
+  const approvalOptions = optionsOf(source.map((a) => a.approvalStatus), APPROVALS);
+  const inWoredas = source.filter((a) => filters.woreda.size === 0 || filters.woreda.has(a.woreda));
   const kebeleOptions = optionsOf(inWoredas.map((a) => a.kebele), kebelesFor(filters.woreda), (k) => (k === UNASSIGNED ? "Unassigned" : k));
   const filterFields: FilterFieldConfig[] = [
-    { key: "woreda", label: "Woreda", allLabel: "All woredas", placeholder: "All Woredas", options: WOREDA_OPTIONS },
+    { key: "woreda", label: "Woreda", allLabel: "All woredas", placeholder: "All Woredas", options: woredaOptions },
     { key: "kebele", label: "Kebele", allLabel: "All kebeles", placeholder: "All Kebeles", options: kebeleOptions },
-    { key: "fayda", label: "Fayda status", allLabel: "All Fayda statuses", placeholder: "All", options: FAYDA_OPTIONS },
-    { key: "active", label: "Active status", allLabel: "All active statuses", placeholder: "All", options: ACTIVE_OPTIONS },
-    { key: "tier", label: "Education tier", allLabel: "All tiers", placeholder: "All", options: TIER_OPTIONS },
-    { key: "approval", label: "Approval status", allLabel: "All approval statuses", placeholder: "All", options: APPROVAL_OPTIONS },
+    { key: "fayda", label: "Fayda status", allLabel: "All Fayda statuses", placeholder: "All", options: faydaOptions },
+    { key: "active", label: "Active status", allLabel: "All active statuses", placeholder: "All", options: activeOptions },
+    { key: "tier", label: "Education tier", allLabel: "All tiers", placeholder: "All", options: tierOptions },
+    { key: "approval", label: "Approval status", allLabel: "All approval statuses", placeholder: "All", options: approvalOptions },
   ];
 
   const rows = useMemo(() => {
     const has = (set: Set<string>, value: string) => set.size === 0 || set.has(value);
-    return AGENTS.filter(
+    return source.filter(
       (a) =>
         has(filters.woreda, a.woreda) &&
         has(filters.kebele, a.kebele) &&
         has(filters.fayda, a.faydaStatus) &&
         has(filters.active, a.activeStatus) &&
         has(filters.tier, a.educationTier) &&
-        has(filters.approval, a.approvalStatus) &&
-        matchesQuery(query, a, a.kebele === UNASSIGNED ? "Unassigned" : ""),
+        has(filters.approval, a.approvalStatus),
     );
-  }, [query, filters]);
+  }, [source, filters]);
 
   const columns: Column<Agent>[] = [
     { key: "daId", header: "DA-ID", cell: (a) => <span className="font-semibold text-ink">{a.daId.replace(/-(?=d+$)/, "-​")}</span> },
     { key: "name", header: "Full Name", cell: (a) => <Link href={`/agents/${a.daId}`} className="whitespace-nowrap text-ink hover:text-brand-green">{a.fullName}</Link> },
     { key: "fayda", header: "Fayda ID", cell: (a) => <span className="whitespace-nowrap text-ink">{a.faydaId}</span> },
-    { key: "faydaStatus", header: <FilterDropdown label="Fayda Status" allLabel="All Fayda statuses" options={FAYDA_OPTIONS} selected={filters.fayda} onApply={setFilter("fayda")} />, align: "center", cell: (a) => <Pill tone={FAYDA_TONE[a.faydaStatus]}>{a.faydaStatus}</Pill> },
-    { key: "active", header: <FilterDropdown label="Active Status" allLabel="All active statuses" options={ACTIVE_OPTIONS} selected={filters.active} onApply={setFilter("active")} />, align: "center", cell: (a) => <Pill tone={ACTIVE_TONE[a.activeStatus]}>{a.activeStatus}</Pill> },
-    { key: "tier", header: <FilterDropdown label="Education Tier" allLabel="All tiers" options={TIER_OPTIONS} selected={filters.tier} onApply={setFilter("tier")} />, cell: (a) => a.educationTier },
+    { key: "faydaStatus", header: <FilterDropdown label="Fayda Status" allLabel="All Fayda statuses" options={faydaOptions} selected={filters.fayda} onApply={setFilter("fayda")} />, align: "center", cell: (a) => <Pill tone={FAYDA_TONE[a.faydaStatus]}>{a.faydaStatus}</Pill> },
+    { key: "active", header: <FilterDropdown label="Active Status" allLabel="All active statuses" options={activeOptions} selected={filters.active} onApply={setFilter("active")} />, align: "center", cell: (a) => <Pill tone={ACTIVE_TONE[a.activeStatus]}>{a.activeStatus}</Pill> },
+    { key: "tier", header: <FilterDropdown label="Education Tier" allLabel="All tiers" options={tierOptions} selected={filters.tier} onApply={setFilter("tier")} />, cell: (a) => a.educationTier },
     { key: "kebele", header: <FilterDropdown label="Assigned Kebele" allLabel="All kebeles" options={kebeleOptions} selected={filters.kebele} onApply={setFilter("kebele")} />, cell: (a) => (a.kebele === UNASSIGNED ? <span className="text-subtle">Unassigned</span> : <span className="whitespace-nowrap">{a.kebele}<span className="block text-[12px] text-muted">{a.woreda}</span></span>) },
     { key: "farmers", header: "Farmer Count", cell: (a) => a.farmerCount.toLocaleString() },
-    { key: "approval", header: <FilterDropdown label="Approval Status" allLabel="All approval statuses" options={APPROVAL_OPTIONS} selected={filters.approval} onApply={setFilter("approval")} />, align: "center", cell: (a) => <Pill tone={APPROVAL_TONE[a.approvalStatus]}>{a.approvalStatus}</Pill> },
+    { key: "approval", header: <FilterDropdown label="Approval Status" allLabel="All approval statuses" options={approvalOptions} selected={filters.approval} onApply={setFilter("approval")} />, align: "center", cell: (a) => <Pill tone={APPROVAL_TONE[a.approvalStatus]}>{a.approvalStatus}</Pill> },
     { key: "updated", header: "Last Updated", cell: (a) => { const [date, time] = splitStamp(a.updatedAt); return <span className="block whitespace-nowrap leading-snug text-ink">{date}<span className="block">{time}</span></span>; } },
     {
       key: "actions", header: "Action", align: "center",
@@ -177,21 +207,24 @@ export function AgentsRegistry() {
       <Card className="overflow-hidden p-0 shadow-card">
         {/* Toolbar — the title never wraps; the controls stay one group that sits beside it when it fits and drops below as a whole when it doesn't. */}
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4">
-          <h2 className="shrink-0 whitespace-nowrap text-[16px] font-semibold text-ink">Master registry</h2>
+          <div className="flex shrink-0 items-center gap-2.5">
+            <h2 className="whitespace-nowrap text-[16px] font-semibold text-ink">Master registry</h2>
+            {loaded && !loaded.error && !loading && <span className="text-[13px] text-muted">{loaded.total.toLocaleString()} in your scope</span>}
+          </div>
           <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
             <SearchInput value={query} onChange={setQuery} placeholder={SEARCH_PLACEHOLDER} />
 
             <AdvancedFiltersButton activeCount={activeFilterCount} onClick={() => setIsFiltersOpen(true)} />
 
+            {canImport && (
+              <button type="button" onClick={() => setImportOpen(true)} className="inline-flex shrink-0 whitespace-nowrap h-9 items-center gap-2 rounded-md bg-brand-green px-3.5 text-[13.5px] font-semibold text-white hover:bg-brand-green-dark">
+                Import agents
+              </button>
+            )}
             {canEdit && (
-              <>
-                <button type="button" onClick={() => setImportOpen(true)} className="inline-flex shrink-0 whitespace-nowrap h-9 items-center gap-2 rounded-md bg-brand-green px-3.5 text-[13.5px] font-semibold text-white hover:bg-brand-green-dark">
-                  Import agents
-                </button>
-                <button type="button" onClick={() => setNotice("Sync from MoA queued — inbound batch will appear in Registry Sync with its receipt.")} className="inline-flex shrink-0 whitespace-nowrap h-9 items-center gap-2 rounded-md border border-brand-green bg-white px-3.5 text-[13.5px] font-semibold text-brand-green hover:bg-brand-wash">
-                  Sync from MoA
-                </button>
-              </>
+              <button type="button" onClick={() => setNotice("Sync from MoA queued — inbound batch will appear in Registry Sync with its receipt.")} className="inline-flex shrink-0 whitespace-nowrap h-9 items-center gap-2 rounded-md border border-brand-green bg-white px-3.5 text-[13.5px] font-semibold text-brand-green hover:bg-brand-wash">
+                Sync from MoA
+              </button>
             )}
             <ExportButton
               label="Export"
@@ -205,10 +238,40 @@ export function AgentsRegistry() {
           </div>
         </div>
 
+        {loaded?.error && !loading && (
+          <Banner tone="error" title="Agents could not be loaded" className="mx-4 mb-3">
+            {loaded.error}
+          </Banner>
+        )}
         {notice && <Banner tone="success" className="mx-4 mb-3" onDismiss={() => setNotice(null)}>{notice}</Banner>}
 
         <div>
-          <DataTable itemLabel="DA identifiers" columns={columns} rows={rows} rowKey={(a) => a.daId} minWidth="1280px" onRowClick={(a) => router.push(`/agents/${a.daId}`)} emptyTitle="No agents match the selected filters" emptyHint="Clear a filter or try a different search." />
+          <DataTable
+            itemLabel="DA identifiers"
+            columns={columns}
+            rows={rows}
+            rowKey={(a) => a.daId}
+            minWidth="1280px"
+            paginate={false}
+            state={loading ? "loading" : loaded?.error ? "error" : "ready"}
+            onRetry={() => setAttempt((n) => n + 1)}
+            onRowClick={(a) => router.push(`/agents/${a.daId}`)}
+            emptyTitle={searchText || activeFilterCount > 0 ? "No agents match the search or filters" : "No agents in your scope"}
+            emptyHint={searchText || activeFilterCount > 0 ? "Clear a filter or try a different search." : "Agents appear here once the DA Registry publishes records in your Region or Woreda."}
+          />
+          {!loading && !loaded?.error && loaded && loaded.total > 0 && (
+            <TablePagination
+              page={page}
+              pageSize={pageSize}
+              total={loaded.total}
+              itemLabel="agents"
+              onPageChange={setPage}
+              onPageSizeChange={(size: number) => {
+                setPageSize(size);
+                setPage(1);
+              }}
+            />
+          )}
         </div>
 
         <AdvancedFiltersDrawer
@@ -231,24 +294,19 @@ export function AgentsRegistry() {
         />
       </Card>
 
+      {/* What this portal sent to the registry and what the registry refused; reloads after an import. */}
+      <BulkImportsPanel refreshKey={importsVersion} />
+
       {/* §4.1 Intake — bulk import is one of only two entry paths (no manual Add DA). */}
-      <Modal isOpen={importOpen} onClose={() => setImportOpen(false)} title="Import Agents (Bulk)" subtitle="CSV/XLSX per the MoA extension-staff template. Records enter as proposals routed to their Woreda for review." size="lg"
-        footer={<><Button variant="outline" onClick={() => setImportOpen(false)}>Cancel</Button><Button variant="brand" onClick={() => { setImportOpen(false); setNotice("Import job #205 queued — 0 records parsed yet. Proposals will appear in Approvals as they pass identity checks."); }}>Upload &amp; validate</Button></>}
-      >
-        <div className="flex flex-col gap-4">
-          <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-zinc-300 bg-surface px-4 py-6 text-center hover:border-brand-green sm:py-8">
-            <input type="file" accept=".csv,.xlsx" className="sr-only" />
-            <span className="text-[14px] font-medium text-ink">Drop the import file here or click to choose</span>
-            <span className="text-[12.5px] text-muted">CSV or XLSX · max 10 MB · template v3 (MoA extension staff)</span>
-          </label>
-          <ul className="list-disc space-y-1 pl-5 text-[13px] text-ink-soft">
-            <li>Each row is checked for a Fayda link and uniqueness before a DA-ID is minted (Generated / Queued / Exception / Failed-retry).</li>
-            <li>Proposals are held in DA Registry (Gen 2) shadow state until the Woreda supervisor approves.</li>
-            <li>There is no manual “Add DA” and no self-registration in this version.</li>
-          </ul>
-          <button type="button" onClick={downloadImportTemplate} className="w-fit text-[13px] font-semibold text-brand-green hover:underline">Download template (v3)</button>
-        </div>
-      </Modal>
+      <ImportAgentsModal
+        isOpen={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={(imported) => {
+          setNotice(importNotice(imported));
+          setAttempt((n) => n + 1);
+          setImportsVersion((n) => n + 1);
+        }}
+      />
     </>
   );
 }

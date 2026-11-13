@@ -64,7 +64,7 @@ export function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordModalProp
           ) : (
           <form className="flex flex-col gap-6" onSubmit={(e) => { e.preventDefault(); setSentTo(String(new FormData(e.currentTarget).get("email") ?? "")); }}>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-bold text-zinc-700" htmlFor="reset-email">Email address</label>
+              <label className="text-sm font-bold text-zinc-700" htmlFor="reset-email">Email address<span className="ml-1 text-danger">*</span></label>
               <Input
                 id="reset-email"
                 name="email"

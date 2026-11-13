@@ -131,7 +131,7 @@ function DecisionCard({ subtitle, actionLabel, onApprove, onReject }: { subtitle
         <SectionTitle title="Your decision" subtitle={subtitle} />
       </div>
       <div className="flex flex-col gap-3 px-5 py-4">
-        <FormField label="Comment for the requester" htmlFor="lc-comment" hint={rejectError ? "Add a reason of at least 5 characters to reject." : undefined} hintTone="error">
+        <FormField label="Comment for the requester" htmlFor="lc-comment" hint={rejectError ? "Add a reason of at least 5 characters to reject." : "Needed to reject: at least 5 characters."} hintTone={rejectError ? "error" : "muted"}>
           <Textarea id="lc-comment" rows={2} value={comment} onChange={(e) => { setComment(e.target.value); setRejectError(false); }} placeholder="e.g. Approved. Please finish the handover before the effective date." />
         </FormField>
         <div className="flex flex-wrap gap-3">

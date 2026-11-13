@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Card } from "@/components/ui/Card";
@@ -19,7 +19,7 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { FilterDropdown, type FilterOption } from "@/components/ui/FilterDropdown";
 import { AdvancedFiltersDrawer, type FilterFieldConfig, type FilterSelection } from "@/components/ui/AdvancedFiltersDrawer";
 import { useAuthStore } from "@/store/useAuthStore";
-import { FARMERS, FarmerAvatar } from "@/features/farmers";
+import { apiFarmerToFarmer, describeFarmerError, FarmerAvatar, listFarmers, type Farmer } from "@/features/farmers";
 import { SEGMENTS, segmentName, useBeneficiariesStore, type Beneficiary, type Segment } from "@/features/beneficiaries";
 import { matchesQuery, searchPlaceholder } from "@/lib/search";
 import { cn } from "@/lib/utils";
@@ -70,6 +70,35 @@ export function BeneficiariesWorkspace() {
   const [removing, setRemoving] = useState<Beneficiary | null>(null);
   const [addFarmers, setAddFarmers] = useState<Set<string>>(() => new Set());
   const [farmerQuery, setFarmerQuery] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  // The caller's farmers from GET /farmers, read when the Add form first opens.
+  const [farmers, setFarmers] = useState<Farmer[] | null>(null);
+  const [farmersError, setFarmersError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!addOpen || farmers) return;
+    let current = true;
+    listFarmers({ pageSize: 500 })
+      .then(({ items }) => {
+        if (!current) return;
+        setFarmersError(null);
+        setFarmers(items.map(apiFarmerToFarmer));
+      })
+      .catch((err: unknown) => current && setFarmersError(describeFarmerError(err)));
+    return () => {
+      current = false;
+    };
+  }, [addOpen, farmers]);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (!pickerRef.current?.contains(e.target as Node)) setPickerOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [pickerOpen]);
   const [addSegment, setAddSegment] = useState(SEGMENTS[0].id);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -111,7 +140,7 @@ export function BeneficiariesWorkspace() {
     );
   }, [rows, filters, query]);
 
-  const pickerMatches = FARMERS.filter((f) => matchesQuery(farmerQuery, f.name, f.kebele, f.woreda, f.crop, f.livestock, f.phone));
+  const pickerMatches = (farmers ?? []).filter((f) => matchesQuery(farmerQuery, f.name, f.kebele, f.woreda, f.crop, f.livestock, f.phone));
   const allMatchesPicked = pickerMatches.length > 0 && pickerMatches.every((f) => addFarmers.has(f.id));
 
   const togglePick = (id: string) =>
@@ -135,9 +164,9 @@ export function BeneficiariesWorkspace() {
   const add = () => {
     if (addFarmers.size === 0) return;
     setAddOpen(false);
-    const { added, skipped } = linkFarmers([...addFarmers], addSegment);
+    const { added, skipped } = linkFarmers((farmers ?? []).filter((f) => addFarmers.has(f.id)), addSegment);
     const parts = [
-      added.length > 0 && `${added.length === 1 ? added[0] : `${added.length} farmers`} added to â€œ${segmentName(addSegment)}â€ â€” Pending verification against the segment rule. The Farmer Registry record is untouched.`,
+      added.length > 0 && `${added.length === 1 ? added[0] : `${added.length} farmers`} added to “${segmentName(addSegment)}” — Pending verification against the segment rule. The Farmer Registry record is untouched.`,
       skipped.length > 0 && `Already in this segment: ${skipped.join(", ")}.`,
     ].filter(Boolean);
     setNotice(parts.join(" "));
@@ -146,7 +175,7 @@ export function BeneficiariesWorkspace() {
   const remove = () => {
     if (!removing) return;
     removeLink(removing.id);
-    setNotice(`Link removed for ${removing.name}. This only detaches the beneficiary segment â€” the farmer's master record in the Farmer Registry is never deleted from here.`);
+    setNotice(`Link removed for ${removing.name}. This only detaches the beneficiary segment — the farmer's master record in the Farmer Registry is never deleted from here.`);
     setRemoving(null);
   };
 
@@ -200,7 +229,7 @@ export function BeneficiariesWorkspace() {
         title="Beneficiaries"
         description="Rule-based segments that link farmers to schemes. Removing a link never deletes a Farmer Registry record."
         actions={
-          <Button variant="brand" size="md" className="px-6" onClick={() => { setAddFarmers(new Set()); setFarmerQuery(""); setAddOpen(true); }}>
+          <Button variant="brand" size="md" className="px-6" onClick={() => { setAddFarmers(new Set()); setFarmerQuery(""); setPickerOpen(false); setAddOpen(true); }}>
             Add beneficiary
           </Button>
         }
@@ -230,7 +259,7 @@ export function BeneficiariesWorkspace() {
                   </svg>
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-[14px] font-semibold text-ink">{s.name.replace(" â€” ", " - ")}</span>
+                  <span className="block text-[14px] font-semibold text-ink">{s.name.replace(" — ", " - ")}</span>
                   <span className="block text-[12px] text-muted">{s.scheme}</span>
                 </span>
               </div>
@@ -282,6 +311,12 @@ export function BeneficiariesWorkspace() {
         <div className="flex flex-col gap-4">
           <FormField label={`Farmers${addFarmers.size > 0 ? ` (${addFarmers.size} selected)` : ""}`} htmlFor="ben-farmer" required hint="Only farmers linked to you appear here (Farmer Registry is the source of records).">
             {/* Same look as the table-column filter panel (FilterDropdown), but empty means none picked, not all. */}
+            <div ref={pickerRef} className="flex flex-col gap-2">
+            <button type="button" aria-expanded={pickerOpen} onClick={() => setPickerOpen((open) => !open)} className="flex h-11 w-full items-center justify-between rounded-lg border border-gray-200 bg-white px-3 text-left text-sm text-zinc-900 transition-colors hover:border-brand-green">
+              {addFarmers.size > 0 ? `${addFarmers.size} farmer${addFarmers.size > 1 ? "s" : ""} selected` : "Select farmers"}
+              <svg className={cn("h-4 w-4 text-muted transition-transform", pickerOpen && "rotate-180")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+            </button>
+            {pickerOpen && (
             <div className="flex flex-col overflow-hidden rounded-xl border border-line bg-white text-[14px] shadow-[0_12px_40px_-12px_rgba(0,0,0,0.25)]">
               <label className={cn("flex shrink-0 cursor-pointer items-center gap-3 border-b border-line px-4 py-2.5", allMatchesPicked ? "bg-brand-mint" : "bg-white hover:bg-surface")}>
                 <Checkbox checked={allMatchesPicked} onChange={togglePickAll} disabled={pickerMatches.length === 0} aria-label="All farmers" />
@@ -309,7 +344,7 @@ export function BeneficiariesWorkspace() {
                     type="search"
                     value={farmerQuery}
                     onChange={(e) => setFarmerQuery(e.target.value)}
-                    placeholder="Search farmersâ€¦"
+                    placeholder="Search farmers…"
                     aria-label="Search farmers by name, kebele, crop, livestock or phone"
                     className="h-9 w-full rounded-md border border-zinc-200 bg-surface pl-8 pr-3 text-[13.5px] text-ink placeholder:text-muted focus:border-brand-green focus:outline-none"
                   />
@@ -317,7 +352,7 @@ export function BeneficiariesWorkspace() {
               </div>
 
               <ul className="max-h-[240px] min-h-0 overflow-y-auto overscroll-contain green-scrollbar">
-                {pickerMatches.length === 0 && <li className="px-4 py-4 text-center text-[13px] text-muted">No matches for â€œ{farmerQuery.trim()}â€</li>}
+                {pickerMatches.length === 0 && <li className="px-4 py-4 text-center text-[13px] text-muted">{farmersError ?? (!farmers ? "Loading farmers…" : farmers.length === 0 ? "No farmer assigned" : `No matches for “${farmerQuery.trim()}”`)}</li>}
                 {pickerMatches.map((f) => (
                   <li key={f.id} className="border-b border-line-soft last:border-0">
                     <label className="flex cursor-pointer items-center gap-3 px-4 py-2.5 transition-colors hover:bg-surface">
@@ -328,6 +363,8 @@ export function BeneficiariesWorkspace() {
                   </li>
                 ))}
               </ul>
+            </div>
+            )}
             </div>
           </FormField>
           <FormField label="Segment" htmlFor="ben-segment" required hint="Membership is verified against the segment rule before enrolment.">
@@ -340,7 +377,7 @@ export function BeneficiariesWorkspace() {
         <Modal isOpen onClose={() => setRemoving(null)} title="Remove Beneficiary Link?" subtitle={removing.name}
           footer={<><Button variant="outline" onClick={() => setRemoving(null)}>Cancel</Button><Button className="bg-danger text-white hover:bg-red-700" onClick={remove}>Remove link</Button></>}
         >
-          <p className="text-[14px] leading-relaxed text-ink-soft">This detaches the farmer from the segment and its scheme. It never deletes the farmer&apos;s master record â€” that lives in the Farmer Registry.</p>
+          <p className="text-[14px] leading-relaxed text-ink-soft">This detaches the farmer from the segment and its scheme. It never deletes the farmer&apos;s master record — that lives in the Farmer Registry.</p>
         </Modal>
       )}
     </>

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { LEAVE_BALANCES, type LeaveRecord } from "@/features/farmers";
 import { Banner } from "@/components/ui/Banner";
+import { todayIso } from "@/lib/utils";
 
 interface RequestLeaveModalProps {
   isOpen: boolean;
@@ -42,8 +43,8 @@ function formatPeriod(fromIso: string, toIso: string) {
 
 export function RequestLeaveModal({ isOpen, onClose, onSubmit }: RequestLeaveModalProps) {
   const [leaveType, setLeaveType] = useState(LEAVE_BALANCES[0].type);
-  const [from, setFrom] = useState("2026-09-15");
-  const [to, setTo] = useState("2026-09-19");
+  const [from, setFrom] = useState(() => todayIso());
+  const [to, setTo] = useState(() => todayIso());
 
   const balance = LEAVE_BALANCES.find((b) => b.type === leaveType) ?? LEAVE_BALANCES[0];
   const days = workingDays(from, to);
@@ -85,10 +86,10 @@ export function RequestLeaveModal({ isOpen, onClose, onSubmit }: RequestLeaveMod
         </FormField>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <FormField label="From" htmlFor="leave-from">
-            <Input id="leave-from" type="date" className="h-10" value={from} onChange={(e) => setFrom(e.target.value)} required />
+          <FormField label="From" htmlFor="leave-from" required hint="Today or later." hintTone={from !== "" && from < todayIso() ? "error" : "muted"}>
+            <Input id="leave-from" type="date" min={todayIso()} className="h-10" value={from} onChange={(e) => setFrom(e.target.value)} required />
           </FormField>
-          <FormField label="To" htmlFor="leave-to">
+          <FormField label="To" htmlFor="leave-to" required hint="On or after the From date." hintTone={to !== "" && to < from ? "error" : "muted"}>
             <Input id="leave-to" type="date" className="h-10" value={to} min={from} onChange={(e) => setTo(e.target.value)} required />
           </FormField>
         </div>
@@ -100,7 +101,9 @@ export function RequestLeaveModal({ isOpen, onClose, onSubmit }: RequestLeaveMod
           </span>
         </p>
 
-        <FormField label="Reason" htmlFor="leave-reason">
+        {days === 0 && <p className="-mt-2 text-[12.5px] text-muted">Choose dates with at least one working day (Mon-Fri) to enable Submit.</p>}
+
+        <FormField label="Reason" htmlFor="leave-reason" required>
           <Input id="leave-reason" name="reason" className="h-10" defaultValue="Family event" required />
         </FormField>
 

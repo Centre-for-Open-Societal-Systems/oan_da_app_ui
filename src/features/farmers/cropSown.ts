@@ -373,6 +373,19 @@ const PORTAL_FORM: CropSownTabDef[] = [
 /** The Crop Sown form: the portal's tabs and sections with the registry's own field definitions (see cropSownSpecApply). */
 export const CROP_SOWN_FORM: CropSownTabDef[] = applySpec(PORTAL_FORM);
 
+export const CROP_SOWN_INTRO_TAB = "crop-sown";
+const INTRO_SECTIONS = ["identity", "address"];
+
+/**
+ * The tabs the Submit Crop Report form shows, as in the design: every registry form opens with the identity, so the form
+ * asks for it once, with the address, on an opening "Crop Sown" tab; each stage tab holds only its own sections. Values
+ * are keyed by section, so a stage still saves them (see STAGE_PLANS).
+ */
+export const CROP_SOWN_TABS: CropSownTabDef[] = [
+  { key: CROP_SOWN_INTRO_TAB, label: "Crop Sown", sections: CROP_SOWN_FORM[0].sections.filter((s) => INTRO_SECTIONS.includes(s.id)) },
+  ...CROP_SOWN_FORM.map((tab) => ({ ...tab, sections: tab.sections.filter((s) => !INTRO_SECTIONS.includes(s.id)) })),
+];
+
 // ── Sample record ───────────────────────────────────────────────────────────────────────────────────────
 
 const ZONE_BY_WOREDA: Record<string, string> = { "Adea woreda": "East Shewa", "Lume woreda": "East Shewa" };
@@ -654,9 +667,8 @@ export interface CropSownTab {
   sections: CropSownSection[];
 }
 
-/** The farmer's record laid out tab → section → field, ready to display. */
-export function getCropSownDetails(farmer: Farmer): CropSownTab[] {
-  const record = getCropSownRecord(farmer);
+/** Crop Sown values laid out tab → section → field, ready to display. */
+export function cropSownTabs(record: CropSownValues): CropSownTab[] {
   return CROP_SOWN_FORM.map((tab) => ({
     key: tab.key,
     label: tab.label,

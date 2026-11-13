@@ -9,7 +9,7 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { AdvancedFiltersButton } from "@/components/ui/AdvancedFiltersButton";
 import { FilterDropdown, type FilterOption } from "@/components/ui/FilterDropdown";
 import { AdvancedFiltersDrawer, type FilterFieldConfig, type FilterSelection } from "@/components/ui/AdvancedFiltersDrawer";
-import { ADVISOR_STATUS_TONE, advisorUpdatedDate, type Advisor } from "@/features/communication";
+import { advisorUpdatedDate, type Advisor } from "@/features/communication";
 import { Banner } from "@/components/ui/Banner";
 import { ExportButton } from "@/components/ui/ExportButton";
 import { matchesQuery, searchPlaceholder } from "@/lib/search";
@@ -27,7 +27,6 @@ const EXPORT_COLUMNS: CsvColumn<Advisor>[] = [
   { header: "Woreda", value: (a) => a.woreda },
   { header: "Phone", value: (a) => a.phone },
   { header: "Email", value: (a) => a.email },
-  { header: "Status", value: (a) => a.status },
   { header: "Availability", value: (a) => a.availability },
   { header: "Last Updated", value: (a) => a.updatedAt },
 ];
@@ -39,9 +38,8 @@ interface AdvisorFilters extends FilterSelection {
   expertise: Set<string>;
   region: Set<string>;
   woreda: Set<string>;
-  status: Set<string>;
 }
-const EMPTY: AdvisorFilters = { expertise: new Set(), region: new Set(), woreda: new Set(), status: new Set() };
+const EMPTY: AdvisorFilters = { expertise: new Set(), region: new Set(), woreda: new Set() };
 
 // MoA subject-matter experts the DA can reach out to. Read-only reference list; View opens the advisor page.
 export function AdvisorDirectory({ advisors }: { advisors: Advisor[] }) {
@@ -53,12 +51,10 @@ export function AdvisorDirectory({ advisors }: { advisors: Advisor[] }) {
   const expertiseOptions = optionsOf(advisors.map((a) => a.expertise));
   const regionOptions = optionsOf(advisors.map((a) => a.region));
   const woredaOptions = optionsOf(advisors.map((a) => a.woreda));
-  const statusOptions = optionsOf(advisors.map((a) => a.status));
   const filterFields: FilterFieldConfig[] = [
     { key: "expertise", label: "Expertise Area", allLabel: "All expertise areas", placeholder: "All Expertise Areas", options: expertiseOptions },
     { key: "region", label: "Region", allLabel: "All regions", placeholder: "All Regions", options: regionOptions },
     { key: "woreda", label: "Woreda", allLabel: "All woredas", placeholder: "All Woredas", options: woredaOptions },
-    { key: "status", label: "Status", allLabel: "All Status", placeholder: "All Status", options: statusOptions },
   ];
 
   const activeFilterCount = Object.values(filters).filter((set) => set.size > 0).length;
@@ -70,8 +66,7 @@ export function AdvisorDirectory({ advisors }: { advisors: Advisor[] }) {
       has(filters.expertise, a.expertise) &&
       has(filters.region, a.region) &&
       has(filters.woreda, a.woreda) &&
-      has(filters.status, a.status) &&
-      matchesQuery(query, a.name, a.id, a.expertise, a.unit, a.region, a.woreda, a.phone, a.email, a.status),
+      matchesQuery(query, a.name, a.id, a.expertise, a.unit, a.region, a.woreda, a.phone, a.email),
   );
 
   const columns: Column<Advisor>[] = [
@@ -116,11 +111,6 @@ export function AdvisorDirectory({ advisors }: { advisors: Advisor[] }) {
           <a href={`mailto:${a.email}`} className="text-[12.5px] text-muted hover:text-brand-green">{a.email}</a>
         </span>
       ),
-    },
-    {
-      key: "status",
-      header: <FilterDropdown label="Status" allLabel="All Status" options={statusOptions} selected={filters.status} onApply={setFilter("status")} />,
-      cell: (a) => <Pill tone={ADVISOR_STATUS_TONE[a.status]} className="px-2.5 py-0.5 text-[12.5px]">{a.status}</Pill>,
     },
     { key: "updated", header: "Last Updated", cell: (a) => <span className="whitespace-nowrap">{advisorUpdatedDate(a)}</span> },
     { key: "action", header: "Action", align: "center", cell: (a) => <RowAction icon="view" href={`/advisors/${a.id}`}>View</RowAction> },
@@ -169,7 +159,6 @@ export function AdvisorDirectory({ advisors }: { advisors: Advisor[] }) {
             expertise: next.expertise ?? new Set(),
             region: next.region ?? new Set(),
             woreda: next.woreda ?? new Set(),
-            status: next.status ?? new Set(),
           })
         }
       />

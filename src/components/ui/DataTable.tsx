@@ -27,6 +27,8 @@ interface DataTableProps<T> {
   onRowClick?: (row: T) => void;
   minWidth?: string;
   selectedKey?: string | null;
+  /** Extra classes for a row, e.g. to highlight one that needs attention. */
+  rowClassName?: (row: T) => string | undefined;
   /** Adds a search box above the table that matches any value in a row (for tables with no toolbar search of their own). */
   searchable?: boolean;
   searchPlaceholder?: string;
@@ -41,7 +43,7 @@ interface DataTableProps<T> {
 const ALIGN = { left: "text-left", center: "text-center", right: "text-right" };
 
 // Generic bordered table used by the registry / queue screens. Header + zebra-free rows match FarmersTable.
-export function DataTable<T>({ columns, rows, rowKey, state = "ready", emptyTitle = "Nothing to show", emptyHint, onRetry, onRowClick, minWidth = "900px", selectedKey, searchable, searchPlaceholder: placeholderOverride, title, itemLabel = "records", paginate = true }: DataTableProps<T>) {
+export function DataTable<T>({ columns, rows, rowKey, state = "ready", emptyTitle = "Nothing to show", emptyHint, onRetry, onRowClick, minWidth = "900px", selectedKey, rowClassName, searchable, searchPlaceholder: placeholderOverride, title, itemLabel = "records", paginate = true }: DataTableProps<T>) {
   const [query, setQuery] = useState("");
   const visibleRows = searchable ? rows.filter((row) => matchesQuery(query, row)) : rows;
   const isFiltered = !!searchable && query.trim() !== "";
@@ -117,6 +119,7 @@ export function DataTable<T>({ columns, rows, rowKey, state = "ready", emptyTitl
                     "border-b border-line-soft transition-colors last:border-b-0 hover:bg-surface",
                     onRowClick && "cursor-pointer",
                     selectedKey === key && "bg-brand-wash",
+                    rowClassName?.(row),
                   )}
                 >
                   {columns.map((c) => (

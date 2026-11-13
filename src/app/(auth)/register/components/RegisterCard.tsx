@@ -13,10 +13,10 @@ import { ROLE_LABELS, type Role } from "@/lib/rbac";
 import { useAuthStore } from "@/store/useAuthStore";
 import { AUTH_INPUT, AUTH_LABEL, AuthCard, PasswordInput } from "../../components/AuthCard";
 
-function Field({ label, htmlFor, hint, children }: { label: string; htmlFor: string; hint?: string; children: React.ReactNode }) {
+function Field({ label, htmlFor, required, hint, children }: { label: string; htmlFor: string; required?: boolean; hint?: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label className={AUTH_LABEL} htmlFor={htmlFor}>{label}</label>
+      <label className={AUTH_LABEL} htmlFor={htmlFor}>{label}{required && <span className="ml-1 text-danger">*</span>}</label>
       {children}
       {hint && <p className="text-xs text-zinc-500">{hint}</p>}
     </div>
@@ -66,15 +66,15 @@ export function RegisterCard() {
       <form className="flex flex-col gap-3 short:gap-2.5" onSubmit={submit}>
         {error && <ErrorAlert message={error} />}
 
-        <Field label="Full name" htmlFor="name">
+        <Field label="Full name" htmlFor="name" required hint="At least 3 characters.">
           <Input id="name" name="name" required placeholder="Enter your full name" className={AUTH_INPUT} />
         </Field>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 short:gap-2.5">
-          <Field label="Email address" htmlFor="email">
+          <Field label="Email address" htmlFor="email" required>
             <Input id="email" name="email" type="email" required placeholder="Enter your email address" className={AUTH_INPUT} />
           </Field>
-          <Field label="Mobile number" htmlFor="phone">
+          <Field label="Mobile number" htmlFor="phone" required hint="Ethiopian mobile number, e.g. +251 91 234 5678.">
             <Input id="phone" name="phone" type="tel" required placeholder="+251 91 234 5678" className={AUTH_INPUT} />
           </Field>
           <Field label="Role" htmlFor="role">
@@ -87,10 +87,10 @@ export function RegisterCard() {
               {WOREDAS.map((w) => <option key={w} value={w}>{w}</option>)}
             </Select>
           </Field>
-          <Field label="Password" htmlFor="password">
+          <Field label="Password" htmlFor="password" required hint="At least 8 characters.">
             <PasswordInput id="password" name="password" placeholder="Min. 8 characters" />
           </Field>
-          <Field label="Confirm password" htmlFor="confirm">
+          <Field label="Confirm password" htmlFor="confirm" required hint="Must match the password.">
             <PasswordInput id="confirm" name="confirm" />
           </Field>
         </div>

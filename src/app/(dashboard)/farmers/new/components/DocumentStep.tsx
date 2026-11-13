@@ -47,7 +47,7 @@ export function DocumentStep({ form, update, errors }: StepProps) {
             <span className="font-semibold">{form.document.name}</span> uploaded <span className="text-muted">(document {form.document.id})</span>
           </span>
         )}
-        {!uploading && !form.document && <span className="text-[13.5px] text-muted">PDF, JPEG or PNG, up to 5 MB.</span>}
+        {!uploading && !form.document && <span className="text-[13.5px] text-muted">Required. PDF, JPEG or PNG, up to 5 MB.</span>}
       </div>
       {message && (
         <p role="alert" className="text-[13px] text-danger">

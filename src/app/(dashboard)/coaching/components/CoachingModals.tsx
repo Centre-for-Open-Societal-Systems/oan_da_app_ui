@@ -7,7 +7,7 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Textarea } from "@/components/ui/Textarea";
-import { cn } from "@/lib/utils";
+import { cn, todayIso } from "@/lib/utils";
 import {
   COACHING_AGENT,
   COACHING_FOCUS_OPTIONS,
@@ -111,7 +111,7 @@ export function ShareModal({ sessionDate, entry, onClose, onShare }: { sessionDa
         {COACHING_AGENT.first} will see the entry in her Coaching workspace as view-only. She can tick her own next actions and acknowledge it.
       </p>
 
-      <p className="mt-4 text-[13.5px] font-semibold text-ink">What to share</p>
+      <p className="mt-4 text-[13.5px] font-semibold text-ink">What to share<span className="ml-1 text-danger">*</span></p>
       <div className="mt-2 flex flex-col gap-2">
         {rows.map((r) => {
           const on = parts.has(r.key);
@@ -125,7 +125,7 @@ export function ShareModal({ sessionDate, entry, onClose, onShare }: { sessionDa
         })}
       </div>
 
-      <p className="mt-4 text-[13.5px] font-semibold text-ink">Notify {COACHING_AGENT.first}</p>
+      <p className="mt-4 text-[13.5px] font-semibold text-ink">Notify {COACHING_AGENT.first}<span className="ml-1 text-danger">*</span></p>
       <div className="mt-2 flex flex-wrap gap-2.5">
         {CHANNELS.map((c) => {
           const on = channels.has(c.key);
@@ -148,6 +148,7 @@ export function ShareModal({ sessionDate, entry, onClose, onShare }: { sessionDa
         Unsaved changes are saved first. Sharing is recorded on the coaching history.
       </p>
 
+      {!valid && <p className="mt-4 text-[12.5px] text-muted">Tick at least one option in each list marked * to enable Share with {COACHING_AGENT.first}.</p>}
       <div className="mt-4 flex justify-end gap-3">
         <Button variant="outline" className="h-11 px-6 font-semibold" onClick={onClose}>Cancel</Button>
         <Button
@@ -169,7 +170,7 @@ export function ShareModal({ sessionDate, entry, onClose, onShare }: { sessionDa
 // ---------- New session ----------
 
 export function NewSessionModal({ onClose, onCreate }: { onClose: () => void; onCreate: (s: { date: string; topic: string; focus: string[] }) => void }) {
-  const [date, setDate] = useState("");
+  const [date, setDate] = useState(() => todayIso());
   const [topic, setTopic] = useState("");
   const [focus, setFocus] = useState<Set<string>>(new Set());
   const valid = date !== "" && topic.trim() !== "";
@@ -200,7 +201,7 @@ export function NewSessionModal({ onClose, onCreate }: { onClose: () => void; on
       }
     >
       <div className="flex flex-col gap-4">
-        <FormField label="Session date" htmlFor="ns-date" required><Input id="ns-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></FormField>
+        <FormField label="Session date" htmlFor="ns-date" required hint="Today or later." hintTone={date !== "" && date < todayIso() ? "error" : "muted"}><Input id="ns-date" type="date" min={todayIso()} value={date} onChange={(e) => setDate(e.target.value)} /></FormField>
         <FormField label="Topic" htmlFor="ns-topic" required><Input id="ns-topic" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="What will you work on together?" /></FormField>
         <div className="flex flex-col gap-2">
           <p className="text-[14px] font-medium text-ink">Focus areas</p>
@@ -221,6 +222,7 @@ export function NewSessionModal({ onClose, onCreate }: { onClose: () => void; on
             })}
           </div>
         </div>
+        {!valid && <p className="text-[12.5px] text-muted">Complete every field marked * to enable Schedule session.</p>}
       </div>
     </Modal>
   );

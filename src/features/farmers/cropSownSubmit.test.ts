@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./cropSownApi", () => ({ fetchIntakeForm: vi.fn(), saveFarmerCrop: vi.fn() }));
 
-import { buildRecord, clearIntakeFormCache, lookupRecord, MissingFieldError, optionId, optionLabel, saveStage } from "./cropSownSubmit";
+import { apiSectionIds, buildRecord, clearIntakeFormCache, lookupRecord, MissingFieldError, optionId, optionLabel, saveStage } from "./cropSownSubmit";
 import { fetchIntakeForm, saveFarmerCrop } from "./cropSownApi";
 import { valueKey } from "./cropSown";
 import type { Farmer } from "./types";
@@ -88,7 +88,7 @@ describe("saveStage", () => {
   it("refuses a new stage without a Production Season, pointing at the tab where it is entered", async () => {
     const { [valueKey("identity", "production_season")]: _omitted, ...without } = values;
     void _omitted;
-    await expect(saveStage({ farmer, tab: "planning", values: without, drafts: {} })).rejects.toMatchObject({ name: "MissingFieldError", tab: "planning" });
+    await expect(saveStage({ farmer, tab: "planning", values: without, drafts: {} })).rejects.toMatchObject({ name: "MissingFieldError", tab: "crop-sown" });
     expect(saveFarmerCrop).not.toHaveBeenCalled();
     expect(new MissingFieldError("x", "planning")).toBeInstanceOf(Error);
   });
@@ -111,5 +111,13 @@ describe("saveStage", () => {
   it("leaves the drafts untouched when the save is refused", async () => {
     vi.mocked(saveFarmerCrop).mockRejectedValueOnce(new Error("Registry unavailable, try again."));
     await expect(saveStage({ farmer, tab: "planning", values, drafts: {} })).rejects.toThrow("Registry unavailable");
+  });
+
+  it("saves nothing on the opening Crop Sown tab, whose fields go out with Planning", async () => {
+    vi.mocked(saveFarmerCrop).mockClear();
+    await expect(saveStage({ farmer, tab: "crop-sown", values, drafts: {} })).resolves.toEqual({ drafts: {}, saved: [] });
+    expect(saveFarmerCrop).not.toHaveBeenCalled();
+    expect(apiSectionIds("crop-sown", "address")).toEqual(apiSectionIds("planning", "address"));
+    expect(apiSectionIds("crop-sown", "identity")).toEqual(apiSectionIds("planning", "identity"));
   });
 });

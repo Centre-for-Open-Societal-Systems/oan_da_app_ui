@@ -72,6 +72,9 @@ describe("validateStep", () => {
     expect(Object.keys(validateStep("farmer", EMPTY_FORM)).sort()).toEqual(["date_of_birth", "father_name", "first_name", "gender", "grandfather_name", "national_id", "phone"]);
     const wrong = validateStep("farmer", { ...filled, phone: "12345", national_id: "123", date_of_birth: "2999-01-01" });
     expect(wrong.phone).toContain("+251");
+    // Nine digits are not enough: a mobile number starts with 9 (or 7), which the registry checks.
+    expect(validateStep("farmer", { ...filled, phone: "+251123456789" }).phone).toContain("Ethiopian mobile number");
+    expect(validateStep("farmer", { ...filled, phone: "912345678" }).phone).toBeUndefined();
     expect(wrong.national_id).toContain("12-digit FIN or the 16-digit FAN");
     expect(wrong.date_of_birth).toContain("future");
   });
@@ -84,6 +87,25 @@ describe("validateStep", () => {
     expect(validateStep("holdings", { ...filled, lands: [{ ownership: "", area_hectare: "" }], crops: [], livestock: [] })).toEqual({});
     expect(validateStep("holdings", { ...filled, lands: [{ ownership: "owner", area_hectare: "0" }] })).toEqual({ "lands.0.area_hectare": "Area must be a number above 0." });
     expect(validateStep("household", { ...filled, household_size: "" })).toEqual({ household_size: "Household size is required when members are listed." });
+  });
+
+  it("needs the household size to equal the farmer plus the members listed, as the registry does", () => {
+    expect(validateStep("household", filled)).toEqual({});
+    expect(validateStep("household", { ...filled, household_size: "4", members: [] })).toEqual({
+      household_size: "Household size is 4, but 1 person is listed (the farmer plus each member). Add every member, or change the size to 1.",
+    });
+    expect(validateStep("household", { ...filled, household_size: "1", members: [] })).toEqual({});
+    expect(validateStep("household", { ...filled, household_size: "", members: [] })).toEqual({});
+  });
+
+  it("needs all five details of a listed member, as the registry does", () => {
+    const member = { first_name: "Almaz", grandfather_name: "", gender: "", date_of_birth: "", relationship: "" };
+    expect(validateStep("household", { ...filled, household_size: "2", members: [member] })).toEqual({
+      "members.0.grandfather_name": "Grandfather's name is required.",
+      "members.0.gender": "Gender is required.",
+      "members.0.date_of_birth": "Date of birth is required.",
+      "members.0.relationship": "Relationship is required.",
+    });
   });
 
   it("needs the uploaded ID document", () => {

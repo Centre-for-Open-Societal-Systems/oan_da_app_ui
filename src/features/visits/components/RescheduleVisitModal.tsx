@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { todayIso } from "@/lib/utils";
 import { getFarmer } from "@/features/farmers";
 import { rescheduleVisit, type ApiVisit } from "../api";
 import { RESCHEDULE_REASONS } from "../data";
@@ -79,15 +80,15 @@ function RescheduleForm({ visit, onClose, onRescheduled }: RescheduleVisitModalP
         <VisitFarmerCard visit={visit} phone={farmer?.phone} />
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <FormField label="New date" htmlFor="reschedule-date">
-            <Input id="reschedule-date" name="date" type="date" className="h-10 text-muted" required />
+          <FormField label="New date" htmlFor="reschedule-date" required>
+            <Input id="reschedule-date" name="date" type="date" min={todayIso()} className="h-10 text-muted" defaultValue={todayIso()} required />
           </FormField>
-          <FormField label="New time" htmlFor="reschedule-time">
+          <FormField label="New time" htmlFor="reschedule-time" required>
             <Input id="reschedule-time" name="time" type="time" className="h-10 text-muted" required />
           </FormField>
         </div>
 
-        <FormField label="Reason for rescheduling" htmlFor="reschedule-reason">
+        <FormField label="Reason for rescheduling" htmlFor="reschedule-reason" required>
           <Select id="reschedule-reason" name="reason" className="h-10" defaultValue="" required>
             <option value="" disabled>Select a reason</option>
             {RESCHEDULE_REASONS.map((reason) => (

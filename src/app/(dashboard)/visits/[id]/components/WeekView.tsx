@@ -1,11 +1,13 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import type { PlannerVisit } from "@/features/visits";
 import { SelectedDayPanel } from "./SelectedDayPanel";
 import { NoVisits, VisitCard } from "./VisitCard";
-import { dateOf, isToday, longDate, visitsOn, weekdayLabel } from "./calendar";
+import { dateOf, isToday, longDate, weekdayLabel } from "./calendar";
 
 interface WeekViewProps {
+  visitsOn: (day: number) => PlannerVisit[];
   weekStart: number;
   selectedDay: number | null;
   selectedVisit: string | null;
@@ -13,7 +15,7 @@ interface WeekViewProps {
   onClearSelection: () => void;
 }
 
-export function WeekView({ weekStart, selectedDay, selectedVisit, onSelectDay, onClearSelection }: WeekViewProps) {
+export function WeekView({ visitsOn, weekStart, selectedDay, selectedVisit, onSelectDay, onClearSelection }: WeekViewProps) {
   const weekDays = Array.from({ length: 7 }, (_, i) => weekStart + i);
   return (
     <div className="overflow-x-auto p-4 sm:p-6">
@@ -54,17 +56,14 @@ export function WeekView({ weekStart, selectedDay, selectedVisit, onSelectDay, o
               {visits.length === 0 ? (
                 <NoVisits />
               ) : (
-                visits.map((v) => {
-                  const key = `${day}-${v.time}`;
-                  return <VisitCard key={key} visit={v} active={selectedVisit === key} onClick={() => onSelectDay(day, key)} />;
-                })
+                visits.map((v) => <VisitCard key={v.id} visit={v} active={selectedVisit === v.id} onClick={() => onSelectDay(day, v.id)} />)
               )}
             </div>
           );
         })}
       </div>
 
-      {selectedDay != null && <SelectedDayPanel day={selectedDay} selectedVisit={selectedVisit} onClear={onClearSelection} />}
+      {selectedDay != null && <SelectedDayPanel visits={visitsOn(selectedDay)} day={selectedDay} selectedVisit={selectedVisit} onClear={onClearSelection} />}
     </div>
   );
 }

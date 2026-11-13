@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ErrorAlert } from "@/components/ui/ErrorAlert";
-import { beginKeycloakLogin, login, mockLogin } from "@/features/auth";
+import { login, mockLogin } from "@/features/auth";
 import { ApiError } from "@/lib/api";
 import { useAuthStore } from "@/store/useAuthStore";
 import { AUTH_INPUT, AUTH_LABEL, AuthCard, PasswordInput } from "../../components/AuthCard";
@@ -58,19 +58,6 @@ export function LoginCard() {
     }
   };
 
-  // Standard redirect sign-in: IAM hands back the Keycloak URL, the browser leaves for it and returns at /auth/callback.
-  const handleKeycloak = async () => {
-    if (isSubmitting) return;
-    setError(null);
-    setIsSubmitting(true);
-    try {
-      await beginKeycloakLogin();
-    } catch (err) {
-      setError(loginErrorMessage(err));
-      setIsSubmitting(false);
-    }
-  };
-
   // Automatically clear URL query parameters if they exist
   useEffect(() => {
     if (window.location.search) {
@@ -85,7 +72,7 @@ export function LoginCard() {
           {error && <ErrorAlert message={error} />}
 
           <div className="flex flex-col gap-1.5">
-            <label className={AUTH_LABEL} htmlFor="email">Email or username</label>
+            <label className={AUTH_LABEL} htmlFor="email">Email or username<span className="ml-1 text-danger">*</span></label>
             <Input
               id="email"
               name="email"
@@ -104,7 +91,7 @@ export function LoginCard() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className={AUTH_LABEL} htmlFor="password">Password</label>
+            <label className={AUTH_LABEL} htmlFor="password">Password<span className="ml-1 text-danger">*</span></label>
             <PasswordInput id="password" name="password" autoComplete="current-password" />
           </div>
 
@@ -170,15 +157,6 @@ export function LoginCard() {
             Secure sign-in · Ministry of Agriculture — Ethiopia
           </div>
         </form>
-
-        <div className="flex items-center gap-3 text-xs font-medium uppercase tracking-wider text-zinc-400">
-          <span className="h-px flex-1 bg-zinc-200" />
-          or
-          <span className="h-px flex-1 bg-zinc-200" />
-        </div>
-        <Button type="button" variant="outline" size="lg" disabled={isSubmitting} onClick={handleKeycloak} className="h-11 w-full gap-2 rounded-md font-semibold">
-          Sign in with Keycloak
-        </Button>
       </AuthCard>
 
       <ForgotPasswordModal

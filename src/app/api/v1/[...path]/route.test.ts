@@ -106,6 +106,15 @@ it("does not try to renew a call that brought its own token", async () => {
   expect(calls[0].headers.authorization).toBe("Bearer mine");
 });
 
+it("sends a sign-in without the old session's Bearer token and relays the new session cookies", async () => {
+  answer = () => ({ cookies: ["X-Access-Token=new; HttpOnly; Path=/", "X-CSRF-Token=c2; Path=/"] });
+  const res = await POST(new NextRequest("http://localhost:3000/api/v1/da-services/auth/login", { method: "POST", body: '{"usr":"u","pwd":"p"}', headers: { "content-type": "application/json", cookie: IAM_COOKIES } }));
+  expect(calls).toHaveLength(1);
+  expect(calls[0].headers.authorization).toBeUndefined();
+  expect(JSON.parse(calls[0].body)).toEqual({ usr: "u", pwd: "p" });
+  expect(res.headers.getSetCookie()).toEqual(["X-Access-Token=new; HttpOnly; Path=/", "X-CSRF-Token=c2; Path=/"]);
+});
+
 it("fills the IAM access token into an empty logout body", async () => {
   await POST(new NextRequest("http://localhost:3000/api/v1/auth/logout", { method: "POST", body: "{}", headers: { "content-type": "application/json", cookie: IAM_COOKIES } }));
   expect(JSON.parse(calls[0].body)).toEqual({ access_token: "old" });

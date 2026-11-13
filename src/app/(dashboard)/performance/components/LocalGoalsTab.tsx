@@ -57,20 +57,21 @@ function AddGoalModal({ first, onClose, onAdd }: { first: string; onClose: () =>
       }
     >
       <div className="flex flex-col gap-4">
-        <FormField label="Goal" htmlFor="goal-title">
+        <FormField label="Goal" htmlFor="goal-title" required>
           <Input id="goal-title" value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="Hold 2 farmer field days on row planting" />
         </FormField>
         <FormField label="Feeds KPI" htmlFor="goal-kpi">
           <Dropdown id="goal-kpi" value={feedsKpi} onChange={setFeedsKpi} options={KPI_OPTIONS} />
         </FormField>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <FormField label="Target" htmlFor="goal-target" hint={target !== "" && amount === 0 ? "Start with a number, e.g. 2 field days." : undefined} hintTone="error">
+          <FormField label="Target" htmlFor="goal-target" required hint={target !== "" && amount === 0 ? "Start with a number, e.g. 2 field days." : "Needs a number above 0, e.g. 2 field days."} hintTone={target !== "" && amount === 0 ? "error" : "muted"}>
             <Input id="goal-target" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="2 field days" />
           </FormField>
           <FormField label="Due" htmlFor="goal-due">
             <Dropdown id="goal-due" value={due} onChange={setDue} options={GOAL_DUE_OPTIONS} />
           </FormField>
         </div>
+        {!valid && <p className="text-[12.5px] text-muted">Complete every field marked * to enable Add goal.</p>}
         <p className="text-[13px] text-muted">{first} is told in the app. Progress counts towards the KPI it feeds.</p>
       </div>
     </Modal>

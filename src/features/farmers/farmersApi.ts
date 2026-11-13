@@ -136,6 +136,18 @@ export async function fetchFarmerPlots(farmerId: string): Promise<ApiPlot[]> {
   return res.data.plots;
 }
 
+/**
+ * One row of GET /farmers/{id}/livestock: a `kind: "submission"` with its `sections`, or a `kind: "record"` of a register.
+ * Each register has its own columns; livestockRecords.ts reads them.
+ */
+export type ApiFarmerLivestock = Record<string, unknown>;
+
+/** GET /farmers/{id}/livestock: every livestock submission and register record of the farmer. Takes the FR-… Farmer ID. */
+export async function fetchFarmerLivestock(farmerId: string): Promise<ApiFarmerLivestock[]> {
+  const res = await authRequest<{ data: { livestock: ApiFarmerLivestock[] } }>(farmerPath(farmerId, "livestock"));
+  return res.data.livestock;
+}
+
 // ---- Edit permission, queued updates and DA links ----
 
 /** GET /farmers/{id}/permissions: whether the caller may act on this farmer. */
@@ -319,11 +331,14 @@ export function apiPlotToPlot(p: ApiPlot): Plot {
   };
 }
 
+/** The backend's closed-visit status as people read it. */
+const VISIT_STATUS_LABELS: Record<string, string> = { "Physical Visit Complete": "Completed" };
+
 /** A visit for the Visit history timeline. */
 export function apiVisitToVisit(v: ApiFarmerVisit): Visit {
   const at = splitDateTime(v.completed_at ?? v.scheduled_at);
   return {
-    title: `${v.visit_type} · ${v.physical_status}`,
+    title: `${v.visit_type} · ${VISIT_STATUS_LABELS[v.physical_status] ?? v.physical_status}`,
     summary: v.outcome || `Visit ${v.name} by ${v.da_id}`,
     date: at.date,
     time: at.time,

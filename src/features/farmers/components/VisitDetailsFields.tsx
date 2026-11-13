@@ -1,18 +1,24 @@
+import { useState } from "react";
 import { Banner } from "@/components/ui/Banner";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { todayIso } from "@/lib/utils";
 import type { Farmer } from "../types";
 import { DURATIONS, PRIORITIES, PRIORITY_BY_LEVEL, type VisitPreset } from "./planVisit";
 
 interface VisitDetailsFieldsProps {
-  selected: Farmer | undefined;
+  selected: Farmer[];
   preset: VisitPreset | undefined;
   isSchedule: boolean;
 }
 
 // Purpose, date/time, location and priority (uncontrolled inputs) plus the priority / offline notice.
 export function VisitDetailsFields({ selected, preset, isSchedule }: VisitDetailsFieldsProps) {
+  const today = todayIso();
+  const [date, setDate] = useState(today);
+  const pastDate = date !== "" && date < today;
+
   return (
     <>
       <FormField label="Purpose / objective" htmlFor="visit-purpose" required>
@@ -20,8 +26,8 @@ export function VisitDetailsFields({ selected, preset, isSchedule }: VisitDetail
       </FormField>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <FormField label="Date" htmlFor="visit-date" required>
-          <Input id="visit-date" type="date" className="h-10" defaultValue="2026-08-25" required />
+        <FormField label="Date" htmlFor="visit-date" required hint={pastDate ? "You cannot select past date for visit" : "Today or later."} hintTone={pastDate ? "error" : "muted"}>
+          <Input id="visit-date" type="date" className="h-10" value={date} min={today} onChange={(e) => setDate(e.target.value)} required />
         </FormField>
         <FormField label="Time" htmlFor="visit-time" required>
           <Input id="visit-time" type="time" className="h-10" defaultValue="09:00" required />
@@ -38,7 +44,7 @@ export function VisitDetailsFields({ selected, preset, isSchedule }: VisitDetail
           <Input
             id="visit-location"
             className="h-10 border-transparent bg-slate-100 text-ink"
-            value={selected ? `${selected.kebele} 01 · plot 8.191°N, 37.052°E` : ""}
+            value={selected.length > 1 ? "Each farmer's registered parcel" : selected.length === 1 ? `${selected[0].kebele} 01 · plot 8.191°N, 37.052°E` : ""}
             placeholder="Select a farmer first"
             readOnly
             endAdornment={

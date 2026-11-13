@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { LivestockReportForm } from "./components/LivestockReportForm";
 
 export const metadata: Metadata = {
-  title: "Submit Livestock Report | OpenAgriNet",
-  description: "Record a farmer's herd composition, animal health and vaccination, feeding and water, production and sales.",
+  title: "Livestock Survey | OpenAgriNet",
+  description: "Record a farmer's animals, health events, vaccinations, breeding and vital events.",
 };
 
 export default function LivestockReportPage() {

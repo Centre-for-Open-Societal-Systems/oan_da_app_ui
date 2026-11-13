@@ -1,4 +1,4 @@
-import { CROP_SOWN_FORM, registryCode, valueKey, type CropSownFieldDef, type CropSownValues } from "./cropSown";
+import { CROP_SOWN_FORM, CROP_SOWN_INTRO_TAB, registryCode, valueKey, type CropSownFieldDef, type CropSownValues } from "./cropSown";
 import { fetchIntakeForm, saveFarmerCrop, type ApiIntakeField, type ApiIntakeForm, type ApiSavedCrop, type CropSectionInput, type CropSownForm } from "./cropSownApi";
 import type { Farmer } from "./types";
 import { GEO_LEVELS, type GeoIds } from "./useGeoLevels";
@@ -58,6 +58,9 @@ export const STAGE_PLANS: Record<string, StagePlan> = {
   },
   harvesting: { form: "harvesting", season: COMMON_SEASON, sections: [{ sectionId: "cropsown_harvest_details_section_01", ui: ["harvest"] }] },
 };
+
+/** The stage behind a form tab. The "Crop Sown" tab saves nothing itself; its identity and address belong to Planning. */
+export const stagePlanOf = (tab: string): StagePlan | undefined => STAGE_PLANS[tab === CROP_SOWN_INTRO_TAB ? "planning" : tab];
 
 /** What a stage's draft has so far: kept by the form between saves. */
 export interface StageDraft {
@@ -225,7 +228,7 @@ export async function saveStage({ farmer, tab, values, drafts, geoIds = {} }: Sa
     sections.push({ section_id: LOOKUP, records: [lookupRecord(farmer, values)] });
     // The season is what the registry files the stage under: crop year and production season are both needed.
     const rawSeason = values[valueKey("identity", "production_season")]?.trim();
-    if (!rawSeason) throw new MissingFieldError("Production Season is required. Choose it under Farmer Identity.", tab);
+    if (!rawSeason) throw new MissingFieldError("Production Season is required. Choose it under Farmer Identity.", CROP_SOWN_INTRO_TAB);
     const year = values[valueKey("identity", "crop_year")]?.trim() || String(new Date().getFullYear());
     const seasonDef = CROP_SOWN_FORM.flatMap((t) => t.sections).find((x) => x.id === "identity")?.fields.find((f) => f.key === "production_season");
     const seasonApi = fieldsOf(plan.season)?.find((f) => f.field_name === "production_season");
@@ -254,7 +257,7 @@ export async function saveStage({ farmer, tab, values, drafts, geoIds = {} }: Sa
 
 /** The registry sections behind a form section on a tab: where its live field list (options, required) comes from. */
 export function apiSectionIds(tab: string, uiSectionId: string): string[] {
-  const plan = STAGE_PLANS[tab];
+  const plan = stagePlanOf(tab);
   if (!plan) return [];
   if (uiSectionId === "identity") return [LOOKUP, plan.season];
   return plan.sections.filter((s) => s.ui.includes(uiSectionId)).map((s) => s.sectionId);

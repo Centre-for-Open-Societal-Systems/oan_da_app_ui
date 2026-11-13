@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { dateOf, dayOfDate, longDate, monthYear, weekLabel, weekStartOf } from "./calendar";
+import { dateOf, dayOfDate, isoOf, longDate, monthYear, TODAY, weekLabel, weekStartOf } from "./calendar";
 
 // View, cursor and selection state for the visits calendar.
 export function useWeekCalendar() {
   const [view, setView] = useState("Week");
   // The day the calendar is showing (its week / the day itself / its month).
-  const [cursor, setCursor] = useState(0);
+  const [cursor, setCursor] = useState(TODAY);
   // Day and visit the user clicked in the grid.
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [selectedVisit, setSelectedVisit] = useState<string | null>(null);
@@ -34,7 +34,7 @@ export function useWeekCalendar() {
   };
 
   const goToday = () => {
-    setCursor(0);
+    setCursor(TODAY);
     setSelectedDay(null);
   };
 
@@ -47,7 +47,12 @@ export function useWeekCalendar() {
   const cursorDate = dateOf(cursor);
   const label = view === "Day" ? longDate(cursor) : view === "Month" ? monthYear(cursorDate) : weekLabel(weekStart);
   const unit = view === "Day" ? "day" : view === "Month" ? "month" : "week";
-  const onCurrent = view === "Day" ? cursor === 0 : view === "Month" ? monthYear(cursorDate) === monthYear(dateOf(0)) : weekStart === 0;
+  const onCurrent = view === "Day" ? cursor === TODAY : view === "Month" ? monthYear(cursorDate) === monthYear(dateOf(TODAY)) : weekStart === 0;
+  // The visits to load: the cursor's week and month together, so switching views needs no new request.
+  const monthStart = dayOfDate(new Date(Date.UTC(cursorDate.getUTCFullYear(), cursorDate.getUTCMonth(), 1)));
+  const monthEnd = dayOfDate(new Date(Date.UTC(cursorDate.getUTCFullYear(), cursorDate.getUTCMonth() + 1, 0)));
+  const from = isoOf(Math.min(weekStart, monthStart));
+  const to = isoOf(Math.max(weekStart + 6, monthEnd));
 
   return {
     view,
@@ -55,6 +60,8 @@ export function useWeekCalendar() {
     changeView,
     cursor,
     weekStart,
+    from,
+    to,
     label,
     unit,
     onCurrent,

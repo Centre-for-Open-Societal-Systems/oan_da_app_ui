@@ -74,7 +74,7 @@ export function LocationStep({ form, update, errors }: StepProps) {
         ))}
       </Grid>
       <Grid>
-        <TextField id="location" label="GPS location" value={form.location} onChange={(v) => update({ location: v })} error={errors.location} hint={locating ?? "Latitude, longitude, altitude and accuracy, separated by spaces."} placeholder="9.03 38.74 2350 5" />
+        <TextField id="location" label="GPS location" value={form.location} onChange={(v) => update({ location: v })} error={errors.location} hint={locating ?? "Latitude and longitude, then altitude and accuracy if known, separated by spaces."} placeholder="9.03 38.74 2350 5" />
         <div className="flex items-end">
           <Button type="button" variant="outline" onClick={locate} className="h-11">
             Use this device&apos;s location

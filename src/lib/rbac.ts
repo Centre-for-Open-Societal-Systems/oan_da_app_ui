@@ -70,8 +70,7 @@ export const NAV_GROUPS: NavGroup[] = [
       // Supervisor sees field operations here (visits + kebele assignment) instead of the registry-admin items
       { title: "Field Visits", href: "/visits", roles: ["Supervisor"], part: 1 },
       { title: "Assignments", href: "/assignments", roles: ["Supervisor"], part: 1 },
-      // Governed status changes (transfer, leave, retirement …) for a DA, with their audit trail.
-      { title: "Lifecycle Management", href: "/lifecycle", roles: ALL, part: 1 },
+      // Lifecycle Management (/lifecycle) is Part 2: hidden from the sidebar; the page still opens by URL.
       { title: "Approvals", href: "/approvals", roles: ["Admin"], part: 1 },
       { title: "Registry Sync", href: "/registry-sync", roles: ["Admin"], part: 1 },
       // Internal Feedback (/feedback) is hidden from the sidebar; the page still opens by URL.
@@ -80,8 +79,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: "Leave",
     items: [
-      { title: "My Leave", href: "/lifecycle/leave", roles: ALL.filter((r) => r !== "Admin"), part: 1 },
-      { title: "Team Leave", href: "/team-leave", roles: ALL.filter((r) => r !== "Admin"), part: 1 },
+      // My Leave (/lifecycle/leave) and Team Leave (/team-leave) are Part 2: hidden from the sidebar; the pages still open by URL.
       // The Admin runs leave for the whole programme instead of having a leave record of their own.
       { title: "Leave Overview", href: "/leave-overview", roles: ["Admin"], part: 1 },
       { title: "Leave Configure", href: "/leave-configure", roles: ["Admin"], part: 1 },
@@ -92,8 +90,9 @@ export const NAV_GROUPS: NavGroup[] = [
     title: "Communication",
     items: [
       { title: "Knowledge Base", href: "/knowledge", roles: ALL, part: 1 },
-      { title: "Broadcast", href: "/broadcast", roles: ["DA", "CommsOfficer", "Admin"], part: 1 },
-      { title: "Alerts", href: "/alerts", roles: ["CommsOfficer", "Admin", "Supervisor"], part: 1 },
+      { title: "Broadcast", href: "/broadcast", roles: ["DA", "Supervisor", "CommsOfficer", "Admin"], part: 1 },
+      // The Supervisor broadcasts to their Woreda from Broadcast instead of triaging Alerts.
+      { title: "Alerts", href: "/alerts", roles: ["CommsOfficer", "Admin"], part: 1 },
       // Admin maintains the directory; DAs open it from My Teams.
       { title: "Advisors", href: "/advisors", roles: ["Admin"], part: 1 },
     ],
@@ -101,7 +100,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: "Performance",
     items: [
-      { title: "My Performance", href: "/performance", roles: ["DA", "Supervisor"], part: 1 },
+      // My Performance (/performance) and Training (/training) are hidden from the sidebar; the pages still open by URL.
       // The Supervisor's Performance rail: team, appraisal cycle, monitoring, then reviews through training.
       { title: "My Teams", href: "/performance/teams", roles: ["Supervisor"], part: 1 },
       { title: "Appraisals", href: "/appraisals", roles: ["Supervisor"], part: 1 },
@@ -109,8 +108,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { title: "Reviews", href: "/reviews", roles: ["Supervisor", "Admin"], part: 1 },
       { title: "Coaching", href: "/coaching", roles: ["Supervisor"], part: 1 },
       { title: "Recognition", href: "/recognition", roles: ["Supervisor"], part: 2 },
-      { title: "Surveys", href: "/surveys", roles: ["DA", "Supervisor"], part: 1 },
-      { title: "Training", href: "/training", roles: ["DA", "Supervisor"], part: 1 },
+      { title: "Surveys", href: "/surveys", roles: ["DA", "Supervisor", "Executive", "Admin"], part: 1 },
     ],
   },
   {
@@ -153,9 +151,9 @@ export const PAGE_TITLES: { prefix: string; title: string }[] = [
   { prefix: "/lifecycle", title: "Lifecycle Management" },
   { prefix: "/registry-sync", title: "Agents" },
   { prefix: "/feedback", title: "Internal Feedback" },
-  { prefix: "/farmers/new", title: "Register Farmer" },
-  { prefix: "/farmers/crop-report", title: "Crop Report" },
-  { prefix: "/farmers/livestock-report", title: "Livestock Report" },
+  { prefix: "/farmers/new", title: "Farmer Registration" },
+  { prefix: "/farmers/crop-report", title: "Crop Sown Survey" },
+  { prefix: "/farmers/livestock-report", title: "Livestock Survey" },
   { prefix: "/farmers/", title: "Farmer Profile" },
   { prefix: "/farmers", title: "My Farmers" },
   { prefix: "/visits/", title: "Visit Planner" },
@@ -167,6 +165,8 @@ export const PAGE_TITLES: { prefix: string; title: string }[] = [
   { prefix: "/knowledge", title: "Knowledge Base" },
   { prefix: "/broadcast", title: "Broadcast" },
   { prefix: "/alerts", title: "Alerts" },
+  { prefix: "/notifications", title: "Notifications" },
+  { prefix: "/404-error", title: "Page not found" },
   { prefix: "/advisors", title: "Advisors" },
   { prefix: "/performance/kpi-entry", title: "KPI Entry" },
   { prefix: "/performance/teams/targets", title: "Set Targets" },
@@ -178,6 +178,7 @@ export const PAGE_TITLES: { prefix: string; title: string }[] = [
   { prefix: "/performance", title: "My Performance" },
   { prefix: "/reviews/history", title: "Review History" },
   { prefix: "/reviews", title: "Reviews" },
+  { prefix: "/surveys/templates/", title: "Survey Template" },
   { prefix: "/surveys/", title: "Survey Capture" },
   { prefix: "/surveys", title: "Surveys" },
   { prefix: "/training/agents", title: "Agent Training" },

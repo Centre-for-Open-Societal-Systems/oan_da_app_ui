@@ -30,17 +30,11 @@ export interface VisitTimelineEntry {
 export type PlannerStatus = "scheduled" | "completed" | "overdue";
 
 export interface PlannerVisit {
+  id: string;
   time: string;
   farmerName: string;
   kebele: string;
   status: PlannerStatus;
-}
-
-export interface PlannerDay {
-  label: string;
-  dayOfMonth: number;
-  isToday?: boolean;
-  visits: PlannerVisit[];
 }
 
 export type PriorityLevel = "high" | "medium" | "low";
@@ -58,6 +52,7 @@ export interface PriorityFarmer {
 export type ArrivalState = "done" | "confirmed" | "tentative";
 
 export interface TodaysVisit {
+  id: string;
   farmerName: string;
   plannedArrival: string;
   state: ArrivalState;

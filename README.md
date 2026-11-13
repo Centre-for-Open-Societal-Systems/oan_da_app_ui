@@ -46,4 +46,6 @@ npm run dev        # http://localhost:3000
 | `npm test` | Unit tests (Vitest, `src/**/*.test.ts`) |
 | `npm run check` | lint + typecheck + tests; CI runs this plus `build` on every PR |
 
+Login (form login vs SSO redirect, the `NEXT_PUBLIC_LOGIN_MODE` switch, the backend login API) is described in [LOGIN.md](LOGIN.md).
+
 Where code belongs, the import rules, styling tokens and the open state-management decision are described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
