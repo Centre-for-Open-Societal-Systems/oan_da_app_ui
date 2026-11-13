@@ -12,7 +12,7 @@ import { FilterDropdown, type FilterOption } from "@/components/ui/FilterDropdow
 import { TablePagination } from "@/components/ui/TablePagination";
 import { fetchGrievanceSummary, GRIEVANCE_PAGE_MAX, listGrievances, toGrievance, type GrievanceSummaryCard } from "@/features/grievances";
 import { GrievanceStatusPill } from "@/features/grievances";
-import { GrievanceDetailModal } from "@/features/grievances";
+import { GrievanceDetailModal, UploadEvidenceModal, uploadEvidenceDocument } from "@/features/grievances";
 import type { Grievance } from "@/features/grievances";
 import { GrievanceStats, type GrievanceStatCard } from "./GrievanceStats";
 import { RaiseGrievanceButton } from "./RaiseGrievanceButton";
@@ -63,6 +63,8 @@ export function GrievancesTable() {
   const [query, setQuery] = useState("");
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [selected, setSelected] = useState<Grievance | null>(null);
+  /** Grievance whose "Upload evidence" modal is open. */
+  const [uploading, setUploading] = useState<Grievance | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -135,15 +137,16 @@ export function GrievancesTable() {
 
         {/* Table */}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[960px] table-fixed border-collapse text-left">
+          {/* Fixed widths sized to content; Details takes the rest. Actions fits View + Upload Evidence on one line. */}
+          <table className="w-full min-w-[1180px] table-fixed border-collapse text-left">
             <colgroup>
-              <col className="w-[190px]" />
+              <col className="w-[150px]" />
               <col />
-              <col className="w-[150px]" />
-              <col className="w-[180px]" />
-              <col className="w-[150px]" />
-              <col className="w-[150px]" />
-              <col className="w-[110px]" />
+              <col className="w-[130px]" />
+              <col className="w-[170px]" />
+              <col className="w-[135px]" />
+              <col className="w-[140px]" />
+              <col className="w-[260px]" />
             </colgroup>
             <thead>
               <tr className="border-y border-line bg-surface text-[14px] font-semibold text-slate-500">
@@ -157,7 +160,7 @@ export function GrievancesTable() {
                 <th className="px-4 py-3 font-semibold">
                   <FilterDropdown label="Status" allLabel="All statuses" options={statusOptions} selected={filters.status} onApply={setFilter("status")} />
                 </th>
-                <th className="px-4 py-3 text-center font-semibold">Actions</th>
+                <th className="px-4 py-3 text-right font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody className="text-[14px] text-slate-700">
@@ -179,7 +182,7 @@ export function GrievancesTable() {
               )}
               {pageRows.map((g) => (
                 <tr key={g.ticketId} className="border-b border-line-soft transition-colors last:border-0 hover:bg-surface">
-                  <td className="whitespace-nowrap px-3 py-4 text-[13px] font-semibold text-ink">{g.ticketId}</td>
+                  <td className="truncate whitespace-nowrap px-4 py-4 text-[13px] font-semibold text-ink" title={g.ticketId}>{g.ticketId}</td>
                   <td className="px-4 py-4">
                     <p className="truncate text-[14.5px] font-semibold text-ink" title={g.title}>{g.title}</p>
                     {g.submitter && <p className="mt-1 truncate text-[13px] text-muted" title={g.submitter}>{g.submitter}</p>}
@@ -192,11 +195,14 @@ export function GrievancesTable() {
                     <br />
                     {g.submittedAt.split(", ")[2]}
                   </td>
-                  <td className="px-4 py-4">
+                  <td className="whitespace-nowrap px-4 py-4">
                     <GrievanceStatusPill status={g.status} />
                   </td>
-                  <td className="px-4 py-4 text-center">
-                    <RowAction onClick={() => setSelected(g)} icon="view">View</RowAction>
+                  <td className="px-4 py-4">
+                    <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+                      <RowAction onClick={() => setUploading(g)} icon="upload" className="border-brand-border">Upload Evidence</RowAction>
+                      <RowAction onClick={() => setSelected(g)} icon="view" className="border-brand-border">View</RowAction>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -230,6 +236,17 @@ export function GrievancesTable() {
       />
 
       {selected && <GrievanceDetailModal key={selected.ticketId} grievance={selected} onClose={() => setSelected(null)} />}
+      {uploading && (
+        <UploadEvidenceModal
+          key={uploading.ticketId}
+          ticketId={uploading.ticketId}
+          onClose={() => setUploading(null)}
+          // DUMMY until the backend releases the evidence-upload API: records the document in this browser only.
+          onUpload={async (ticketId, file) => {
+            await uploadEvidenceDocument(ticketId, file);
+          }}
+        />
+      )}
     </>
   );
 }
