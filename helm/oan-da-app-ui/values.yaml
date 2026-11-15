@@ -2,7 +2,7 @@
 # depends on. Per-environment values live in helm/environments/<env>/oan-da-app-ui.yaml.
 #
 # Set at install, not here:
-# - ui.image.tag: the Jenkins tag, e.g. 0.1.0-develop.<build>
+# - ui.image.tag: the Jenkins tag, e.g. 0.0.1-develop.<build>
 # Image repository and the backend URL are per environment.
 
 ui:

@@ -2,7 +2,7 @@ apiVersion: v2
 name: oan-da-app-ui
 description: OAN DA app (registry portal) Next.js UI; deploys the OAN ui-service chart with the DA defaults.
 type: application
-version: 0.1.0
+version: 0.0.1
 appVersion: latest
 keywords:
 - oan
