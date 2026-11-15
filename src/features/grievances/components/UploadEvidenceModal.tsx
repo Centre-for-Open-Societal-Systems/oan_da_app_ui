@@ -1,35 +1,34 @@
 "use client";
 
-import { useRef, useState, type DragEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { fetchGrievance, formatGrievanceTime } from "../api";
+import { EVIDENCE_EXTENSIONS, EVIDENCE_TYPES_LABEL, listGrievanceEvidence, MAX_EVIDENCE_BYTES, MAX_EVIDENCE_FILES } from "../evidence";
 import { GrievanceStatusPill } from "./GrievancePills";
 
-export const MAX_EVIDENCE_FILES = 10;
-export const MAX_EVIDENCE_BYTES = 10 * 1024 * 1024;
-/** PDF, PNG, JPG, CSV, Excel (XLS / XLSX) and MP3 audio. */
-const ACCEPTED_EXTENSIONS = ["pdf", "png", "jpg", "jpeg", "csv", "xls", "xlsx", "mp3"];
-const ACCEPT_ATTR = ACCEPTED_EXTENSIONS.map((e) => `.${e}`).join(",") + ",audio/mpeg";
+const ACCEPT_ATTR = EVIDENCE_EXTENSIONS.map((e) => `.${e}`).join(",") + ",audio/mpeg";
 
 const extensionOf = (name: string) => name.split(".").pop()?.toLowerCase() ?? "";
 const formatFileSize = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`);
 
 /**
- * Splits picked files into those to add and the reasons others were skipped: wrong type, over 10 MB, already
- * selected, or past the 10-document limit.
+ * Splits picked files into those to add and the reasons others were skipped: wrong type, empty, over 10 MB, already
+ * selected, or past the document limit. `limit` is how many this grievance can still take (10 less what it already
+ * has).
  */
-export function pickEvidence(current: File[], picked: File[]): { added: File[]; skipped: string[] } {
+export function pickEvidence(current: File[], picked: File[], limit = MAX_EVIDENCE_FILES): { added: File[]; skipped: string[] } {
   const added: File[] = [];
   const skipped: string[] = [];
   for (const f of picked) {
-    if (!ACCEPTED_EXTENSIONS.includes(extensionOf(f.name))) skipped.push(`${f.name}: file type not allowed`);
+    if (!EVIDENCE_EXTENSIONS.includes(extensionOf(f.name))) skipped.push(`${f.name}: file type not allowed (${EVIDENCE_TYPES_LABEL} only)`);
+    else if (f.size === 0) skipped.push(`${f.name}: the file is empty`);
     else if (f.size > MAX_EVIDENCE_BYTES) skipped.push(`${f.name}: larger than 10 MB`);
     else if ([...current, ...added].some((p) => p.name === f.name && p.size === f.size)) skipped.push(`${f.name}: already selected`);
-    else if (current.length + added.length >= MAX_EVIDENCE_FILES) skipped.push(`${f.name}: limit of ${MAX_EVIDENCE_FILES} documents reached`);
+    else if (current.length + added.length >= limit) skipped.push(`${f.name}: limit of ${MAX_EVIDENCE_FILES} documents reached`);
     else added.push(f);
   }
   return { added, skipped };
@@ -62,10 +61,11 @@ interface UploadEvidenceModalProps {
 }
 
 /**
- * "Upload evidence": up to 10 documents (PDF, PNG, JPG, CSV, Excel, MP3; 10 MB each), picked by click or drag and
- * drop. Without a `ticketId` the user first searches a Grievance ID (GET /grievances/{id}); upload unlocks once it is
- * found. Submit sends each file through `onUpload`, then the modal switches to "Evidence submission result" listing
- * which were submitted and which failed; "Retry failed" resends only the failed ones.
+ * "Upload evidence": documents (PDF, PNG, JPG, MP3; 10 MB each) picked by click or drag and drop. A grievance holds 10
+ * in total, so the modal reads how many it already has (GET /grievances/{id}/attachments) and offers the rest. Without
+ * a `ticketId` the user first searches a Grievance ID (GET /grievances/{id}); upload unlocks once it is found. Submit
+ * sends each file through `onUpload`, then the modal switches to "Evidence submission result" listing which were
+ * uploaded and why any failed; "Retry failed" resends only the failed ones.
  */
 export function UploadEvidenceModal({ ticketId, onClose, onUpload }: UploadEvidenceModalProps) {
   const findMode = !ticketId;
@@ -104,14 +104,30 @@ export function UploadEvidenceModal({ ticketId, onClose, onUpload }: UploadEvide
   /** Per-file outcome once submitted; null while still picking files. */
   const [results, setResults] = useState<Map<File, Outcome> | null>(null);
 
-  const remaining = MAX_EVIDENCE_FILES - files.length;
+  /** Documents already on the grievance, and for which ticket that was read. Unknown (still loading, or the read failed) counts as none: the server holds the limit either way. */
+  const [onCase, setOnCase] = useState<{ ticketId: string; count: number } | null>(null);
+  useEffect(() => {
+    if (!target) return;
+    let current = true;
+    listGrievanceEvidence(target)
+      .then((items) => current && setOnCase({ ticketId: target, count: items.length }))
+      .catch(() => undefined);
+    return () => {
+      current = false;
+    };
+  }, [target]);
+  const existing = onCase && onCase.ticketId === target ? onCase.count : 0;
+
+  /** How many documents this grievance can still take. */
+  const limit = Math.max(0, MAX_EVIDENCE_FILES - existing);
+  const remaining = Math.max(0, limit - files.length);
   const full = remaining <= 0;
   /** The dropzone is off while no grievance is found or the 10-document limit is reached. */
   const locked = full || !target;
 
   const add = (list: FileList | null) => {
     if (!list?.length) return;
-    const { added, skipped: why } = pickEvidence(files, Array.from(list));
+    const { added, skipped: why } = pickEvidence(files, Array.from(list), limit);
     setSkipped(why);
     if (added.length) {
       setFiles([...files, ...added]);
@@ -182,13 +198,17 @@ export function UploadEvidenceModal({ ticketId, onClose, onUpload }: UploadEvide
       >
         <div className="flex flex-col gap-4">
           <div className="rounded-xl border border-line bg-surface-alt px-4 py-3" role="status">
-            {done > 0 && <p className="text-[14.5px] font-semibold text-brand-green">{plural(done)} successfully submitted</p>}
-            {failed.length > 0 ? (
+            {done > 0 && <p className="text-[14.5px] font-semibold text-brand-green">{plural(done)} uploaded</p>}
+            {failed.length > 0 && (
               <p className={cn("text-[13px] text-danger", done > 0 && "mt-1")}>
-                {plural(failed.length)} failed to submit. You can retry the failed {failed.length === 1 ? "document" : "documents"}.
+                {plural(failed.length)} failed to upload. See the reason on each, then retry.
               </p>
-            ) : (
-              <p className="mt-1 text-[13px] text-muted">All documents are attached to the grievance.</p>
+            )}
+            {done > 0 && (
+              <p className="mt-1 text-[13px] text-muted">
+                {failed.length === 0 && "All documents are attached to the grievance. "}
+                Each is scanned for viruses and can be opened from the grievance once the scan is complete.
+              </p>
             )}
           </div>
 
@@ -205,11 +225,11 @@ export function UploadEvidenceModal({ ticketId, onClose, onUpload }: UploadEvide
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[13.5px] font-semibold text-ink" title={f.name}>{f.name}</p>
-                      <p className={cn("truncate text-[12px]", ok ? "text-brand-green" : "text-danger")} title={r && !r.ok ? r.reason : undefined}>
-                        {formatFileSize(f.size)} · {ok ? "Successfully submitted" : "Failed to submit"}
+                      <p className={cn("text-[12px]", ok ? "truncate text-brand-green" : "text-danger")}>
+                        {formatFileSize(f.size)} · {ok ? "Uploaded, scanning for viruses" : r && !r.ok ? r.reason : "Failed to upload"}
                       </p>
                     </div>
-                    <span className={cn("shrink-0 text-[13px] font-semibold", ok ? "text-brand-green" : "text-danger")}>{ok ? "Submitted" : "Failed"}</span>
+                    <span className={cn("shrink-0 text-[13px] font-semibold", ok ? "text-brand-green" : "text-danger")}>{ok ? "Uploaded" : "Failed"}</span>
                   </li>
                 );
               })}
@@ -218,7 +238,7 @@ export function UploadEvidenceModal({ ticketId, onClose, onUpload }: UploadEvide
 
           {failed.length > 0 && done > 0 && (
             <p className="text-[12.5px] leading-relaxed text-muted">
-              The {plural(done)} submitted {done === 1 ? "is" : "are"} saved. Retrying will only resubmit the failed {failed.length === 1 ? "document" : "documents"}; successful submissions will not be duplicated.
+              The {plural(done)} uploaded {done === 1 ? "is" : "are"} saved. Retrying will only resend the failed {failed.length === 1 ? "document" : "documents"}; uploaded documents will not be duplicated.
             </p>
           )}
         </div>
@@ -231,7 +251,7 @@ export function UploadEvidenceModal({ ticketId, onClose, onUpload }: UploadEvide
       isOpen
       onClose={close}
       title="Upload evidence"
-      subtitle={findMode ? "Search for a grievance, review its details, then upload your documents." : `Attach up to ${MAX_EVIDENCE_FILES} supporting documents to grievance ${ticketId}.`}
+      subtitle={findMode ? "Search for a grievance, review its details, then upload your documents." : `Attach supporting documents to grievance ${ticketId}. A grievance can have up to ${MAX_EVIDENCE_FILES}.`}
       size="lg"
       footer={
         <>
@@ -264,7 +284,7 @@ export function UploadEvidenceModal({ ticketId, onClose, onUpload }: UploadEvide
                     setSearchError(null);
                     if (found) setFound(null);
                   }}
-                  placeholder="e.g. GRV-2026-00128"
+                  placeholder="e.g. 0-004-000F-0"
                   aria-invalid={!!searchError}
                   aria-describedby="evidence-grievance-hint"
                   disabled={saving}
@@ -346,7 +366,7 @@ export function UploadEvidenceModal({ ticketId, onClose, onUpload }: UploadEvide
               </svg>
             </span>
             <span className="text-[14px] font-semibold text-ink">{full ? "Document limit reached" : !target ? "Find a grievance to upload documents" : "Click to browse or drag and drop documents"}</span>
-            <span className="text-[12.5px] text-muted">PDF, PNG, JPG, CSV, XL, MP3 Audio · Up to {MAX_EVIDENCE_FILES} documents · 10 MB per document</span>
+            <span className="text-[12.5px] text-muted">{EVIDENCE_TYPES_LABEL} · Up to {MAX_EVIDENCE_FILES} documents a grievance · 10 MB per document</span>
             <input ref={inputRef} type="file" multiple accept={ACCEPT_ATTR} className="hidden" onChange={(e) => { add(e.target.files); e.target.value = ""; }} />
           </div>
           {noFiles && (
@@ -364,7 +384,7 @@ export function UploadEvidenceModal({ ticketId, onClose, onUpload }: UploadEvide
 
         {files.length > 0 && (
           <div className="flex flex-col gap-2">
-            <p className="text-[14px] font-semibold text-ink">Selected documents ({files.length}/{MAX_EVIDENCE_FILES})</p>
+            <p className="text-[14px] font-semibold text-ink">Selected documents ({files.length}/{limit})</p>
             <ul className="flex flex-col gap-2">
               {files.map((f) => (
                 <li key={`${f.name}-${f.size}`} className="flex items-center gap-3 rounded-xl border border-brand-border bg-brand-wash px-3 py-2.5">
@@ -386,6 +406,7 @@ export function UploadEvidenceModal({ ticketId, onClose, onUpload }: UploadEvide
         )}
 
         <p className="text-[12.5px] leading-relaxed text-muted">
+          {existing > 0 && `This grievance already has ${plural(existing)}. `}
           {full ? "You have reached the limit of 10 documents." : `You can add ${remaining} more document${remaining === 1 ? "" : "s"}.`} Each document must be 10 MB or smaller.
           <br />
           {target ? `Selected documents will be attached to ${target} on submission.` : "Documents will be attached to the grievance when you submit."}

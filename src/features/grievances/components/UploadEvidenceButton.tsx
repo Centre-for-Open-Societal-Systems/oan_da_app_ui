@@ -27,7 +27,6 @@ export function UploadEvidenceButton({ className }: { className?: string }) {
       {open && (
         <UploadEvidenceModal
           onClose={() => setOpen(false)}
-          // DUMMY until the backend releases the evidence-upload API: records the document in this browser only.
           onUpload={async (ticketId, file) => {
             await uploadEvidenceDocument(ticketId, file);
           }}

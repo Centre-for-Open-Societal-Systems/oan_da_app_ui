@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { caseFromApi, fetchGrievance, fetchGrievanceTimeline } from "../api";
 import { buildCase } from "../data";
 import type { Grievance } from "../types";
+import { GrievanceEvidenceList } from "./GrievanceEvidenceList";
 import { GrievancePriorityPill, GrievanceStatusPill } from "./GrievancePills";
 import { GrievanceTimeline } from "./GrievanceTimeline";
 
@@ -102,6 +103,9 @@ export function GrievanceDetailModal({ grievance, onClose }: GrievanceDetailModa
           </dl>
 
           <GrievanceTimeline messages={data.thread} status={grievance.status} />
+
+          {/* Sample rows are not on the Grievance Service, so they have no evidence to read. */}
+          {grievance.fromApi && <GrievanceEvidenceList ticketId={grievance.ticketId} />}
         </div>
       </div>
     </div>,
