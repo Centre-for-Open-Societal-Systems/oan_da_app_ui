@@ -1,0 +1,33 @@
+# Defaults for the OAN DA app UI. Everything sits under `ui`, the values of the ui-service chart this one
+# depends on. Per-environment values live in helm/environments/<env>/oan-da-app-ui.yaml.
+#
+# Set at install, not here:
+# - ui.image.tag: the Jenkins tag, e.g. 0.0.1-develop.<build>
+# Image repository and the backend URL are per environment.
+
+ui:
+  image:
+    repository: ""
+    tag: ""
+
+  # Off: the Deployment runs ui-service's replicaCount (1). The bounds stay for turning it back on.
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPU: 75
+    targetMemory: 75
+  # An HPA needs requests to compute utilization.
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+  containerName: da-app-ui
+
+  env:
+    # Read at runtime by the /api/v1 proxy (src/app/api/v1/[...path]/route.ts), so one image serves every
+    # environment. These override the values baked in at build time.
+    API_BASE_URL: ""
+    # What replaces the portal's `/api` on API_BASE_URL: `/api` for Frappe itself, "" for the APISIX gateway.
+    API_PATH_PREFIX: "/api"

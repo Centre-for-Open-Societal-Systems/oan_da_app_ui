@@ -1,0 +1,29 @@
+# Values for the oan-da-app-ui chart (helm/oan-da-app-ui) on the oan_dev k3s node.
+# Release `da-app-ui`, namespace `da-app` (shared with the DA services backend). Installed by the Jenkins
+# stage "develop → oan_dev (helm)" (ci/deploy-helm-dev.sh).
+#
+# Set at install, not here:
+# - ui.image.tag: the Jenkins tag `<package.json version>-develop.<build>`
+
+ui:
+  image:
+    # Jenkinsfile ECR_REPO, pushed by "Push image (helm)". The node pulls from ECR with its IAM role.
+    repository: 379220350808.dkr.ecr.ap-south-1.amazonaws.com/eoan/oan-da-app-ui/da-app-ui
+
+  env:
+    # The DA services API through APISIX. Inside oan_dev the name resolves to APISIX (oan-helm,
+    # addons/oan-dev-coredns), which serves it with the dev wildcard certificate.
+    API_BASE_URL: https://da-services.development.oanstaging.com
+    # APISIX publishes the API without Frappe's /api and puts it back itself.
+    API_PATH_PREFIX: ""
+
+  ingress:
+    enabled: true
+    # The only IngressClass on oan_dev and not the default one: without it no controller serves the host.
+    className: apisix
+    hosts:
+    - host: da-app.development.oanstaging.com
+      # Helm replaces the chart's default host list, so the paths are repeated here.
+      paths:
+      - path: /
+        pathType: Prefix

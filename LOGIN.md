@@ -115,6 +115,7 @@ The Super Admin demo accounts in [accounts.ts](src/features/auth/accounts.ts) si
 |---|---|
 | `API_BASE_URL` | DA Services backend the `/api/v1/*` proxy forwards to, e.g. `https://da-backend-development.oanstaging.com`, or `http://localhost:8000` for a local backend |
 | `CROP_SOWN_BASE_URL` | Optional separate backend for Crop Sown routes |
+| `API_PATH_PREFIX` | What replaces `/api` on `API_BASE_URL`. Default `/api` (Frappe directly); `""` behind the APISIX gateway, which publishes the API as `/v1/...` |
 
 The proxy is [src/app/api/v1/[...path]/route.ts](src/app/api/v1/[...path]/route.ts). Login routes (`/da-services/sso/login` and others) never get an old session cookie attached as Bearer.
 
