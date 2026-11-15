@@ -3,12 +3,12 @@
 # stage "develop → oan_dev (helm)" (ci/deploy-helm-dev.sh).
 #
 # Set at install, not here:
-# - ui.image.tag: the Jenkins tag `develop-<build>-<sha>`
+# - ui.image.tag: the Jenkins tag `<package.json version>-develop.<build>`
 
 ui:
   image:
-    # Jenkinsfile IMAGE_REPO. The node pulls from ECR with its IAM role.
-    repository: 379220350808.dkr.ecr.ap-south-1.amazonaws.com/da-registry-frontend
+    # Jenkinsfile ECR_REPO, pushed by "Push image (helm)". The node pulls from ECR with its IAM role.
+    repository: 379220350808.dkr.ecr.ap-south-1.amazonaws.com/eoan/oan-da-app-ui/da-app-ui
 
   env:
     # The DA services API through APISIX. Inside oan_dev the name resolves to APISIX (oan-helm,

@@ -11,12 +11,14 @@ pipeline {
         AWS_ACCOUNT_ID  = '379220350808'
         IMAGE_REGISTRY  = '379220350808.dkr.ecr.ap-south-1.amazonaws.com'
         IMAGE_NAME      = 'da-registry-frontend'   // must exist as an ECR repository first
-        IMAGE_REPO      = "${IMAGE_REGISTRY}/${IMAGE_NAME}"
-        // The DA cluster node (different from the grievance node). staging: Jenkins SSHes in and runs helm there.
-        // develop runs on the oan_dev k3s node instead (stage "develop → oan_dev (helm)").
-        DA_NODE         = '65.0.132.192'
-        // oan_dev's private address: APISIX binds its ports 80/443, Verify calls it from the VPN agent.
+        // develop is also installed on the oan_dev k3s node (stage "develop → oan_dev (helm)"), from the same
+        // image pushed again under this repository with the tag <package.json version>-develop.<build>.
+        ECR_REPO        = 'eoan/oan-da-app-ui/da-app-ui'
+        // oan_dev's private address: APISIX binds its ports 80/443, the oan_dev verify calls it from the VPN agent.
         OAN_DEV_EDGE_IP = '10.0.1.131'
+        IMAGE_REPO      = "${IMAGE_REGISTRY}/${IMAGE_NAME}"
+        // The DA cluster node (different from the grievance node). Jenkins SSHes in and runs helm there.
+        DA_NODE         = '65.0.132.192'
         HELM_RELEASE    = 'registry-frontend'
         CHART_DIR       = '/home/ubuntu/da/helm/charts/da-app'
         // Per-branch target (namespace, public URL) is chosen in the Checkout stage:
@@ -32,9 +34,9 @@ pipeline {
                 script {
                     def targets = [
                         develop: [
-                            namespace: 'da-app',
-                            verifyUrl: 'https://da-app.development.oanstaging.com/login',
-                            apiBaseUrl: 'https://da-services.development.oanstaging.com'
+                            namespace: 'develop',
+                            verifyUrl: 'https://da-registry-development.oanstaging.com/login',
+                            apiBaseUrl: 'http://da-backend-development.oanstaging.com'
                         ],
                         staging: [
                             namespace: 'staging',
@@ -101,22 +103,8 @@ pipeline {
             }
         }
 
-        // develop -> Helm release `da-app-ui` on the oan_dev k3s node (chart helm/oan-da-app-ui). The chart's
-        // values set API_BASE_URL and API_PATH_PREFIX at runtime: the DA services API through APISIX.
-        stage('develop → oan_dev (helm)') {
-            when { beforeAgent true; branch 'develop' }
-            agent { label 'oan-ci-deploy' }   // VPN agent with helm and kubectl that reaches the oan_dev API
-            options { timeout(time: 15, unit: 'MINUTES') }
-            steps {
-                checkout scm
-                withCredentials([file(credentialsId: 'oan-dev-kubeconfig', variable: 'KUBECONFIG')]) {
-                    sh 'DA_NAMESPACE="$K8S_NAMESPACE" bash ci/deploy-helm-dev.sh'
-                }
-            }
-        }
-
         stage('Deploy (helm)') {
-            when { branch 'staging' }
+            when { anyOf { branch 'develop'; branch 'staging' } }
             steps {
                 withCredentials([sshUserPrivateKey(
                     credentialsId: 'da-node-ssh-key',
@@ -151,15 +139,12 @@ ENDSSH
             }
         }
 
-        // develop: through APISIX on oan_dev by its private address (public DNS may still point elsewhere).
-        stage('Verify (develop)') {
-            when { beforeAgent true; branch 'develop' }
-            agent { label 'oan-ci-deploy' }
+        stage('Verify') {
+            when { anyOf { branch 'develop'; branch 'staging' } }
             steps {
                 sh '''
-                    host=$(echo "$VERIFY_URL" | sed -E 's#^https://([^/]+).*#\\1#')
                     for i in $(seq 1 10); do
-                        code=$(curl -sL -o /dev/null -w "%{http_code}" --resolve "$host:443:$OAN_DEV_EDGE_IP" "$VERIFY_URL" || true)
+                        code=$(curl -skL -o /dev/null -w "%{http_code}" "$VERIFY_URL" || true)
                         echo "attempt $i: $VERIFY_URL -> $code"
                         [ "$code" = "200" ] && exit 0
                         sleep 6
@@ -170,17 +155,69 @@ ENDSSH
             }
         }
 
-        stage('Verify') {
-            when { branch 'staging' }
+        // ---- develop -> Helm release `da-app-ui` on the oan_dev k3s node ----
+        // Runs after the DA node deploy above, so a problem here never blocks it. The image built above is
+        // pushed again under eoan/oan-da-app-ui/da-app-ui:<package.json version>-develop.<build>. The chart sets
+        // API_BASE_URL and API_PATH_PREFIX at runtime: the DA services API through APISIX.
+        stage('Push image (helm)') {
+            when { branch 'develop' }
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-ecr-creds'
+                ]]) {
+                    script {
+                        def version = sh(returnStdout: true,
+                            script: "python3 -c 'import json; print(json.load(open(\"package.json\"))[\"version\"])'").trim()
+                        env.IMMUTABLE_TAG = "${version}-develop.${env.BUILD_NUMBER}"
+                    }
+                    sh '''#!/usr/bin/env bash
+                        set -euo pipefail
+                        IMAGE_URI="${IMAGE_REGISTRY}/${ECR_REPO}"
+
+                        aws ecr get-login-password --region "$AWS_REGION" \
+                            | docker login --username AWS --password-stdin "$IMAGE_REGISTRY"
+
+                        # ECR does not create a repository on push.
+                        aws ecr describe-repositories --region "$AWS_REGION" --repository-names "$ECR_REPO" >/dev/null 2>&1 \
+                            || aws ecr create-repository --region "$AWS_REGION" --repository-name "$ECR_REPO" >/dev/null
+
+                        docker tag "$FULL_IMAGE" "${IMAGE_URI}:${IMMUTABLE_TAG}"
+                        docker push "${IMAGE_URI}:${IMMUTABLE_TAG}"
+                        docker rmi "${IMAGE_URI}:${IMMUTABLE_TAG}" || true
+                        echo "Pushed ${IMAGE_URI}:${IMMUTABLE_TAG}"
+                    '''
+                }
+            }
+        }
+
+        stage('develop → oan_dev (helm)') {
+            when { beforeAgent true; branch 'develop' }
+            agent { label 'oan-ci-deploy' }   // VPN agent with helm and kubectl that reaches the oan_dev API
+            options { timeout(time: 15, unit: 'MINUTES') }
+            steps {
+                checkout scm
+                withCredentials([file(credentialsId: 'oan-dev-kubeconfig', variable: 'KUBECONFIG')]) {
+                    sh 'bash ci/deploy-helm-dev.sh'
+                }
+            }
+        }
+
+        // Through APISIX on oan_dev by its private address: public DNS may still point elsewhere.
+        stage('Verify (oan_dev)') {
+            when { beforeAgent true; branch 'develop' }
+            agent { label 'oan-ci-deploy' }
             steps {
                 sh '''
+                    host=da-app.development.oanstaging.com
+                    url="https://$host/login"
                     for i in $(seq 1 10); do
-                        code=$(curl -skL -o /dev/null -w "%{http_code}" "$VERIFY_URL" || true)
-                        echo "attempt $i: $VERIFY_URL -> $code"
+                        code=$(curl -sL -o /dev/null -w "%{http_code}" --resolve "$host:443:$OAN_DEV_EDGE_IP" "$url" || true)
+                        echo "attempt $i: $url -> $code"
                         [ "$code" = "200" ] && exit 0
                         sleep 6
                     done
-                    echo "da-registry-frontend did not return 200 at $VERIFY_URL"
+                    echo "da-app-ui did not return 200 at $url"
                     exit 1
                 '''
             }
