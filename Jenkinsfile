@@ -12,8 +12,11 @@ pipeline {
         IMAGE_REGISTRY  = '379220350808.dkr.ecr.ap-south-1.amazonaws.com'
         IMAGE_NAME      = 'da-registry-frontend'   // must exist as an ECR repository first
         IMAGE_REPO      = "${IMAGE_REGISTRY}/${IMAGE_NAME}"
-        // The DA cluster node (different from the grievance node). Jenkins SSHes in and runs helm there.
+        // The DA cluster node (different from the grievance node). staging: Jenkins SSHes in and runs helm there.
+        // develop runs on the oan_dev k3s node instead (stage "develop → oan_dev (helm)").
         DA_NODE         = '65.0.132.192'
+        // oan_dev's private address: APISIX binds its ports 80/443, Verify calls it from the VPN agent.
+        OAN_DEV_EDGE_IP = '10.0.1.131'
         HELM_RELEASE    = 'registry-frontend'
         CHART_DIR       = '/home/ubuntu/da/helm/charts/da-app'
         // Per-branch target (namespace, public URL) is chosen in the Checkout stage:
@@ -29,9 +32,9 @@ pipeline {
                 script {
                     def targets = [
                         develop: [
-                            namespace: 'develop',
-                            verifyUrl: 'https://da-registry-development.oanstaging.com/login',
-                            apiBaseUrl: 'http://da-backend-development.oanstaging.com'
+                            namespace: 'da-app',
+                            verifyUrl: 'https://da-app.development.oanstaging.com/login',
+                            apiBaseUrl: 'https://da-services.development.oanstaging.com'
                         ],
                         staging: [
                             namespace: 'staging',
@@ -98,8 +101,22 @@ pipeline {
             }
         }
 
+        // develop -> Helm release `da-app-ui` on the oan_dev k3s node (chart helm/oan-da-app-ui). The chart's
+        // values set API_BASE_URL and API_PATH_PREFIX at runtime: the DA services API through APISIX.
+        stage('develop → oan_dev (helm)') {
+            when { beforeAgent true; branch 'develop' }
+            agent { label 'oan-ci-deploy' }   // VPN agent with helm and kubectl that reaches the oan_dev API
+            options { timeout(time: 15, unit: 'MINUTES') }
+            steps {
+                checkout scm
+                withCredentials([file(credentialsId: 'oan-dev-kubeconfig', variable: 'KUBECONFIG')]) {
+                    sh 'DA_NAMESPACE="$K8S_NAMESPACE" bash ci/deploy-helm-dev.sh'
+                }
+            }
+        }
+
         stage('Deploy (helm)') {
-            when { anyOf { branch 'develop'; branch 'staging' } }
+            when { branch 'staging' }
             steps {
                 withCredentials([sshUserPrivateKey(
                     credentialsId: 'da-node-ssh-key',
@@ -134,8 +151,27 @@ ENDSSH
             }
         }
 
+        // develop: through APISIX on oan_dev by its private address (public DNS may still point elsewhere).
+        stage('Verify (develop)') {
+            when { beforeAgent true; branch 'develop' }
+            agent { label 'oan-ci-deploy' }
+            steps {
+                sh '''
+                    host=$(echo "$VERIFY_URL" | sed -E 's#^https://([^/]+).*#\\1#')
+                    for i in $(seq 1 10); do
+                        code=$(curl -sL -o /dev/null -w "%{http_code}" --resolve "$host:443:$OAN_DEV_EDGE_IP" "$VERIFY_URL" || true)
+                        echo "attempt $i: $VERIFY_URL -> $code"
+                        [ "$code" = "200" ] && exit 0
+                        sleep 6
+                    done
+                    echo "da-registry-frontend did not return 200 at $VERIFY_URL"
+                    exit 1
+                '''
+            }
+        }
+
         stage('Verify') {
-            when { anyOf { branch 'develop'; branch 'staging' } }
+            when { branch 'staging' }
             steps {
                 sh '''
                     for i in $(seq 1 10); do
