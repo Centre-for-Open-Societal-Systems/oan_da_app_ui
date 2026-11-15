@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Pill } from "@/components/ui/Pill";
 import { Spinner } from "@/components/ui/Spinner";
 import { formatGrievanceTime } from "../api";
-import { evidenceScanLabel, listGrievanceEvidence, MAX_EVIDENCE_FILES, openGrievanceEvidence, type GrievanceAttachment } from "../evidence";
+import { evidenceScanLabel, isEvidenceViewable, listGrievanceEvidence, MAX_EVIDENCE_FILES, openGrievanceEvidence, type GrievanceAttachment } from "../evidence";
 
 const formatFileSize = (bytes: number | null) => (bytes == null ? "" : bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`);
 
@@ -27,7 +27,7 @@ export function GrievanceEvidenceList({ ticketId }: { ticketId: string }) {
   const read = useCallback(
     () =>
       listGrievanceEvidence(ticketId)
-        .then(({ items }) => ({ ticketId, items, error: null }))
+        .then((items) => ({ ticketId, items, error: null }))
         .catch((err: unknown) => ({ ticketId, items: [], error: err instanceof Error ? err.message : "Could not load the evidence documents." })),
     [ticketId],
   );
@@ -86,6 +86,7 @@ export function GrievanceEvidenceList({ ticketId }: { ticketId: string }) {
         <ul className="flex flex-col gap-2">
           {items.map((a) => {
             const scan = evidenceScanLabel(a.scan_status);
+            const viewable = isEvidenceViewable(a);
             const working = busy === a.attachment_id;
             return (
               <li key={a.attachment_id} className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-white px-3 py-2.5">
@@ -94,10 +95,10 @@ export function GrievanceEvidenceList({ ticketId }: { ticketId: string }) {
                   <p className="text-[12px] text-muted">
                     {[formatFileSize(a.size_bytes), a.document_type, a.uploaded_at ? formatGrievanceTime(a.uploaded_at) : ""].filter(Boolean).join(" · ")}
                   </p>
-                  {!a.viewable && <p className="mt-0.5 text-[12px] text-ink-soft">{withheld(a)}</p>}
+                  {!viewable && <p className="mt-0.5 text-[12px] text-ink-soft">{withheld(a)}</p>}
                 </div>
                 <Pill tone={scan.tone} className="px-2.5 py-0.5">{scan.label}</Pill>
-                {a.viewable && (
+                {viewable && (
                   <div className="flex shrink-0 items-center gap-2">
                     <Button variant="brandOutline" size="sm" disabled={working} onClick={() => void open(a, false)} className="gap-2" aria-label={`Open ${a.file_name}`}>
                       {working && <Spinner className="h-3.5 w-3.5" />}

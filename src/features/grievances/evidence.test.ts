@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/api";
 import { useAuthStore } from "@/store/useAuthStore";
-import { evidenceScanLabel, fetchGrievanceEvidenceFile, listGrievanceEvidence, uploadEvidenceDocument, uploadGrievanceEvidence, useEvidenceStore, type GrievanceAttachment } from "./evidence";
+import { evidenceScanLabel, fetchGrievanceEvidenceFile, isEvidenceViewable, listGrievanceEvidence, uploadEvidenceDocument, uploadGrievanceEvidence, useEvidenceStore, type GrievanceAttachment } from "./evidence";
 
 // Minimal in-memory Storage so the persisted stores run under Node.
 class MemoryStorage implements Storage {
@@ -28,7 +28,6 @@ const attachment = (over: Partial<GrievanceAttachment> = {}): GrievanceAttachmen
   scan_status: "Pending",
   scanned_at: null,
   uploaded_at: "2026-11-15 09:59:00",
-  viewable: false,
   ...over,
 });
 
@@ -48,7 +47,7 @@ beforeEach(() => {
 
 describe("grievance evidence api", () => {
   it("uploads one file as multipart to the ticket", async () => {
-    fetchMock.mockResolvedValueOnce(json({ status: "success", data: { ticket_id: TICKET, count: 1, attachments: [attachment()] } }, 201));
+    fetchMock.mockResolvedValueOnce(json({ status: "success", data: [attachment()] }, 201));
     const uploaded = await uploadGrievanceEvidence(TICKET, pdf(), "Receipt");
 
     expect(uploaded.attachment_id).toBe("GAT-00001");
@@ -66,42 +65,35 @@ describe("grievance evidence api", () => {
   });
 
   it("escapes the ticket in the path", async () => {
-    fetchMock.mockResolvedValueOnce(json({ data: [], meta: { remaining: 10 } }));
+    fetchMock.mockResolvedValueOnce(json({ data: [] }));
     await listGrievanceEvidence("a/b c");
     expect(call()[0]).toBe("/api/v1/da-services/grievances/a%2Fb%20c/attachments");
   });
 
-  it("gives the refused file's own reason", async () => {
-    fetchMock.mockResolvedValueOnce(json({ status: "error", code: "VALIDATION_ERROR", message: "Some files cannot be uploaded.", details: { "receipt.pdf": "The file is larger than 10 MB." } }, 400));
+  it("passes on the service's reason for a refusal", async () => {
+    fetchMock.mockResolvedValueOnce(json({ status: "error", message: "A grievance may carry at most 10 attachments." }, 400));
     const err = await uploadGrievanceEvidence(TICKET, pdf()).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);
-    expect((err as ApiError).message).toBe("The file is larger than 10 MB.");
     expect((err as ApiError).status).toBe(400);
-  });
-
-  it("keeps the service's message when no file is named", async () => {
-    fetchMock.mockResolvedValueOnce(json({ status: "error", message: "A grievance may carry at most 10 attachments." }, 400));
-    await expect(uploadGrievanceEvidence(TICKET, pdf())).rejects.toThrow("A grievance may carry at most 10 attachments.");
+    expect((err as ApiError).message).toBe("A grievance may carry at most 10 attachments.");
   });
 
   it("treats a success without an attachment as a failure", async () => {
-    fetchMock.mockResolvedValueOnce(json({ status: "success", data: { ticket_id: TICKET, count: 0, attachments: [] } }, 201));
+    fetchMock.mockResolvedValueOnce(json({ status: "success", data: [] }, 201));
     await expect(uploadGrievanceEvidence(TICKET, pdf())).rejects.toThrow("The document was not attached. Try again.");
   });
 
-  it("lists the documents and how many more fit", async () => {
-    fetchMock.mockResolvedValueOnce(json({ data: [attachment({ scan_status: "Clean", viewable: true }), attachment({ attachment_id: "GAT-00002" })], meta: { count: 2, max: 10, remaining: 8 } }));
-    const { items, remaining } = await listGrievanceEvidence(TICKET);
+  it("lists the documents on the grievance", async () => {
+    fetchMock.mockResolvedValueOnce(json({ data: [attachment({ scan_status: "Clean" }), attachment({ attachment_id: "GAT-00002" })] }));
+    const items = await listGrievanceEvidence(TICKET);
     expect(call()[0]).toBe(BASE);
     expect(items.map((a) => a.attachment_id)).toEqual(["GAT-00001", "GAT-00002"]);
-    expect(remaining).toBe(8);
+    expect(items.map(isEvidenceViewable)).toEqual([true, false]);
   });
 
-  it("works out the room left when meta is missing", async () => {
-    fetchMock.mockResolvedValueOnce(json({ data: [attachment(), attachment({ attachment_id: "GAT-00002" }), attachment({ attachment_id: "GAT-00003" })] }));
-    expect((await listGrievanceEvidence(TICKET)).remaining).toBe(7);
+  it("reads a missing list as empty", async () => {
     fetchMock.mockResolvedValueOnce(json({ data: null }));
-    expect(await listGrievanceEvidence(TICKET)).toEqual({ items: [], remaining: 10 });
+    expect(await listGrievanceEvidence(TICKET)).toEqual([]);
   });
 
   it("fetches the file bytes with the session's token", async () => {
@@ -114,12 +106,11 @@ describe("grievance evidence api", () => {
   });
 
   it("reports why a file cannot be opened", async () => {
-    fetchMock.mockResolvedValueOnce(json({ status: "error", code: "ATTACHMENT_NOT_READY", message: "This document is still being scanned. Try again shortly." }, 409));
+    fetchMock.mockResolvedValueOnce(json({ status: "error", code: "VALIDATION_ERROR", message: "receipt.pdf is not available: its scan status is Pending." }, 400));
     const err = await fetchGrievanceEvidenceFile(TICKET, "GAT-00001").catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);
-    expect((err as ApiError).status).toBe(409);
-    expect((err as ApiError).code).toBe("ATTACHMENT_NOT_READY");
-    expect((err as ApiError).message).toBe("This document is still being scanned. Try again shortly.");
+    expect((err as ApiError).status).toBe(400);
+    expect((err as ApiError).message).toBe("receipt.pdf is not available: its scan status is Pending.");
   });
 
   it("names the scan status for the list", () => {
@@ -132,7 +123,7 @@ describe("grievance evidence api", () => {
 
 describe("uploadEvidenceDocument", () => {
   it("notes an uploaded document for the Documents tab", async () => {
-    fetchMock.mockResolvedValueOnce(json({ data: { attachments: [attachment()] } }, 201));
+    fetchMock.mockResolvedValueOnce(json({ data: [attachment()] }, 201));
     const doc = await uploadEvidenceDocument(TICKET, pdf());
     expect(doc).toMatchObject({ id: "GAT-00001", ticketId: TICKET, name: "receipt.pdf", size: 2048, type: "pdf" });
     expect(useEvidenceStore.getState().documents).toEqual([doc]);

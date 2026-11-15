@@ -110,7 +110,7 @@ export function UploadEvidenceModal({ ticketId, onClose, onUpload }: UploadEvide
     if (!target) return;
     let current = true;
     listGrievanceEvidence(target)
-      .then(({ items }) => current && setOnCase({ ticketId: target, count: items.length }))
+      .then((items) => current && setOnCase({ ticketId: target, count: items.length }))
       .catch(() => undefined);
     return () => {
       current = false;

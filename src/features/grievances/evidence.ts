@@ -9,7 +9,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 // which checks each file's type from its content and virus-scans it. A new file is "Pending" until that scan finishes
 // and can be opened only once it is "Clean". Contract: oan_da_app_services/docs/grievance-da-http.md (Evidence).
 
-/** The Grievance Service's limits; DA Services and the service enforce them again. */
+/** The Grievance Service's limits. Only that service enforces them; the form checks them first to save an upload. */
 export const MAX_EVIDENCE_FILES = 10;
 export const MAX_EVIDENCE_BYTES = 10 * 1024 * 1024;
 /** JPG, PNG, PDF and MP3: the only types the Grievance Service accepts. */
@@ -23,47 +23,38 @@ export interface GrievanceAttachment {
   mime_type: string | null;
   size_bytes: number | null;
   document_type: string | null;
-  /** "Pending", "Clean" or "Infected"; anything other than "Clean" cannot be opened. */
+  /** "Pending", "Clean" or "Infected"; the service serves a file only once it is "Clean". */
   scan_status: string | null;
   scanned_at: string | null;
   uploaded_at: string | null;
-  /** True only once the virus scan passed. */
-  viewable: boolean;
 }
+
+/** Whether the document passed its virus scan and can be opened. */
+export const isEvidenceViewable = (attachment: GrievanceAttachment) => attachment.scan_status === "Clean";
 
 const attachmentsPath = (ticketId: string) => `/da-services/grievances/${encodeURIComponent(ticketId)}/attachments`;
 
 /**
- * POST /grievances/{ticket_id}/attachments (multipart, one file): attaches `file` to the grievance. A refused file
- * (type, size, the 10-document limit) throws an ApiError whose message is the reason for that file.
+ * POST /grievances/{ticket_id}/attachments (multipart, one file): attaches `file` to the grievance. A refusal (file
+ * type, size, the 10-document limit) throws an ApiError carrying the Grievance Service's reason.
  */
 export async function uploadGrievanceEvidence(ticketId: string, file: File, documentType?: string): Promise<GrievanceAttachment> {
   const body = new FormData();
   body.append("files", file, file.name);
   if (documentType) body.append("document_type", documentType);
-  try {
-    const data = (await authRequest<{ data: { attachments?: GrievanceAttachment[] } | null }>(attachmentsPath(ticketId), { method: "POST", body })).data;
-    const uploaded = data?.attachments?.[0];
-    if (!uploaded) throw new ApiError("The document was not attached. Try again.", 502);
-    return uploaded;
-  } catch (err) {
-    // A 400 names each refused file under `details`; show this file's own reason rather than the summary line.
-    if (err instanceof ApiError && err.details?.[file.name]) throw new ApiError(err.details[file.name], err.status, err.details, err.code);
-    throw err;
-  }
+  const uploaded = (await authRequest<{ data: GrievanceAttachment[] | null }>(attachmentsPath(ticketId), { method: "POST", body })).data?.[0];
+  if (!uploaded) throw new ApiError("The document was not attached. Try again.", 502);
+  return uploaded;
 }
 
-/** GET /grievances/{ticket_id}/attachments: every document on the grievance, oldest first, and how many more fit. */
-export async function listGrievanceEvidence(ticketId: string): Promise<{ items: GrievanceAttachment[]; remaining: number }> {
-  const res = await authRequest<{ data: GrievanceAttachment[] | null; meta?: { remaining?: number } | null }>(attachmentsPath(ticketId));
-  const items = res.data ?? [];
-  const remaining = typeof res.meta?.remaining === "number" ? res.meta.remaining : Math.max(0, MAX_EVIDENCE_FILES - items.length);
-  return { items, remaining };
+/** GET /grievances/{ticket_id}/attachments: every document on the grievance, oldest first, with its scan status. */
+export async function listGrievanceEvidence(ticketId: string): Promise<GrievanceAttachment[]> {
+  return (await authRequest<{ data: GrievanceAttachment[] | null }>(attachmentsPath(ticketId))).data ?? [];
 }
 
 /**
  * GET /grievances/{ticket_id}/attachments/{attachment_id}/view: the file itself (raw bytes, not the JSON envelope).
- * 409 while its scan is not Clean, 404 when it is not on this ticket.
+ * 400 with the service's reason while its scan is not Clean, 404 when it is not on this ticket.
  */
 export async function fetchGrievanceEvidenceFile(ticketId: string, attachmentId: string): Promise<Blob> {
   const path = `/api/v1${attachmentsPath(ticketId)}/${encodeURIComponent(attachmentId)}/view`;
