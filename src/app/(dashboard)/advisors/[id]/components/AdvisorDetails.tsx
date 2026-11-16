@@ -1,11 +1,11 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { BackLink } from "@/components/ui/BackLink";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Pill } from "@/components/ui/Pill";
-import { ADVISOR_STATUS_TONE, advisorStatusNote, useAdvisorsStore, type Advisor } from "@/features/communication";
+import { ADVISOR_STATUS_TONE, advisorStatusNote, describeAdvisorError, fetchAdvisor, type Advisor } from "@/features/communication";
 
 const PHONE_ICON = "M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z";
 const MAIL_ICON = "M4 4h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2zM22 6l-10 7L2 6";
@@ -41,14 +41,35 @@ function SectionCard({ title, children }: { title: string; children: ReactNode }
 
 // Read-only advisor page for the DA: who the expert is and how to reach them outside OpenAgriNet.
 export function AdvisorDetails({ id }: { id: string }) {
-  const advisor = useAdvisorsStore((s) => s.rows.find((a) => a.id === id));
+  // Keyed by id, so opening another advisor shows Loading until its record arrives.
+  const [loaded, setLoaded] = useState<{ id: string; advisor?: Advisor; error?: string } | null>(null);
+  useEffect(() => {
+    let current = true;
+    fetchAdvisor(id)
+      .then((advisor) => current && setLoaded({ id, advisor }))
+      .catch((err: unknown) => current && setLoaded({ id, error: describeAdvisorError(err) }));
+    return () => {
+      current = false;
+    };
+  }, [id]);
+  const result = loaded?.id === id ? loaded : null;
+  const advisor = result?.advisor;
+
+  if (!result) {
+    return (
+      <div className="flex w-full flex-col gap-4">
+        <BackLink href="/advisors" />
+        <Card className="shadow-card"><p className="py-10 text-center text-[14px] text-ink-soft">Loading advisor…</p></Card>
+      </div>
+    );
+  }
 
   if (!advisor) {
     return (
       <div className="flex w-full flex-col gap-4">
         <BackLink href="/advisors" />
         <Card className="shadow-card">
-          <EmptyState title="Advisor not found" hint="It may have been added in an earlier session. New advisors are kept in memory until the API is connected." />
+          <EmptyState tone="error" title="Couldn't open this advisor" hint={result.error ?? "Advisor not found."} />
         </Card>
       </div>
     );

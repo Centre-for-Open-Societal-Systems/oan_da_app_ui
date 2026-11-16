@@ -10,6 +10,7 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { FilterDropdown, type FilterOption } from "@/components/ui/FilterDropdown";
 import { AdvancedFiltersDrawer, type FilterFieldConfig, type FilterSelection } from "@/components/ui/AdvancedFiltersDrawer";
 import { SURVEY_STATUS_TONE, SURVEY_TYPES, describeSurveyError, listSurveys, type SurveyTask } from "@/features/surveys";
+import { listFarmers } from "@/features/farmers";
 import { matchesQuery, searchPlaceholder } from "@/lib/search";
 import { todayIso } from "@/lib/utils";
 
@@ -25,7 +26,7 @@ interface SurveyFilters extends FilterSelection {
 }
 const EMPTY: SurveyFilters = { type: new Set(), language: new Set(), status: new Set() };
 
-const pct = (s: SurveyTask) => (s.targetFarmers > 0 ? Math.min(100, Math.round((s.collected / s.targetFarmers) * 100)) : 0);
+const pct = (collected: number, farmers: number | null) => (farmers ? Math.min(100, Math.round((collected / farmers) * 100)) : 0);
 
 // FR-09d: surveys assigned to the DA (GET /surveys) — template version, window, own progress, queued responses.
 export function SurveyTasks() {
@@ -35,6 +36,18 @@ export function SurveyTasks() {
   const [filters, setFilters] = useState<SurveyFilters>(EMPTY);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [query, setQuery] = useState("");
+  // Farmers this DA can survey (their Kebeles): what a survey's progress is counted against. Null until known.
+  const [farmerTotal, setFarmerTotal] = useState<number | null>(null);
+  useEffect(() => {
+    let current = true;
+    listFarmers({ pageSize: 1 })
+      .then(({ total }) => current && setFarmerTotal(total))
+      .catch(() => current && setFarmerTotal(null));
+    return () => {
+      current = false;
+    };
+  }, []);
+  const progressText = (s: SurveyTask) => (farmerTotal == null ? `${s.collected} collected` : `${s.collected} of ${farmerTotal}`);
 
   const fetchSurveys = useCallback(() => {
     listSurveys()
@@ -72,7 +85,7 @@ export function SurveyTasks() {
       (filters.type.size === 0 || filters.type.has(s.type)) &&
       (filters.language.size === 0 || s.languages.some((l) => filters.language.has(l))) &&
       (filters.status.size === 0 || filters.status.has(s.status)) &&
-      matchesQuery(query, s.name, s.type, s.templateVersion, s.window, s.languages, s.status, `${s.collected} of ${s.targetFarmers}`),
+      matchesQuery(query, s.name, s.type, s.templateVersion, s.window, s.languages, s.status, progressText(s)),
   );
 
   const today = todayIso();
@@ -87,8 +100,8 @@ export function SurveyTasks() {
     {
       key: "progress", header: "Responses", cell: (s) => (
         <div className="min-w-[140px]">
-          <div className="flex items-center justify-between text-[12.5px]"><span className="font-medium text-ink">{s.collected} of {s.targetFarmers}</span><span className="text-muted">{pct(s)}%</span></div>
-          <div className="mt-1 h-1.5 w-full rounded-full bg-slate-200"><div className="h-1.5 rounded-full bg-brand-green" style={{ width: `${pct(s)}%` }} /></div>
+          <div className="flex items-center justify-between text-[12.5px]"><span className="font-medium text-ink">{progressText(s)}</span>{farmerTotal != null && <span className="text-muted">{pct(s.collected, farmerTotal)}%</span>}</div>
+          <div className="mt-1 h-1.5 w-full rounded-full bg-slate-200"><div className="h-1.5 rounded-full bg-brand-green" style={{ width: `${pct(s.collected, farmerTotal)}%` }} /></div>
           {s.queued > 0 && <span className="mt-1 block text-[11.5px] text-amber-700">{s.queued} queued</span>}
         </div>
       ),

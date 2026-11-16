@@ -42,7 +42,7 @@ interface AdvisorFilters extends FilterSelection {
 const EMPTY: AdvisorFilters = { expertise: new Set(), region: new Set(), woreda: new Set() };
 
 // MoA subject-matter experts the DA can reach out to. Read-only reference list; View opens the advisor page.
-export function AdvisorDirectory({ advisors }: { advisors: Advisor[] }) {
+export function AdvisorDirectory({ advisors, state = "ready", onRetry }: { advisors: Advisor[]; state?: "loading" | "ready" | "error"; onRetry?: () => void }) {
   const [filters, setFilters] = useState<AdvisorFilters>(EMPTY);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -145,8 +145,10 @@ export function AdvisorDirectory({ advisors }: { advisors: Advisor[] }) {
         rows={rows}
         rowKey={(a) => a.id}
         minWidth="1100px"
+        state={state}
+        onRetry={onRetry}
         emptyTitle={advisors.length === 0 ? "No advisors listed yet" : "No advisors match the selected filters"}
-        emptyHint={advisors.length === 0 ? "MoA subject-matter experts will appear here once the directory is published." : "Clear a filter or try a different search."}
+        emptyHint={advisors.length === 0 ? "MoA subject-matter experts appear here once an Administrator adds them." : "Clear a filter or try a different search."}
       />
 
       <AdvancedFiltersDrawer
