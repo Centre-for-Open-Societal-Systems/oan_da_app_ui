@@ -1,5 +1,4 @@
 import { Metadata } from "next";
-import { FarmersPageHeader } from "./components/FarmersPageHeader";
 import { FarmersTable } from "./components/FarmersTable";
 
 export const metadata: Metadata = {
@@ -8,10 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function FarmersPage() {
-  return (
-    <div className="flex w-full flex-col gap-4">
-      <FarmersPageHeader />
-      <FarmersTable />
-    </div>
-  );
+  return <FarmersTable />;
 }

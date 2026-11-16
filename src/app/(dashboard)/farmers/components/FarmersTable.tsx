@@ -28,6 +28,7 @@ import type { FilterFieldConfig } from "@/components/ui/AdvancedFiltersDrawer";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { FilterDropdown } from "@/components/ui/FilterDropdown";
 import { AdvancedFiltersDrawer } from "@/components/ui/AdvancedFiltersDrawer";
+import { FarmersPageHeader } from "./FarmersPageHeader";
 
 import { PAGE_SIZES, TablePagination } from "@/components/ui/TablePagination";
 import { Spinner } from "@/components/ui/Spinner";
@@ -163,196 +164,230 @@ export function FarmersTable() {
     });
 
   return (
-    <Card className="overflow-hidden p-0 shadow-card">
-      {/* Toolbar */}
-      <div className="flex flex-col gap-3 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-center gap-2.5">
-          <h2 className="text-[15px] font-semibold text-ink">My Farmers</h2>
-          {loaded && !loaded.error && <span className="text-[13px] text-muted">{loaded.total.toLocaleString()} total</span>}
-          <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-brand-green px-1.5 text-[12px] font-semibold text-white">
-            {selected.size}
-          </span>
-        </div>
-
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end">
-          <SearchInput value={query} onChange={setQuery} placeholder={SEARCH_PLACEHOLDER} />
-
-          <AdvancedFiltersButton activeCount={activeFilterCount} onClick={() => setIsFiltersOpen(true)} />
-
-          {canPlanVisit && (
-            <Button
-              variant="brandOutline"
-              size="md"
-              disabled={selectedFarmers.length === 0 || selected.size > MAX_BATCH_FARMERS}
-              title={selected.size > MAX_BATCH_FARMERS ? `You can select up to ${MAX_BATCH_FARMERS} farmers for a batch visit` : selected.size === 0 ? `Select 1 to ${MAX_BATCH_FARMERS} farmers to plan a batch visit` : undefined}
-              onClick={() => setIsBatchOpen(true)}
-            >
-              Plan a visit (Batch){selected.size > 0 ? ` (${selected.size})` : ""}
-            </Button>
-          )}
-
-          {selected.size > 0 && (
-            <Button variant="brand" size="md" onClick={() => { setSegmentId(SEGMENTS[0].id); setIsAddOpen(true); }}>
-              Add to Model Farmers ({selected.size})
-            </Button>
-          )}
-
+    <div className="flex w-full flex-col gap-3.5 sm:gap-4">
+      <FarmersPageHeader
+        actions={
           <ExportButton
             disabled={rows.length === 0}
+            className="flex-1 sm:flex-initial sm:h-10 sm:px-4 sm:text-[14px] text-[13px]"
             onExport={(format) => {
               downloadTable(format, `farmers-report-${fileDate()}`, rows, EXPORT_COLUMNS, "Farmers report");
               setNotice(`Exported ${rows.length} farmer${rows.length === 1 ? "" : "s"} matching the current search and filters (${formatLabel(format)}).`);
             }}
           />
-        </div>
-      </div>
-
-      {loaded?.error && (
-        <Banner tone="error" title="Farmers could not be loaded" className="mx-4 mb-3">
-          {loaded.error}
-        </Banner>
-      )}
-      {notice && <Banner tone="success" className="mx-4 mb-3" onDismiss={() => setNotice(null)}>{notice}</Banner>}
-      {canPlanVisit && selected.size > MAX_BATCH_FARMERS && (
-        <Banner tone="warning" className="mx-4 mb-3">You can select up to {MAX_BATCH_FARMERS} farmers for a batch visit. Unselect {selected.size - MAX_BATCH_FARMERS} to plan it.</Banner>
-      )}
-
-      {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[1020px] border-collapse text-left">
-          <thead>
-            <tr className="border-y border-line bg-surface text-[14px] font-semibold text-slate-500">
-              <th className="w-14 px-4 py-3 align-middle">
-                <Checkbox checked={allSelected} onChange={toggleAll} aria-label="Select all farmers" />
-              </th>
-              <th className="px-4 py-3 font-semibold">Farmer Details</th>
-              <th className="px-4 py-3 font-semibold">
-                <FilterDropdown label="Kebele" allLabel="All kebeles" options={kebeleOptions} selected={filters.kebele} onApply={setColumnFilter("kebele")} />
-              </th>
-              <th className="px-4 py-3 font-semibold">Land</th>
-              <th className="px-4 py-3 text-center font-semibold">Plots</th>
-              <th className="px-4 py-3 text-center font-semibold">Approved Date</th>
-              <th className="px-4 py-3 text-center font-semibold">
-                <FilterDropdown label="Status" allLabel="All Status" options={statusOptions} selected={filters.status} onApply={setColumnFilter("status")} />
-              </th>
-              <th className="px-4 py-3 text-center font-semibold">Action</th>
-            </tr>
-          </thead>
-          <tbody className="text-[14px] text-slate-700">
-            {loading && (
-              <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-[13.5px] text-muted">
-                  <Spinner className="mx-auto mb-2 h-5 w-5" />
-                  Loading farmers… the first load can take up to 20 seconds.
-                </td>
-              </tr>
-            )}
-            {!loading && rows.length === 0 && !loaded?.error && (
-              <tr>
-                <td colSpan={8} className="px-4 py-6">
-                  {source.length === 0 ? (
-                    <EmptyState title={searchText && searchText !== ALL_FARMERS_SEARCH ? "No farmers match your search" : isDA ? "No farmer assigned" : "No farmers in your area yet"} hint={searchText && searchText !== ALL_FARMERS_SEARCH ? "Try a name, a Farmer-ID or a phone number." : isDA ? "Farmers your supervisor assigns to you appear here." : "Approved farmers in your scope appear here."} />
-                  ) : (
-                    <EmptyState title="No farmers match the selected filters" hint="Clear a filter or try a different search." />
-                  )}
-                </td>
-              </tr>
-            )}
-            {rows.map((farmer) => {
-              const isSelected = selected.has(farmer.id);
-              return (
-                <tr
-                  key={farmer.id}
-                  className={cn(
-                    "border-b border-line-soft transition-colors last:border-0",
-                    isSelected ? "bg-brand-wash" : "hover:bg-surface",
-                  )}
-                >
-                  <td className="w-14 px-4 py-3.5 align-middle">
-                    <Checkbox
-                      checked={isSelected}
-                      onChange={() => toggleOne(farmer.id)}
-                      aria-label={`Select ${farmer.name}`}
-                    />
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center gap-2.5">
-                      <FarmerAvatar name={farmer.name} avatar={farmer.avatar} />
-                      <div className="leading-tight">
-                        <p className="font-medium text-ink">{farmer.name}</p>
-                        <p className="mt-0.5 text-[13px] text-muted">{[farmer.regId, farmer.phone || "—"].filter(Boolean).join(" · ")}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3.5 leading-tight">
-                    {farmer.kebele}
-                    <p className="mt-0.5 text-[13px] text-muted">{[farmer.woreda, farmer.region].filter(Boolean).join(", ")}</p>
-                  </td>
-                  <td className="px-4 py-3.5">{farmer.landUnknown ? "—" : `${farmer.landHa} ha`}</td>
-                  <td className="px-4 py-3.5 text-center">{farmer.plotsUnknown ? "—" : farmer.totalPlots}</td>
-                  <td className="px-4 py-3.5 text-center leading-tight">
-                    {farmer.registeredAt}
-                    <br />
-                    {farmer.registeredTime && <span className="text-slate-600">- {farmer.registeredTime}</span>}
-                  </td>
-                  <td className="px-4 py-3.5 text-center">
-                    <StatusPill status={farmerActivity(farmer.status)} reason={farmer.statusReason} />
-                  </td>
-                  <td className="px-4 py-3.5 text-center">
-                    <RowAction href={`/farmers/${farmer.regId ?? farmer.id}`} icon="view">View</RowAction>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      <TablePagination {...paginationProps} itemLabel="farmers" />
-
-      <AdvancedFiltersDrawer
-        isOpen={isFiltersOpen}
-        onClose={() => setIsFiltersOpen(false)}
-        fields={filterFields}
-        filters={filters}
-        onApply={(next) =>
-          setFilters({
-            ...EMPTY_FILTERS,
-            kebele: next.kebele ?? new Set(),
-            status: next.status ?? new Set(),
-          })
         }
       />
 
-      {isBatchOpen && <PlanVisitModal farmers={selectedFarmers} isOpen onClose={() => setIsBatchOpen(false)} />}
+      <Card className="overflow-hidden p-0 shadow-card">
+        {/* Toolbar */}
+        <div className="flex flex-col gap-2.5 sm:gap-3 p-3.5 sm:p-4 lg:flex-row lg:items-center lg:justify-between border-b border-line-soft">
+          {/* Left side: My Farmers, count, badge */}
+          <div className="flex shrink-0 items-center gap-2 sm:gap-2.5 whitespace-nowrap">
+            <h2 className="text-[15px] sm:text-[16px] font-semibold text-ink">My Farmers</h2>
+            {loaded && !loaded.error && (
+              <span className="text-[12.5px] sm:text-[13px] text-muted">{loaded.total.toLocaleString()} total</span>
+            )}
+            <span className="flex h-5.5 min-w-5.5 sm:h-6 sm:min-w-6 items-center justify-center rounded-full bg-brand-green px-1.5 text-[11px] sm:text-[12px] font-semibold text-white">
+              {selected.size}
+            </span>
+          </div>
 
-      <Modal
-        isOpen={isAddOpen}
-        onClose={() => setIsAddOpen(false)}
-        title="Add to Model Farmers"
-        subtitle={`${selectedFarmers.length} farmer${selectedFarmers.length === 1 ? "" : "s"} selected`}
-        footer={<><Button variant="outline" onClick={() => setIsAddOpen(false)}>Cancel</Button><Button variant="brand" onClick={addToBeneficiaries}>Add</Button></>}
-      >
-        <div className="flex flex-col gap-4">
-          <FormField label="Package" htmlFor="bulk-segment" required hint="Membership is verified against the package rule before enrolment.">
-            <Select id="bulk-segment" value={segmentId} onChange={(e) => setSegmentId(e.target.value)}>
-              {SEGMENTS.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </Select>
-          </FormField>
-          <div>
-            <p className="text-[14px] font-medium text-ink">Farmers</p>
-            <ul className="mt-2 flex max-h-[220px] flex-col gap-2 overflow-y-auto">
-              {selectedFarmers.map((f) => (
-                <li key={f.id} className="flex items-center gap-2.5 text-[14px]">
-                  <FarmerAvatar name={f.name} avatar={f.avatar} />
-                  <span className="text-ink">{f.name}</span>
-                  <span className="text-[13px] text-muted">{f.kebele} · {f.crop} · {f.livestock}</span>
-                </li>
-              ))}
-            </ul>
+          {/* Right side: Plan a visit, Add to Model Farmers, Search, Advanced Filters */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 lg:justify-end flex-wrap lg:flex-nowrap">
+            {/* Batch Actions Group */}
+            {(canPlanVisit || selected.size > 0) && (
+              <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+                {canPlanVisit && (
+                  <Button
+                    variant="brandOutline"
+                    size="md"
+                    disabled={selectedFarmers.length === 0 || selected.size > MAX_BATCH_FARMERS}
+                    title={selected.size > MAX_BATCH_FARMERS ? `You can select up to ${MAX_BATCH_FARMERS} farmers for a batch visit` : selected.size === 0 ? `Select 1 to ${MAX_BATCH_FARMERS} farmers to plan a batch visit` : undefined}
+                    onClick={() => setIsBatchOpen(true)}
+                    className="flex-1 sm:flex-initial text-[12px] sm:text-[13px] h-9 sm:h-10 px-2.5 sm:px-3 whitespace-nowrap shrink-0"
+                  >
+                    <span>Plan <span className="hidden sm:inline">a </span>visit<span className="hidden xl:inline"> (Batch)</span>{selected.size > 0 ? ` (${selected.size})` : ""}</span>
+                  </Button>
+                )}
+
+                {selected.size > 0 && (
+                  <Button
+                    variant="brand"
+                    size="md"
+                    onClick={() => { setSegmentId(SEGMENTS[0].id); setIsAddOpen(true); }}
+                    className="flex-1 sm:flex-initial text-[12px] sm:text-[13px] h-9 sm:h-10 px-2.5 sm:px-3 whitespace-nowrap shrink-0"
+                  >
+                    <span><span className="hidden sm:inline">Add to </span>Model Farmers{selected.size > 0 ? ` (${selected.size})` : ""}</span>
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {/* Search & Filters Group */}
+            <div className="flex items-center gap-2 flex-1 sm:flex-initial shrink-0 w-full sm:w-auto">
+              <SearchInput
+                value={query}
+                onChange={setQuery}
+                placeholder={SEARCH_PLACEHOLDER}
+                className="flex-1 sm:w-[150px] md:w-[170px] lg:w-[150px] xl:w-[190px] 2xl:w-[230px] [&_input]:w-full"
+              />
+
+              <AdvancedFiltersButton
+                activeCount={activeFilterCount}
+                onClick={() => setIsFiltersOpen(true)}
+                className="h-9 sm:h-10 px-2.5 sm:px-3 text-[12px] sm:text-[13px] shrink-0 whitespace-nowrap"
+              />
+            </div>
           </div>
         </div>
-      </Modal>
-    </Card>
+
+        {loaded?.error && (
+          <Banner tone="error" title="Farmers could not be loaded" className="mx-3.5 sm:mx-4 mb-3">
+            {loaded.error}
+          </Banner>
+        )}
+        {notice && <Banner tone="success" className="mx-3.5 sm:mx-4 mb-3" onDismiss={() => setNotice(null)}>{notice}</Banner>}
+        {canPlanVisit && selected.size > MAX_BATCH_FARMERS && (
+          <Banner tone="warning" className="mx-3.5 sm:mx-4 mb-3">You can select up to {MAX_BATCH_FARMERS} farmers for a batch visit. Unselect {selected.size - MAX_BATCH_FARMERS} to plan it.</Banner>
+        )}
+
+        {/* Table (Desktop layout matching Visits tab with horizontal scroll, no fixed columns) */}
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[920px] lg:min-w-[980px] border-collapse text-left">
+            <thead>
+              <tr className="border-y border-line bg-surface text-[14px] font-semibold text-slate-500">
+                <th className="w-14 px-4 py-3 align-middle">
+                  <Checkbox checked={allSelected} onChange={toggleAll} aria-label="Select all farmers" />
+                </th>
+                <th className="px-4 py-3 font-semibold">Farmer Details</th>
+                <th className="px-4 py-3 font-semibold">
+                  <FilterDropdown label="Kebele" allLabel="All kebeles" options={kebeleOptions} selected={filters.kebele} onApply={setColumnFilter("kebele")} />
+                </th>
+                <th className="px-4 py-3 font-semibold">Land</th>
+                <th className="px-4 py-3 text-center font-semibold">Plots</th>
+                <th className="px-4 py-3 text-center font-semibold">Approved Date</th>
+                <th className="px-4 py-3 text-center font-semibold">
+                  <FilterDropdown label="Status" allLabel="All Status" options={statusOptions} selected={filters.status} onApply={setColumnFilter("status")} />
+                </th>
+                <th className="px-4 py-3 text-center font-semibold">Action</th>
+              </tr>
+            </thead>
+            <tbody className="text-[13.5px] sm:text-[14px] text-slate-700">
+              {loading && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-10 text-center text-[13.5px] text-muted">
+                    <Spinner className="mx-auto mb-2 h-5 w-5" />
+                    Loading farmers… the first load can take up to 20 seconds.
+                  </td>
+                </tr>
+              )}
+              {!loading && rows.length === 0 && !loaded?.error && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-6">
+                    {source.length === 0 ? (
+                      <EmptyState title={searchText && searchText !== ALL_FARMERS_SEARCH ? "No farmers match your search" : isDA ? "No farmer assigned" : "No farmers in your area yet"} hint={searchText && searchText !== ALL_FARMERS_SEARCH ? "Try a name, a Farmer-ID or a phone number." : isDA ? "Farmers your supervisor assigns to you appear here." : "Approved farmers in your scope appear here."} />
+                    ) : (
+                      <EmptyState title="No farmers match the selected filters" hint="Clear a filter or try a different search." />
+                    )}
+                  </td>
+                </tr>
+              )}
+              {rows.map((farmer) => {
+                const isSelected = selected.has(farmer.id);
+                return (
+                  <tr
+                    key={farmer.id}
+                    className={cn(
+                      "border-b border-line-soft transition-colors last:border-0 hover:bg-surface",
+                      isSelected && "bg-brand-wash"
+                    )}
+                  >
+                    <td className="w-14 px-4 py-3.5 align-middle">
+                      <Checkbox
+                        checked={isSelected}
+                        onChange={() => toggleOne(farmer.id)}
+                        aria-label={`Select ${farmer.name}`}
+                      />
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-2.5">
+                        <FarmerAvatar name={farmer.name} avatar={farmer.avatar} />
+                        <div className="leading-tight">
+                          <p className="font-semibold text-ink text-[13.5px] sm:text-[14px]">{farmer.name}</p>
+                          <p className="mt-0.5 text-[12px] sm:text-[12.5px] text-muted">{[farmer.regId, farmer.phone || "—"].filter(Boolean).join(" · ")}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5 leading-tight">
+                      <span className="font-medium text-slate-800 text-[13px] sm:text-[13.5px] block">{farmer.kebele}</span>
+                      <p className="mt-0.5 text-[11.5px] sm:text-[12px] text-muted">{[farmer.woreda, farmer.region].filter(Boolean).join(", ")}</p>
+                    </td>
+                    <td className="px-4 py-3.5 whitespace-nowrap text-[13px]">{farmer.landUnknown ? "—" : `${farmer.landHa} ha`}</td>
+                    <td className="px-4 py-3.5 text-center whitespace-nowrap text-[13px]">{farmer.plotsUnknown ? "—" : farmer.totalPlots}</td>
+                    <td className="px-4 py-3.5 text-center leading-tight whitespace-nowrap text-[12px]">
+                      {farmer.registeredAt}
+                      <br />
+                      {farmer.registeredTime && <span className="text-slate-500">- {farmer.registeredTime}</span>}
+                    </td>
+                    <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                      <StatusPill status={farmerActivity(farmer.status)} reason={farmer.statusReason} />
+                    </td>
+                    <td className="px-4 py-3.5 text-center">
+                      <RowAction href={`/farmers/${farmer.regId ?? farmer.id}`} icon="view">View</RowAction>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <TablePagination {...paginationProps} itemLabel="farmers" />
+
+        <AdvancedFiltersDrawer
+          isOpen={isFiltersOpen}
+          onClose={() => setIsFiltersOpen(false)}
+          fields={filterFields}
+          filters={filters}
+          onApply={(next) =>
+            setFilters({
+              ...EMPTY_FILTERS,
+              kebele: next.kebele ?? new Set(),
+              status: next.status ?? new Set(),
+            })
+          }
+        />
+
+        {isBatchOpen && <PlanVisitModal farmers={selectedFarmers} isOpen onClose={() => setIsBatchOpen(false)} />}
+
+        <Modal
+          isOpen={isAddOpen}
+          onClose={() => setIsAddOpen(false)}
+          title="Add to Model Farmers"
+          subtitle={`${selectedFarmers.length} farmer${selectedFarmers.length === 1 ? "" : "s"} selected`}
+          footer={<><Button variant="outline" onClick={() => setIsAddOpen(false)}>Cancel</Button><Button variant="brand" onClick={addToBeneficiaries}>Add</Button></>}
+        >
+          <div className="flex flex-col gap-4">
+            <FormField label="Package" htmlFor="bulk-segment" required hint="Membership is verified against the package rule before enrolment.">
+              <Select id="bulk-segment" value={segmentId} onChange={(e) => setSegmentId(e.target.value)}>
+                {SEGMENTS.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </Select>
+            </FormField>
+            <div>
+              <p className="text-[14px] font-medium text-ink">Farmers</p>
+              <ul className="mt-2 flex max-h-[220px] flex-col gap-2 overflow-y-auto">
+                {selectedFarmers.map((f) => (
+                  <li key={f.id} className="flex items-center gap-2.5 text-[14px]">
+                    <FarmerAvatar name={f.name} avatar={f.avatar} />
+                    <span className="text-ink">{f.name}</span>
+                    <span className="text-[13px] text-muted">{f.kebele} · {f.crop} · {f.livestock}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </Modal>
+      </Card>
+    </div>
   );
 }
