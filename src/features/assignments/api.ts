@@ -41,6 +41,19 @@ export interface AdminArea {
   name_am: string | null;
 }
 
+/** A level of the Master Data geography that the Broadcast form walks down. */
+export type GeoField = "region" | "zone" | "woreda";
+
+/** One row of GET /get_master_data for data_type=geo. */
+export interface GeoArea {
+  id: string;
+  code: string;
+  name: string;
+  field_name: GeoField;
+  parent: string;
+  sort_order: number;
+}
+
 export interface KebeleCoverage {
   kebele: string;
   kebele_name: string;
@@ -116,6 +129,15 @@ export async function listAreas(p: { level?: AdminArea["level"]; parent?: string
 /** GET /master/kebeles: the Kebeles of one Woreda (code), for the assign form. */
 export async function listKebeles(woreda: string): Promise<AdminArea[]> {
   const res = await authRequest<{ data: AdminArea[] }>(`/da-services/master/kebeles${query({ woreda })}`);
+  return res.data;
+}
+
+/**
+ * GET /get_master_data: the areas of one geo level under a parent's code. Geo calls ignore search and current_page
+ * (page 2 repeats page 1), so one call gets the whole list.
+ */
+export async function listGeo({ fieldName, parent }: { fieldName: GeoField; parent: string }): Promise<GeoArea[]> {
+  const res = await authRequest<{ data: GeoArea[] }>(`/da-services/get_master_data${query({ data_type: "geo", field_name: fieldName, parent })}`);
   return res.data;
 }
 

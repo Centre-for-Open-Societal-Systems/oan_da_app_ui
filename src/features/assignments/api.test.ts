@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuthStore } from "@/store/useAuthStore";
 import { assignAgent, fetchCoverage, fetchMyAssignment, formatAssignmentDate, listAssignments, listKebeles, toAgentAssignment, type ApiAssignmentRow } from "./api";
-import { areaLabel, areaNameMap, woredasInRegion } from "./api";
+import { areaLabel, areaNameMap, listGeo, woredasInRegion } from "./api";
 
 // Minimal in-memory Storage so the persisted auth store runs under Node.
 class MemoryStorage implements Storage {
@@ -51,6 +51,15 @@ describe("assignments api", () => {
 
     await expect(listAssignments()).resolves.toEqual({ rows: [row], total: 1, summary });
     expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/assignments?limit=500");
+  });
+
+  it("lists one geo level under its parent's code, in a single call", async () => {
+    const zone = { id: "ET1202", code: "ET1202", name: "Agnewak", field_name: "zone", parent: "ET12", sort_order: 0 };
+    fetchMock.mockResolvedValueOnce(json({ status: "success", data: [zone], meta: { current_page: 1, total_pages: 1, total: 1 } }));
+
+    await expect(listGeo({ fieldName: "zone", parent: "ET12" })).resolves.toEqual([zone]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/get_master_data?data_type=geo&field_name=zone&parent=ET12");
   });
 
   it("asks for coverage, kebeles and the DA's own posting", async () => {
