@@ -4,6 +4,8 @@ import { cn } from "@/lib/utils";
 import type { Farmer } from "../types";
 import { FarmerAvatar } from "./FarmerAvatar";
 import { MAX_BATCH_FARMERS, registryCode } from "./planVisit";
+import { SelectedFarmerCard } from "./SelectedFarmerCard";
+import type { VisitItemDetails } from "./VisitItemFields";
 
 interface FarmerPickerProps {
   /** The picked farmers, at most MAX_BATCH_FARMERS: one visit is planned for each. */
@@ -20,11 +22,15 @@ interface FarmerPickerProps {
   /** True once a search ran for the current (non-empty) term — shows the match count. */
   showCount: boolean;
   onClearSearch: () => void;
+  /** Batch: each farmer's own visit details (by farmer id), set with "Edit details" on their card. */
+  overrides?: Record<string, VisitItemDetails>;
+  onDetailsChange?: (farmer: Farmer, details: VisitItemDetails | null) => void;
+  readCommon?: () => VisitItemDetails;
 }
 
 // The picked farmers, then the farmer list (narrowed by the search) with a checkbox per row: tick up to
 // MAX_BATCH_FARMERS of them for a batch visit.
-export function FarmerPicker({ selected, onToggle, onRemove, isFull, matches, emptyText, query, showCount, onClearSearch }: FarmerPickerProps) {
+export function FarmerPicker({ selected, onToggle, onRemove, isFull, matches, emptyText, query, showCount, onClearSearch, overrides, onDetailsChange, readCommon }: FarmerPickerProps) {
   const isPicked = (f: Farmer) => selected.some((s) => s.id === f.id);
 
   return (
@@ -40,24 +46,14 @@ export function FarmerPicker({ selected, onToggle, onRemove, isFull, matches, em
 
       {selected.length > 0 && (
         <ul className="flex flex-col gap-2">
-          {selected.map((f) => (
-            <li key={f.id} className="flex items-center gap-3 rounded-lg border border-brand-border bg-brand-mint px-3.5 py-3">
-              <FarmerAvatar name={f.name} avatar={f.avatar} className="h-9 w-9 text-[13px] bg-white" />
-              <div className="min-w-0 flex-1">
-                <p className="text-[14.5px] font-semibold text-ink">{f.name}</p>
-                <p className="mt-0.5 truncate text-[13px] text-slate-600">
-                  {registryCode(f)} · {f.kebele} · {f.crop} {f.landHa} ha · {f.livestock} {f.livestockHeads} heads
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => onRemove(f)}
-                className="h-8 rounded-md border border-brand-green bg-white px-3 text-[13px] font-semibold text-brand-green transition-colors hover:bg-brand-wash"
-              >
-                Remove
-              </button>
-            </li>
-          ))}
+          {selected.map((f) =>
+            // Own details only make sense in a batch; a single farmer simply uses the form below.
+            selected.length > 1 && onDetailsChange ? (
+              <SelectedFarmerCard key={f.id} farmer={f} onRemove={onRemove} details={overrides?.[f.id]} onDetailsChange={onDetailsChange} readCommon={readCommon} />
+            ) : (
+              <SelectedFarmerCard key={f.id} farmer={f} onRemove={onRemove} />
+            ),
+          )}
         </ul>
       )}
 

@@ -2,14 +2,12 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { FormField } from "@/components/ui/FormField";
-import { Input } from "@/components/ui/Input";
-import { Select } from "@/components/ui/Select";
-import { cn, todayIso } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import type { Farmer } from "../types";
 import type { BatchVisitItem } from "../visitsApi";
 import { FarmerAvatar } from "./FarmerAvatar";
-import { DURATIONS, durationMinutes, registryCode, VISIT_TYPES, type BatchRow } from "./planVisit";
+import { registryCode, type BatchRow } from "./planVisit";
+import { VisitItemFields } from "./VisitItemFields";
 
 interface PlanVisitBatchResultProps {
   rows: BatchRow[];
@@ -21,7 +19,6 @@ interface PlanVisitBatchResultProps {
 }
 
 const visits = (n: number) => `${n} visit${n === 1 ? "" : "s"}`;
-const PRIORITY_LEVELS = ["High", "Medium", "Low"] as const;
 
 // Outcome of a batch plan: one row per farmer, planned (visit id) or failed (the backend's reason) with Edit /
 // Discard. Edit opens that farmer's own details in the row; Resubmit sends only them.
@@ -108,44 +105,7 @@ export function PlanVisitBatchResult({ rows, onDiscard, onResubmit, submitting }
                     setEditing(null);
                   }}
                 >
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <FormField label="Visit type" htmlFor={`edit-type-${r.farmer.id}`}>
-                      <Select id={`edit-type-${r.farmer.id}`} className="h-9" value={editing.request.visit_type} onChange={(e) => patch({ visit_type: e.target.value })}>
-                        {VISIT_TYPES.map((t) => <option key={t}>{t}</option>)}
-                      </Select>
-                    </FormField>
-                    <FormField label="Priority" htmlFor={`edit-priority-${r.farmer.id}`}>
-                      <Select
-                        id={`edit-priority-${r.farmer.id}`}
-                        className="h-9"
-                        value={editing.request.priority}
-                        onChange={(e) => patch({ priority: e.target.value as BatchVisitItem["priority"] })}
-                      >
-                        {PRIORITY_LEVELS.map((p) => <option key={p}>{p}</option>)}
-                      </Select>
-                    </FormField>
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <FormField label="Date" htmlFor={`edit-date-${r.farmer.id}`} required>
-                      <Input id={`edit-date-${r.farmer.id}`} type="date" className="h-9" min={todayIso()} value={editing.request.date} onChange={(e) => patch({ date: e.target.value })} required />
-                    </FormField>
-                    <FormField label="Time" htmlFor={`edit-time-${r.farmer.id}`} required>
-                      <Input id={`edit-time-${r.farmer.id}`} type="time" className="h-9" value={editing.request.time} onChange={(e) => patch({ time: e.target.value })} required />
-                    </FormField>
-                    <FormField label="Duration" htmlFor={`edit-duration-${r.farmer.id}`}>
-                      <Select
-                        id={`edit-duration-${r.farmer.id}`}
-                        className="h-9"
-                        value={String(editing.request.duration_min)}
-                        onChange={(e) => patch({ duration_min: Number(e.target.value) })}
-                      >
-                        {DURATIONS.map((d) => <option key={d} value={durationMinutes(d)}>{d}</option>)}
-                      </Select>
-                    </FormField>
-                  </div>
-                  <FormField label="Purpose / objective" htmlFor={`edit-purpose-${r.farmer.id}`} required>
-                    <Input id={`edit-purpose-${r.farmer.id}`} className="h-9" value={editing.request.purpose} onChange={(e) => patch({ purpose: e.target.value })} required />
-                  </FormField>
+                  <VisitItemFields idPrefix={`edit-${r.farmer.id}`} value={editing.request} onChange={patch} />
                   <div className="flex justify-end gap-2">
                     <Button type="button" variant="outline" size="sm" onClick={() => setEditing(null)} disabled={submitting}>
                       Cancel

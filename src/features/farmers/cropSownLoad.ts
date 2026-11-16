@@ -1,10 +1,12 @@
 import { CROP_SOWN_FORM, valueKey, type CropSownFieldDef, type CropSownValues } from "./cropSown";
-import { fetchFarmerCrop, listFarmerCrops, type ApiFarmerCrop, type ApiIntakeField, type ApiIntakeForm, type CropSownForm } from "./cropSownApi";
+import { fetchFarmerCrop, fetchRegisterTab, listFarmerCrops, REGISTER_TAB_IDS, type ApiFarmerCrop, type ApiIntakeField, type ApiRegisterTab, type ApiIntakeForm, type CropSownForm } from "./cropSownApi";
 import { loadIntakeForm, optionId, optionLabel, STAGE_PLANS } from "./cropSownSubmit";
 
-// A farmer's earlier Crop Sown details, from the registry itself: GET /farmers/{id}/crops lists their submissions (one per
-// stage form), GET /farmers/{id}/crops?submission_id= reads one with its section records. The newest submission of each
-// stage fills that stage's tab, turning the registry's codes back into the labels the form shows.
+// A farmer's earlier Crop Sown details, from the registry itself: GET /farmers/{id}/crops?source=submission lists their
+// submissions (one per stage form), ?source=register their approved register rows. ?submission_id= reads one submission
+// with its section records; ?internal_record_id=&tab_id= reads one tab of the register record. A stage's tab is filled
+// from the register record when asked for and it has that tab, else from the newest submission of that stage, turning
+// the registry's codes back into the labels the form shows.
 
 const STAGES: CropSownForm[] = ["planning", "cultivation", "sowing", "harvesting"];
 
@@ -69,6 +71,20 @@ export function stageValues(tab: string, sections: { sectionId: string; rows: Ro
   return values;
 }
 
+/**
+ * The sections of a register tab response. The register names a section by its section_register_id only; the stage's
+ * intake form tells which section_id that is. A section no intake form knows (Production) keeps `fallback` as its id.
+ */
+export function registerSections(tab: ApiRegisterTab, intake: ApiIntakeForm | null, fallback: string): { sectionId: string; rows: Row[] }[] {
+  return (tab.tabs ?? []).flatMap((t) => t.records ?? []).map((sec) => ({
+    sectionId: sec.section_id ?? intake?.sections.find((i) => i.section_register_id === sec.section_register_id)?.section_id ?? fallback,
+    rows: (sec.records ?? []).filter((r): r is Row => !!r && typeof r === "object"),
+  }));
+}
+
+/** The register record among a farmer's crop rows (the row with internal_record_id), if any. */
+export const registerRowOf = (crops: ApiFarmerCrop[]): ApiFarmerCrop | undefined => crops.find((c) => !c.submission_id && !!c.internal_record_id);
+
 /** The intake submissions in a crops list (the register's own row has no submission), newest first. */
 export function submissionsOf(crops: ApiFarmerCrop[]): ApiFarmerCrop[] {
   const stamp = (c: ApiFarmerCrop) => c.last_updated_at ?? c.first_created_at ?? "";
@@ -113,20 +129,44 @@ export interface LoadedCropDetails {
   stages: CropSownForm[];
   /** How many intake submissions the farmer has in all. */
   total: number;
+  /** The register record's Production tab sections, when the register was read. */
+  production?: { sectionId: string; rows: Row[] }[];
+}
+
+export interface LoadCropOptions {
+  /** Keep what only a read-only view shows (see stageValues). */
+  display?: boolean;
+  /** Read each stage from the register record's tab first (one call per tab), falling back to the newest submission. */
+  register?: boolean;
 }
 
 /**
- * Reads the farmer's earlier Crop Sown submissions and turns them into form values. `listed` is the list when the caller
- * already has it; `display` keeps what only a read-only view shows (see stageValues).
+ * Reads the farmer's earlier Crop Sown records and turns them into form values. `listed` is the list when the caller
+ * already has it (submission and register rows); see LoadCropOptions for the rest.
  */
-export async function loadCropDetails(farmerCode: string, listed?: ApiFarmerCrop[], { display = false } = {}): Promise<LoadedCropDetails> {
-  const crops = listed ?? (await listFarmerCrops(farmerCode));
+export async function loadCropDetails(farmerCode: string, listed?: ApiFarmerCrop[], { display = false, register = false }: LoadCropOptions = {}): Promise<LoadedCropDetails> {
+  const crops = listed ?? (await listFarmerCrops(farmerCode, "submission"));
   if (crops.length === 0) return { values: {}, stages: [], total: 0 };
   const submissions = submissionsOf(crops);
+  const registerId = register ? registerRowOf(crops)?.internal_record_id : undefined;
 
+  /** The sections of one register tab; none when it cannot be read, so the submission can stand in. */
+  const registerTab = async (tabId: string, intake: ApiIntakeForm | null, fallback: string) => {
+    if (!registerId) return [];
+    try {
+      return registerSections(await fetchRegisterTab(farmerCode, registerId, tabId), intake, fallback);
+    } catch {
+      return [];
+    }
+  };
+
+  const productionTab = registerTab(REGISTER_TAB_IDS.production, null, "Production");
   const perStage = await Promise.all(
     STAGES.map(async (form) => {
       const intake = await loadIntakeForm(form);
+      const fromRegister = await registerTab(REGISTER_TAB_IDS[form], intake, form);
+      const registerValues = fromRegister.length ? stageValues(form, fromRegister, intake, display) : {};
+      if (Object.keys(registerValues).length) return { form, mine: registerValues };
       // Newest first; the stage's form id tells which submission belongs to which tab.
       const latest = intake ? submissions.find((c) => c.form_id === intake.form_id) : undefined;
       if (!latest?.submission_id) return { form, mine: {} as CropSownValues };
@@ -155,5 +195,6 @@ export async function loadCropDetails(farmerCode: string, listed?: ApiFarmerCrop
       values[key] = value;
     }
   }
-  return { values, stages, total: submissions.length };
+  const production = (await productionTab).filter((section) => section.rows.length > 0);
+  return { values, stages, total: submissions.length, ...(registerId ? { production } : {}) };
 }

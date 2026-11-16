@@ -60,18 +60,19 @@ export function GrievanceDetailModal({ grievance, onClose }: GrievanceDetailModa
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-ink/40 p-3 backdrop-blur-[2px] sm:p-6"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/40 p-3 backdrop-blur-[2px] sm:p-6"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
+      {/* Fits the screen: the header stays put and the body (summary, timeline, evidence) scrolls. */}
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="grievance-title"
-        className="my-auto w-full min-w-0 max-w-[820px] overflow-hidden rounded-2xl bg-white shadow-2xl"
+        className="flex max-h-[calc(100dvh-1.5rem)] w-full min-w-0 max-w-[820px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]"
       >
-        <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-4 sm:gap-4 sm:px-6">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-line px-4 py-4 sm:gap-4 sm:px-6">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[13px] font-medium text-slate-600">{grievance.ticketId}</span>
@@ -92,7 +93,7 @@ export function GrievanceDetailModal({ grievance, onClose }: GrievanceDetailModa
           </button>
         </div>
 
-        <div className="flex flex-col gap-5 px-3 py-4 sm:px-6 sm:py-5">
+        <div className="green-scrollbar flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-contain px-3 py-4 sm:px-6 sm:py-5">
           <dl className="grid grid-cols-[110px_minmax(0,1fr)] items-center gap-x-4 gap-y-3 rounded-xl bg-surface px-5 py-4 text-[14px] sm:grid-cols-[130px_minmax(0,1fr)]">
             {summary.map((row) => (
               <div key={row.label} className="contents">

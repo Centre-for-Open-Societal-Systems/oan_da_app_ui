@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuthStore } from "@/store/useAuthStore";
 import { ApiError } from "@/lib/api";
-import { describeCropSownError, fetchGeoLevelValues, fetchIntakeForm, isCropsNotFound, listFarmerCrops, saveFarmerCrop } from "./cropSownApi";
+import { describeCropSownError, fetchGeoLevelValues, fetchIntakeForm, fetchRegisterTab, isCropsNotFound, listAllFarmerCrops, listFarmerCrops, saveFarmerCrop } from "./cropSownApi";
 
 // Minimal in-memory Storage so the persisted auth store runs under Node.
 class MemoryStorage implements Storage {
@@ -14,7 +14,7 @@ class MemoryStorage implements Storage {
   setItem(k: string, v: string) { this.map.set(k, String(v)); }
 }
 
-const json = (body: unknown) => new Response(JSON.stringify(body));
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 const fetchMock = vi.fn<typeof fetch>();
 
 beforeEach(() => {
@@ -55,6 +55,26 @@ describe("Crop Sown API", () => {
   it("lists the crops of a farmer", async () => {
     fetchMock.mockResolvedValueOnce(json({ data: { farmer_id: "FR-1", crops: [{ submission_id: "s1" }] } }));
     expect(await listFarmerCrops("FR-1")).toHaveLength(1);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/farmers/FR-1/crops?source=submission");
+  });
+
+  it("lists submissions and register rows together; a 404 on one list means none there", async () => {
+    fetchMock.mockImplementation(async (input) =>
+      String(input).endsWith("source=submission") ? json({ data: { crops: [{ submission_id: "s1" }] } }) : json({ message: "not found" }, 404),
+    );
+    expect(await listAllFarmerCrops("FR-1")).toEqual([{ submission_id: "s1" }]);
+    fetchMock.mockImplementation(async (input) =>
+      json({ data: { crops: [String(input).endsWith("source=register") ? { internal_record_id: "r1" } : { submission_id: "s1" }] } }),
+    );
+    expect(await listAllFarmerCrops("FR-1")).toEqual([{ submission_id: "s1" }, { internal_record_id: "r1" }]);
+    fetchMock.mockImplementation(async () => json({ message: "not found" }, 404));
+    await expect(listAllFarmerCrops("FR-1")).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("reads one register tab by internal_record_id and tab_id", async () => {
+    fetchMock.mockResolvedValueOnce(json({ data: { internal_record_id: "r1", tab_id: "cropsown_planning_tab", tabs: [] } }));
+    await fetchRegisterTab("FR-1", "r1", "cropsown_planning_tab");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/farmers/FR-1/crops?internal_record_id=r1&tab_id=cropsown_planning_tab");
   });
 
   it("words the error for the status", () => {

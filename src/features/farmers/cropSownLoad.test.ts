@@ -1,22 +1,31 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("./cropSownApi", () => ({ fetchIntakeForm: vi.fn(), saveFarmerCrop: vi.fn(), listFarmerCrops: vi.fn(), fetchFarmerCrop: vi.fn() }));
+vi.mock("./cropSownApi", async (importOriginal) => ({
+  REGISTER_TAB_IDS: (await importOriginal<typeof import("./cropSownApi")>()).REGISTER_TAB_IDS,
+  fetchIntakeForm: vi.fn(),
+  saveFarmerCrop: vi.fn(),
+  listFarmerCrops: vi.fn(),
+  fetchFarmerCrop: vi.fn(),
+  fetchRegisterTab: vi.fn(),
+}));
 
 import { loadCropDetails, sectionRows, stageValues, submissionsOf, summaryOf, summaryDisplay, summaryValues, toFormValue } from "./cropSownLoad";
 import { clearIntakeFormCache } from "./cropSownSubmit";
-import { fetchFarmerCrop, fetchIntakeForm, listFarmerCrops } from "./cropSownApi";
+import { fetchFarmerCrop, fetchIntakeForm, fetchRegisterTab, listFarmerCrops } from "./cropSownApi";
 import { CROP_SOWN_FORM } from "./cropSown";
 
 const field = (field_name: string, extra: object = {}) => ({ field_name, label: field_name, data_type: "string", required: false, readonly: false, options: null, attribute_id: null, ...extra });
 const intake = (form_id: string, sections: object[] = []) => ({ form_id, register_id: "r", form_mnemonic: form_id, intake_forms: [], sections }) as never;
 const planningIntake = intake("form-planning", [
   { section_id: "cropsown_intake_season_section_01", section_register_id: "r", section_mnemonic: "s", screen_section: null, is_list: false, fields: [field("production_season", { options: [{ value_id: "SEASON_MEHER", value_display: "Meher" }] })] },
+  { section_id: "cropsown_planning_details_section_01", section_register_id: "reg-planning-details", section_mnemonic: "p", screen_section: null, is_list: true, fields: [] },
 ]);
 
 beforeEach(() => {
   clearIntakeFormCache();
   vi.mocked(listFarmerCrops).mockReset();
   vi.mocked(fetchFarmerCrop).mockReset();
+  vi.mocked(fetchRegisterTab).mockReset();
   vi.mocked(fetchIntakeForm).mockReset().mockImplementation(async (form) => (form === "planning" ? planningIntake : intake(`form-${form}`)));
 });
 
@@ -118,6 +127,29 @@ describe("loadCropDetails", () => {
     const form = await loadCropDetails("FR-9", LIST);
     expect(form.values["address.latitude"]).toBeUndefined();
     expect(form.values["planning.planned_date_ec"]).toBeUndefined();
+  });
+
+  it("reads stages from the register record's tabs first, falling back to submissions", async () => {
+    const withRegister = [...LIST, { record_name: "Teff", internal_record_id: "reg-1" }];
+    vi.mocked(fetchRegisterTab).mockImplementation(async (_farmer, _id, tabId) => ({
+      internal_record_id: "reg-1",
+      tab_id: tabId,
+      tabs: [{ tab_id: tabId, records: tabId === "cropsown_planning_tab"
+        // As staging sends it: no section_id, only the section_register_id the intake form knows.
+        ? [{ section_register_id: "reg-planning-details", is_list: true, records: [{ planned_date_ec: "2018-01-05" }] }]
+        : tabId === "cropsown_production_tab" ? [{ section_register_id: "reg-production", is_list: true, records: [{ yield_qt: 12 }] }] : [] }],
+    }));
+    vi.mocked(fetchFarmerCrop).mockResolvedValue({ sections: [{ section_id: "cropsown_planning_details_section_01", records: [{ planned_date_ec: "2017-10-11" }] }], tabs: [] } as never);
+    const result = await loadCropDetails("FR-9", withRegister, { display: true, register: true });
+    expect(fetchRegisterTab).toHaveBeenCalledWith("FR-9", "reg-1", "cropsown_planning_tab");
+    expect(fetchRegisterTab).toHaveBeenCalledWith("FR-9", "reg-1", "cropsown_harvest_tab");
+    expect(result.values["planning.planned_date_ec"]).toBe("2018-01-05");
+    expect(fetchFarmerCrop).not.toHaveBeenCalled();
+    expect(result.production).toEqual([{ sectionId: "Production", rows: [{ yield_qt: 12 }] }]);
+
+    vi.mocked(fetchRegisterTab).mockRejectedValue(new Error("down"));
+    const fallback = await loadCropDetails("FR-9", withRegister, { display: true, register: true });
+    expect(fallback.values["planning.planned_date_ec"]).toBe("2017-10-11");
   });
 
   it("still gives the summary when a submission cannot be read", async () => {
