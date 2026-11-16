@@ -11,10 +11,13 @@ export type ProfileTab = (typeof TABS)[number];
 // Hidden for now: the Overview and Livestock history tabs (their panels are still passed in). Remove one from this list to bring it back.
 const HIDDEN_TABS: ProfileTab[] = ["Overview", "Livestock history"];
 const VISIBLE_TABS = TABS.filter((tab) => !HIDDEN_TABS.includes(tab));
+/** The tab the profile opens on. */
+export const DEFAULT_PROFILE_TAB: ProfileTab = VISIBLE_TABS[0];
 
-// Only the tab switch runs on the client; each panel is rendered by the page and passed in.
-export function ProfileTabs({ panels }: { panels: Record<ProfileTab, ReactNode> }) {
-  const [active, setActive] = useState<ProfileTab>(VISIBLE_TABS[0]);
+// Only the tab switch runs on the client; each panel is rendered by the page and passed in. `onSelect` tells the page
+// which tab was opened, so it can load that tab's data only then.
+export function ProfileTabs({ panels, onSelect }: { panels: Record<ProfileTab, ReactNode>; onSelect?: (tab: ProfileTab) => void }) {
+  const [active, setActive] = useState<ProfileTab>(DEFAULT_PROFILE_TAB);
 
   return (
     <Card className="overflow-hidden border border-line p-0 shadow-card">
@@ -27,7 +30,10 @@ export function ProfileTabs({ panels }: { panels: Record<ProfileTab, ReactNode> 
               type="button"
               role="tab"
               aria-selected={isActive}
-              onClick={() => setActive(tab)}
+              onClick={() => {
+                setActive(tab);
+                onSelect?.(tab);
+              }}
               className={cn(
                 "shrink-0 whitespace-nowrap border-r border-line px-5 py-3.5 text-[14px] transition-colors first:rounded-tl-xl",
                 isActive

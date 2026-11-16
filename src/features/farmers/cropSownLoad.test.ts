@@ -9,7 +9,7 @@ vi.mock("./cropSownApi", async (importOriginal) => ({
   fetchRegisterTab: vi.fn(),
 }));
 
-import { loadCropDetails, sectionRows, stageValues, submissionsOf, summaryOf, summaryDisplay, summaryValues, toFormValue } from "./cropSownLoad";
+import { intakeDisplayValue, loadCropDetails, loadStageDisplay, sectionRows, stageValues, submissionsOf, summaryOf, summaryDisplay, summaryValues, toFormValue } from "./cropSownLoad";
 import { clearIntakeFormCache } from "./cropSownSubmit";
 import { fetchFarmerCrop, fetchIntakeForm, fetchRegisterTab, listFarmerCrops } from "./cropSownApi";
 import { CROP_SOWN_FORM } from "./cropSown";
@@ -157,5 +157,29 @@ describe("loadCropDetails", () => {
     const result = await loadCropDetails("FR-9", LIST);
     expect(result.stages).toEqual([]);
     expect(result.values).toMatchObject({ "identity.fayda_fan_id": "5837291046283715", "address.woreda": "Laelay Koraro" });
+  });
+});
+
+describe("loadStageDisplay", () => {
+  it("lays a stage out by its intake form, labels and option labels included", async () => {
+    vi.mocked(fetchIntakeForm).mockResolvedValue(intake("form-planning", [
+      { section_id: "cropsown_planning_details_section_01", section_register_id: "reg-planning-details", section_mnemonic: "cs_planning_details", screen_section: null, is_list: true,
+        fields: [field("soil_fertility", { label: "Soil Fertility", options: [{ label: "High", value: "SOIL_HIGH" }] }), field("land_id", { label: "Land ID" }), field("is_plot_registered", { label: null })] },
+    ]));
+    vi.mocked(fetchRegisterTab).mockResolvedValue({ internal_record_id: "reg-1", tab_id: "cropsown_planning_tab",
+      tabs: [{ tab_id: "cropsown_planning_tab", records: [{ section_register_id: "reg-planning-details", is_list: true, records: [{ soil_fertility: "SOIL_HIGH", land_id: "Plot 1", is_plot_registered: true }] }] }] });
+    const shown = await loadStageDisplay("FR-9", [{ record_name: "Teff", internal_record_id: "reg-1" }], "planning");
+    expect(shown.hasData).toBe(true);
+    expect(shown.sections[0].rows[0]).toEqual([
+      { key: "soil_fertility", label: "Soil Fertility", value: "High" },
+      { key: "land_id", label: "Land ID", value: "Plot 1" },
+      { key: "is_plot_registered", label: "Is plot registered", value: "Yes" },
+    ]);
+  });
+
+  it("shows a catalog choice by value_display and an empty value as a dash", () => {
+    const f = field("season", { choices: [{ value_id: "SEASON_MEHER", value_display: "Meher (main rains)" }] }) as never;
+    expect(intakeDisplayValue("SEASON_MEHER", f)).toBe("Meher (main rains)");
+    expect(intakeDisplayValue(null, f)).toBe("—");
   });
 });

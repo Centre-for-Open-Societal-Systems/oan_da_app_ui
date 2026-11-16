@@ -16,14 +16,13 @@ import { FilterDropdown, type FilterOption } from "@/components/ui/FilterDropdow
 import { AdvancedFiltersDrawer, type FilterFieldConfig, type FilterSelection } from "@/components/ui/AdvancedFiltersDrawer";
 import { PAGE_SIZES, TablePagination } from "@/components/ui/TablePagination";
 import { useAuthStore } from "@/store/useAuthStore";
-import { ACTIVE_TONE, APPROVAL_TONE, BulkImportsPanel, FAYDA_TONE, apiAgentToAgent, describeAgentError, importStatusLabel, listAgents, type Agent, type AgentImport } from "@/features/agents";
+import { ACTIVE_TONE, APPROVAL_TONE, BulkImportsPanel, apiAgentToAgent, describeAgentError, importStatusLabel, listAgents, type Agent, type AgentImport } from "@/features/agents";
 import { searchPlaceholder } from "@/lib/search";
 import { fileDate, type CsvColumn } from "@/lib/download";
 import { downloadTable, formatLabel } from "@/lib/export";
 import { ImportAgentsModal } from "./ImportAgentsModal";
 
 const SEARCH_DEBOUNCE_MS = 400;
-const FAYDA = ["Verified", "Pending", "Mismatch"];
 const ACTIVE = ["Active", "On-leave", "Separated", "Unassigned"];
 const TIERS = ["Certificate", "Diploma", "Degree", "Masters", "MSc", "PhD"];
 const APPROVALS = ["Draft", "Awaiting review", "Changes requested", "Approved", "Published", "Rejected"];
@@ -34,7 +33,6 @@ const CSV_COLUMNS: CsvColumn<Agent>[] = [
   { header: "DA-ID", value: (a) => a.daId },
   { header: "Full Name", value: (a) => a.fullName },
   { header: "Fayda ID", value: (a) => a.faydaId },
-  { header: "Fayda Status", value: (a) => a.faydaStatus },
   { header: "Active Status", value: (a) => a.activeStatus },
   { header: "Education Tier", value: (a) => a.educationTier },
   { header: "Assigned Kebele", value: (a) => (a.kebele === UNASSIGNED ? "Unassigned" : a.kebele) },
@@ -58,12 +56,11 @@ const optionsOf = (values: string[], order: readonly string[], label?: (v: strin
 interface Filters extends FilterSelection {
   woreda: Set<string>;
   kebele: Set<string>;
-  fayda: Set<string>;
   active: Set<string>;
   tier: Set<string>;
   approval: Set<string>;
 }
-const EMPTY: Filters = { woreda: new Set(), kebele: new Set(), fayda: new Set(), active: new Set(), tier: new Set(), approval: new Set() };
+const EMPTY: Filters = { woreda: new Set(), kebele: new Set(), active: new Set(), tier: new Set(), approval: new Set() };
 
 // "14 Sep 2026, 09:12" → ["14 Sep 2026,", "09:12 AM"] for the two-line Last Updated cell.
 const splitStamp = (stamp: string): [string, string] => {
@@ -136,7 +133,6 @@ export function AgentsRegistry() {
   const setFilter = (key: keyof Filters) => (next: Set<string>) => setFilters((prev) => pruneKebeles({ ...prev, [key]: next }));
 
   const woredaOptions = optionsOf(source.map((a) => a.woreda), unique(source.map((a) => a.woreda)));
-  const faydaOptions = optionsOf(source.map((a) => a.faydaStatus), FAYDA);
   const activeOptions = optionsOf(source.map((a) => a.activeStatus), ACTIVE);
   const tierOptions = optionsOf(source.map((a) => a.educationTier), unique([...TIERS, ...source.map((a) => a.educationTier)]));
   const approvalOptions = optionsOf(source.map((a) => a.approvalStatus), APPROVALS);
@@ -145,7 +141,6 @@ export function AgentsRegistry() {
   const filterFields: FilterFieldConfig[] = [
     { key: "woreda", label: "Woreda", allLabel: "All woredas", placeholder: "All Woredas", options: woredaOptions },
     { key: "kebele", label: "Kebele", allLabel: "All kebeles", placeholder: "All Kebeles", options: kebeleOptions },
-    { key: "fayda", label: "Fayda status", allLabel: "All Fayda statuses", placeholder: "All", options: faydaOptions },
     { key: "active", label: "Active status", allLabel: "All active statuses", placeholder: "All", options: activeOptions },
     { key: "tier", label: "Education tier", allLabel: "All tiers", placeholder: "All", options: tierOptions },
     { key: "approval", label: "Approval status", allLabel: "All approval statuses", placeholder: "All", options: approvalOptions },
@@ -157,7 +152,6 @@ export function AgentsRegistry() {
       (a) =>
         has(filters.woreda, a.woreda) &&
         has(filters.kebele, a.kebele) &&
-        has(filters.fayda, a.faydaStatus) &&
         has(filters.active, a.activeStatus) &&
         has(filters.tier, a.educationTier) &&
         has(filters.approval, a.approvalStatus),
@@ -168,7 +162,6 @@ export function AgentsRegistry() {
     { key: "daId", header: "DA-ID", cell: (a) => <span className="font-semibold text-ink">{a.daId.replace(/-(?=d+$)/, "-​")}</span> },
     { key: "name", header: "Full Name", cell: (a) => <Link href={`/agents/${a.daId}`} className="whitespace-nowrap text-ink hover:text-brand-green">{a.fullName}</Link> },
     { key: "fayda", header: "Fayda ID", cell: (a) => <span className="whitespace-nowrap text-ink">{a.faydaId}</span> },
-    { key: "faydaStatus", header: <FilterDropdown label="Fayda Status" allLabel="All Fayda statuses" options={faydaOptions} selected={filters.fayda} onApply={setFilter("fayda")} />, align: "center", cell: (a) => <Pill tone={FAYDA_TONE[a.faydaStatus]}>{a.faydaStatus}</Pill> },
     { key: "active", header: <FilterDropdown label="Active Status" allLabel="All active statuses" options={activeOptions} selected={filters.active} onApply={setFilter("active")} />, align: "center", cell: (a) => <Pill tone={ACTIVE_TONE[a.activeStatus]}>{a.activeStatus}</Pill> },
     { key: "tier", header: <FilterDropdown label="Education Tier" allLabel="All tiers" options={tierOptions} selected={filters.tier} onApply={setFilter("tier")} />, cell: (a) => a.educationTier },
     { key: "kebele", header: <FilterDropdown label="Assigned Kebele" allLabel="All kebeles" options={kebeleOptions} selected={filters.kebele} onApply={setFilter("kebele")} />, cell: (a) => (a.kebele === UNASSIGNED ? <span className="text-subtle">Unassigned</span> : <span className="whitespace-nowrap">{a.kebele}<span className="block text-[12px] text-muted">{a.woreda}</span></span>) },
@@ -284,7 +277,6 @@ export function AgentsRegistry() {
               pruneKebeles({
                 woreda: next.woreda ?? new Set(),
                 kebele: next.kebele ?? new Set(),
-                fayda: next.fayda ?? new Set(),
                 active: next.active ?? new Set(),
                 tier: next.tier ?? new Set(),
                 approval: next.approval ?? new Set(),
