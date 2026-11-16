@@ -3,3 +3,4 @@ export * from "./admin";
 export * from "./executive";
 export * from "./supervisor";
 export * from "./agentSummary";
+export * from "./woredaHealth";
