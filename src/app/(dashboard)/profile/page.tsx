@@ -3,7 +3,7 @@ import { ProfileView } from "./components/ProfileView";
 
 export const metadata: Metadata = {
   title: "My profile | OpenAgriNet",
-  description: "View and update your own profile, qualifications and leave.",
+  description: "View and update your own profile and qualifications.",
 };
 
 export default function ProfilePage() {

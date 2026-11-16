@@ -121,6 +121,9 @@ export function PlanVisitModal({ farmer, farmers, isOpen, onClose, mode = "plan"
           query={v.query}
           showCount={v.searched && !!v.term}
           onClearSearch={() => v.changeQuery("")}
+          overrides={v.overrides}
+          onDetailsChange={v.setOverride}
+          readCommon={v.commonDetails}
         />
         <VisitTypePicker value={v.visitType} onChange={v.setVisitType} />
         {v.visitType === ADVISORY_VISIT && <AdvisoryQaFields items={v.advisoryQa} onChange={v.setAdvisoryQa} />}

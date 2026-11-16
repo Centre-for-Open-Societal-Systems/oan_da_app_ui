@@ -17,7 +17,6 @@ import { DaDemographicsSection } from "./DaDemographicsSection";
 import { DemographicsSection } from "./DemographicsSection";
 import { DependentsSection } from "./DependentsSection";
 import { QualificationsSection } from "./QualificationsSection";
-import { LeaveSection } from "./LeaveSection";
 
 const formatDate = (iso: string | null | undefined) => {
   if (!iso) return "—";
@@ -186,7 +185,7 @@ export function ProfileView() {
       )}
       <DependentsSection />
       <QualificationsSection educationTier={my?.profile.education_tier ?? undefined} specialisation={my?.profile.specialisation ?? undefined} />
-      <LeaveSection />
+      {/* Leave & absence is a Part 2 feature (sample data, no API yet): hidden until it is built. */}
     </>
   );
 }

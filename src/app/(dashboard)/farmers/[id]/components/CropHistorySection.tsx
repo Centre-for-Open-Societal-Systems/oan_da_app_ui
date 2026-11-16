@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Banner } from "@/components/ui/Banner";
 import { DataTable, type Column } from "@/components/ui/DataTable";
-import { describeCropSownError, isCropsNotFound, listFarmerCrops, type ApiFarmerCrop } from "@/features/farmers";
+import { describeCropSownError, isCropsNotFound, listAllFarmerCrops, type ApiFarmerCrop } from "@/features/farmers";
 import { SectionCard } from "./SectionCard";
 
 const COLUMNS: Column<ApiFarmerCrop>[] = [
@@ -12,14 +12,15 @@ const COLUMNS: Column<ApiFarmerCrop>[] = [
   { key: "status", header: "Status", cell: (row) => [row.draft_status, row.approval_status].filter(Boolean).join(" · ") || "—" },
 ];
 
-// The farmer's Crop Sown records (GET /farmers/{id}/crops). A 404 means the registry holds no crops for them.
+// The farmer's Crop Sown records: submissions and register rows (GET /farmers/{id}/crops?source=submission|register).
+// A 404 means the registry holds no crops for them.
 export function CropHistorySection({ farmerCode }: { farmerCode: string }) {
   const [crops, setCrops] = useState<ApiFarmerCrop[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let current = true;
-    listFarmerCrops(farmerCode)
+    listAllFarmerCrops(farmerCode)
       .then((rows) => current && setCrops(rows))
       .catch((err: unknown) => {
         if (!current) return;

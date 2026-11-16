@@ -8,7 +8,7 @@ import {
   cropSownTabs,
   describeCropSownError,
   isCropsNotFound,
-  listFarmerCrops,
+  listAllFarmerCrops,
   loadCropDetails,
   registryCode,
   valueKey,
@@ -26,8 +26,9 @@ const RECORD_TAB = "crop-sown";
 
 // Crop Sown Registry record for the farmer, laid out as in the design: one card holding the tabs, with each tab's
 // sections as cards inside it. The "Crop Sown" tab opens with the farmer's identity and address, then the status of the
-// approved register record; each stage tab shows only its own sections as read-only field grids, from the newest
-// submission of that stage (GET /farmers/{id}/crops, then ?submission_id= for its section records).
+// approved register record; each stage tab shows only its own sections as read-only field grids. The lists come from
+// GET /farmers/{id}/crops?source=submission and ?source=register; a stage is read from the register record's tab
+// (?internal_record_id=&tab_id=), else from the newest submission of that stage (?submission_id=).
 // Tabs under "More" with their own layout.
 const PRODUCTION_TAB = "production";
 const MORE_TABS = [{ key: PRODUCTION_TAB, label: "Production" }];
@@ -51,6 +52,30 @@ function FieldsCard({ section }: { section: CropSownTab["sections"][number] }) {
   );
 }
 
+// The register's Production tab has no portal spec yet: its sections show as the registry returns them.
+const humanize = (key: string) => key.replace(/^cropsown_/, "").replace(/_section_d+$/, "").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+const show = (v: unknown) => (v === null || v === undefined || v === "" ? "—" : Array.isArray(v) ? v.join(", ") : typeof v === "object" ? JSON.stringify(v) : typeof v === "boolean" ? (v ? "Yes" : "No") : String(v));
+
+function RecordsCard({ sectionId, rows }: { sectionId: string; rows: Record<string, unknown>[] }) {
+  if (rows.length === 0) return null;
+  return (
+    <SectionCard title={humanize(sectionId)} collapsible className="shadow-xs">
+      <div className="flex flex-col gap-5">
+        {rows.map((row, i) => (
+          <dl key={i} className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Object.entries(row).map(([key, value]) => (
+              <div key={key} className="min-w-0">
+                <dt className="text-[12px] font-medium uppercase tracking-wider text-muted">{humanize(key)}</dt>
+                <dd className="mt-1 break-words text-[15px] font-bold text-ink">{show(value)}</dd>
+              </div>
+            ))}
+          </dl>
+        ))}
+      </div>
+    </SectionCard>
+  );
+}
+
 export function CropSownSection({ farmer }: { farmer: Farmer }) {
   const [active, setActive] = useState(RECORD_TAB);
   const [crops, setCrops] = useState<ApiFarmerCrop[] | null>(null);
@@ -62,9 +87,9 @@ export function CropSownSection({ farmer }: { farmer: Farmer }) {
     let live = true;
     (async () => {
       try {
-        const rows = await listFarmerCrops(code);
+        const rows = await listAllFarmerCrops(code);
         if (live) setCrops(rows);
-        const loaded = await loadCropDetails(code, rows, { display: true });
+        const loaded = await loadCropDetails(code, rows, { display: true, register: true });
         if (live) setDetails(loaded);
       } catch (err) {
         if (!live) return;
@@ -106,7 +131,10 @@ export function CropSownSection({ farmer }: { farmer: Farmer }) {
       <div key={active} className="flex animate-fade-in flex-col gap-5 p-5">
         {error && <Banner tone="error" title="Could not load crop details">{error}</Banner>}
         {active === PRODUCTION_TAB ? (
-          <ProductionSummary farmer={farmer} crops={crops} tabs={tabs} />
+          <>
+            <ProductionSummary farmer={farmer} crops={crops} tabs={tabs} />
+            {details?.production?.map((section) => <RecordsCard key={section.sectionId} sectionId={section.sectionId} rows={section.rows} />)}
+          </>
         ) : !current ? (
           <>
             {tabs[0]?.sections.filter(isIntro).map((section) => <FieldsCard key={section.title} section={section} />)}

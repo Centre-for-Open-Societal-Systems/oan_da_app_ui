@@ -135,13 +135,58 @@ export async function fetchFarmerCrop(farmerId: string, submissionId: string): P
   return (await authRequest<{ data: ApiCropSubmission & { sections: unknown[]; tabs: unknown[] } }>(`${farmerCrops(farmerId)}?${query}`)).data;
 }
 
-/** GET /farmers/{id}/crops: every crop submission of the farmer. */
-export async function listFarmerCrops(farmerId: string): Promise<ApiFarmerCrop[]> {
-  return (await authRequest<{ data: { crops: ApiFarmerCrop[] } }>(farmerCrops(farmerId))).data.crops;
+/** Which staff search the crops list runs: intake form submissions, or the approved register rows. */
+export type CropListSource = "submission" | "register";
+
+/** GET /farmers/{id}/crops?source=: the farmer's submissions (form history) or register rows (with internal_record_id). */
+export async function listFarmerCrops(farmerId: string, source: CropListSource = "submission"): Promise<ApiFarmerCrop[]> {
+  const query = new URLSearchParams({ source });
+  return (await authRequest<{ data: { crops: ApiFarmerCrop[] } }>(`${farmerCrops(farmerId)}?${query}`)).data.crops;
 }
 
 /** 404 on the crops list: a farmer the registries do not know, which for a profile simply means no crops. */
 export const isCropsNotFound = (err: unknown): boolean => err instanceof ApiError && err.status === 404;
+
+/**
+ * Both lists of a farmer: the submissions first, then the register rows. A 404 on one list counts as none; a 404 on
+ * both is thrown, as the single list did.
+ */
+export async function listAllFarmerCrops(farmerId: string): Promise<ApiFarmerCrop[]> {
+  const [submissions, register] = await Promise.allSettled([listFarmerCrops(farmerId, "submission"), listFarmerCrops(farmerId, "register")]);
+  const failed = [submissions, register].filter((r): r is PromiseRejectedResult => r.status === "rejected");
+  const real = failed.find((r) => !isCropsNotFound(r.reason));
+  if (real) throw real.reason;
+  if (failed.length === 2) throw failed[0].reason;
+  const rows = (r: PromiseSettledResult<ApiFarmerCrop[]>) => (r.status === "fulfilled" ? r.value : []);
+  return [...rows(submissions), ...rows(register)];
+}
+
+/** Register tab ids of the Crop Sown register (GET /farmers/{id}/crops?internal_record_id=&tab_id=). */
+export const REGISTER_TAB_IDS = {
+  planning: "cropsown_planning_tab",
+  cultivation: "cropsown_cultivation_tab",
+  sowing: "cropsown_sowing_tab",
+  harvesting: "cropsown_harvest_tab",
+  production: "cropsown_production_tab",
+} as const satisfies Record<CropSownForm | "production", string>;
+
+/** One register tab as GET /farmers/{id}/crops?internal_record_id=&tab_id= returns it. */
+export interface ApiRegisterTab {
+  internal_record_id: string;
+  register_id?: string;
+  tab_id: string;
+  /**
+   * One entry for the asked tab; its records are the tab's sections. Staging names a section by section_register_id
+   * only (the intake form's section of that register id gives its section_id).
+   */
+  tabs: { tab_id: string; records: { section_id?: string; section_register_id?: string; is_list?: boolean; records: Record<string, unknown>[] }[] }[];
+}
+
+/** GET /farmers/{id}/crops?internal_record_id=&tab_id=: one tab of the farmer's register record. */
+export async function fetchRegisterTab(farmerId: string, internalRecordId: string, tabId: string): Promise<ApiRegisterTab> {
+  const query = new URLSearchParams({ internal_record_id: internalRecordId, tab_id: tabId });
+  return (await authRequest<{ data: ApiRegisterTab }>(`${farmerCrops(farmerId)}?${query}`)).data;
+}
 
 /** The text to show for a failed Crop Sown call. */
 export function describeCropSownError(err: unknown): string {

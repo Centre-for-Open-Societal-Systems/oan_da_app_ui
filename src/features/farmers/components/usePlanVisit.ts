@@ -4,6 +4,7 @@ import { useAdvisoryStore } from "../advisoryStore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { listAgents, type ApiAgent } from "@/features/agents";
 import type { BatchVisitItem } from "../visitsApi";
+import type { VisitItemDetails } from "./VisitItemFields";
 import { apiFarmerToFarmer, describeFarmerError, listFarmers } from "../farmersApi";
 import {
   ADVISORY_VISIT,
@@ -44,6 +45,20 @@ export function usePlanVisit(initial: Farmer[], preset: VisitPreset | undefined)
   // Every farmer's outcome of a batch plan, kept across retries; "batch" shows it in place of the form.
   const [batch, setBatch] = useState<BatchRow[] | null>(null);
   const [view, setView] = useState<"form" | "batch">("form");
+  // Farmers in a batch with details of their own (by farmer id); the others use the common form.
+  const [overrides, setOverrides] = useState<Record<string, VisitItemDetails>>({});
+  const setOverride = (farmer: Farmer, details: VisitItemDetails | null) =>
+    setOverrides((prev) => {
+      const next = { ...prev };
+      if (details) next[farmer.id] = details;
+      else delete next[farmer.id];
+      return next;
+    });
+  /** The common form's current values, the starting point of a farmer's own details. */
+  const commonDetails = (): VisitItemDetails => {
+    const d = readVisitDetails();
+    return { visit_type: visitType, priority: splitPriority(d.priority).level, date: d.date, time: d.time, duration_min: durationMinutes(d.duration), purpose: d.purpose };
+  };
   // Whose plan the batch went to, reused when a failed farmer is resubmitted from the result.
   const [owner, setOwner] = useState<Owner | null>(null);
   // One id per open form, suffixed per farmer: a retry after a timeout returns the visits already created instead of duplicates.
@@ -164,6 +179,8 @@ export function usePlanVisit(initial: Farmer[], preset: VisitPreset | undefined)
       const priority = splitPriority(details.priority);
       const requests = selected.map((f) => {
         const code = registryCode(f);
+        // A farmer's own details (set with "Edit details" on their card) win over the common form below.
+        const own = selected.length > 1 ? overrides[f.id] : undefined;
         const request: BatchVisitItem = {
           // A farmer from the farmers API sends its registry id; a sample farmer its mock registry code.
           farmer_id: code,
@@ -178,7 +195,13 @@ export function usePlanVisit(initial: Farmer[], preset: VisitPreset | undefined)
           notify_farmer_sms: true,
           ...(isAdvisory && { advisory_qa: items }),
           client_op_id: selected.length === 1 ? clientOpId : `${clientOpId}-${code}`,
+          ...own,
         };
+        // The priority reason describes the common priority only.
+        if (own && own.priority !== priority.level) request.priority_reason = undefined;
+        // Advisory Q&A from the form goes with any farmer whose own type is Advisory.
+        if (own?.visit_type === ADVISORY_VISIT && items.length > 0) request.advisory_qa = items;
+        else if (own && own.visit_type !== ADVISORY_VISIT) delete request.advisory_qa;
         return { farmer: f, request };
       });
       setError(null);
@@ -232,5 +255,5 @@ export function usePlanVisit(initial: Farmer[], preset: VisitPreset | undefined)
     await send(rows, owner);
   };
 
-  return { view, batch, discard, discardFailed, resubmit, retryFailed, isOfficer, agents, agentsError, assignee, setAssignee, selected, toggle, remove, isFull, visitType, setVisitType, advisoryQa, setAdvisoryQa, query, changeQuery, searched, term, matches, emptyText, runSearch, result, finish, submitting, error };
+  return { overrides, setOverride, commonDetails, view, batch, discard, discardFailed, resubmit, retryFailed, isOfficer, agents, agentsError, assignee, setAssignee, selected, toggle, remove, isFull, visitType, setVisitType, advisoryQa, setAdvisoryQa, query, changeQuery, searched, term, matches, emptyText, runSearch, result, finish, submitting, error };
 }
