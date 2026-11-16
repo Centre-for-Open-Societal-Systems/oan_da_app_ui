@@ -122,12 +122,12 @@ export function FarmersTable() {
     const { added, skipped } = linkBeneficiaries(selectedFarmers, segmentId);
     const parts = [
       added.length > 0 && `${added.length} farmer${added.length === 1 ? "" : "s"} added to “${segmentName(segmentId)}” — Pending verification.`,
-      skipped.length > 0 && `Already in this segment: ${skipped.join(", ")}.`,
+      skipped.length > 0 && `Already in this package: ${skipped.join(", ")}.`,
     ].filter(Boolean);
     setNotice(
       <>
         {parts.join(" ")}{" "}
-        <Link href="/beneficiaries" className="font-semibold underline">View beneficiaries</Link>
+        <Link href="/model-farmers" className="font-semibold underline">View Model Farmers</Link>
       </>,
     );
     setSelected(new Set());
@@ -193,7 +193,7 @@ export function FarmersTable() {
 
           {selected.size > 0 && (
             <Button variant="brand" size="md" onClick={() => { setSegmentId(SEGMENTS[0].id); setIsAddOpen(true); }}>
-              Add to beneficiaries ({selected.size})
+              Add to Model Farmers ({selected.size})
             </Button>
           )}
 
@@ -329,12 +329,12 @@ export function FarmersTable() {
       <Modal
         isOpen={isAddOpen}
         onClose={() => setIsAddOpen(false)}
-        title="Add to Beneficiaries"
+        title="Add to Model Farmers"
         subtitle={`${selectedFarmers.length} farmer${selectedFarmers.length === 1 ? "" : "s"} selected`}
         footer={<><Button variant="outline" onClick={() => setIsAddOpen(false)}>Cancel</Button><Button variant="brand" onClick={addToBeneficiaries}>Add</Button></>}
       >
         <div className="flex flex-col gap-4">
-          <FormField label="Segment" htmlFor="bulk-segment" required hint="Membership is verified against the segment rule before enrolment.">
+          <FormField label="Package" htmlFor="bulk-segment" required hint="Membership is verified against the package rule before enrolment.">
             <Select id="bulk-segment" value={segmentId} onChange={(e) => setSegmentId(e.target.value)}>
               {SEGMENTS.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </Select>

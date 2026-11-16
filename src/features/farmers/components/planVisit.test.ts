@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuthStore } from "@/store/useAuthStore";
 import type { Farmer } from "../types";
-import { joinNames, MAX_BATCH_FARMERS, planFarmers, toggleFarmer } from "./planVisit";
+import { joinNames, MAX_BATCH_FARMERS, mergeBatchRows, planFarmers, toggleFarmer } from "./planVisit";
 
 // Minimal in-memory Storage so the persisted auth store runs under Node.
 class MemoryStorage implements Storage {
@@ -90,5 +90,14 @@ describe("planFarmers", () => {
     fetchMock.mockResolvedValueOnce(reply({ data: { created: [{ name: "V-a", farmer_id: "a" }, { name: "V-b", farmer_id: "b" }], failed: [] } }));
     await planFarmers([farmer("a"), farmer("b")], { user: "da1@example.com", daId: "DA-001" }, item);
     expect(JSON.parse(fetchMock.mock.calls[1][1]!.body as string)).toMatchObject({ user: "da1@example.com", da_id: "DA-001" });
+  });
+});
+
+describe("mergeBatchRows", () => {
+  it("replaces a retried farmer's row in place and keeps the planned ones", () => {
+    const first = mergeBatchRows([], [{ farmer: farmer("a"), visitId: "V-a" }], [{ farmer: farmer("b"), reason: "Already has an active visit" }]);
+    expect(first.map((r) => [r.farmer.id, r.visitId ?? r.reason])).toEqual([["a", "V-a"], ["b", "Already has an active visit"]]);
+    const retried = mergeBatchRows(first, [{ farmer: farmer("b"), visitId: "V-b" }], []);
+    expect(retried.map((r) => [r.farmer.id, r.visitId, r.reason])).toEqual([["a", "V-a", undefined], ["b", "V-b", undefined]]);
   });
 });

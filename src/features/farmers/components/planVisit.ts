@@ -51,6 +51,29 @@ export interface BatchOutcome<T> {
   failed: { farmer: Farmer; reason: string }[];
 }
 
+/** One farmer on the batch result: planned (visitId, when) or failed (reason). */
+export interface BatchRow {
+  farmer: Farmer;
+  visitId?: string;
+  /** Human-readable date/time the visit was planned for. */
+  when?: string;
+  /** The backend's error; set only when the visit was not planned. */
+  reason?: string;
+  /** What was sent for a failed farmer: edited on the result and sent again by Resubmit / Retry failed. */
+  request?: BatchVisitItem;
+}
+
+/**
+ * The batch result after a (re)try: a farmer's latest outcome replaces their earlier row, in the original order;
+ * farmers new to the batch are added at the end.
+ */
+export function mergeBatchRows(prev: BatchRow[], planned: BatchRow[], failed: BatchRow[]): BatchRow[] {
+  const latest = new Map<string, BatchRow>([...planned, ...failed].map((r) => [r.farmer.id, r]));
+  const rows = prev.map((r) => latest.get(r.farmer.id) ?? r);
+  const seen = new Set(prev.map((r) => r.farmer.id));
+  return [...rows, ...[...latest.values()].filter((r) => !seen.has(r.farmer.id))];
+}
+
 const PLAN_FAILED = "Could not plan the visit.";
 const reasonOf = (err: unknown) => (err instanceof Error && err.message ? err.message : PLAN_FAILED);
 
@@ -126,11 +149,13 @@ const isSampleFarmer = (farmer: Farmer) => FARMERS.some((f) => f.id === farmer.i
 export const registryCode = (farmer: Farmer) =>
   isSampleFarmer(farmer) ? `FR-${(88000 + farmer.name.length * 31 + farmer.kebele.length * 7).toString().slice(0, 5)}` : farmer.regId ?? farmer.id;
 
-/** Human-readable date/time from the (uncontrolled) date and time inputs. */
-export const readWhen = () => {
-  const date = (document.getElementById("visit-date") as HTMLInputElement | null)?.value;
-  const time = (document.getElementById("visit-time") as HTMLInputElement | null)?.value;
+/** "2026-11-20", "10:00" → "20 Nov 2026 at 10:00". */
+export function formatWhen(date: string | undefined, time: string | undefined) {
   if (!date) return "the chosen date";
   const label = new Date(`${date}T00:00:00`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
   return time ? `${label} at ${time}` : label;
-};
+}
+
+/** Human-readable date/time from the (uncontrolled) date and time inputs. */
+export const readWhen = () =>
+  formatWhen((document.getElementById("visit-date") as HTMLInputElement | null)?.value, (document.getElementById("visit-time") as HTMLInputElement | null)?.value);

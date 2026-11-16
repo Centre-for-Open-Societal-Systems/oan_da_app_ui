@@ -57,7 +57,7 @@ export const NAV_GROUPS: NavGroup[] = [
     title: "Farmer Management",
     items: [
       { title: "My Farmers", href: "/farmers", roles: ["DA", "Supervisor", "Executive"], part: 1 },
-      { title: "Beneficiaries", href: "/beneficiaries", roles: ["DA", "Supervisor", "Admin"], part: 1 },
+      { title: "Model Farmers", href: "/model-farmers", roles: ["DA", "Supervisor", "Admin"], part: 1 },
       { title: "Grievances", href: "/grievances", roles: ["DA", "Supervisor", "Admin"], part: 1 },
     ],
   },
@@ -159,7 +159,7 @@ export const PAGE_TITLES: { prefix: string; title: string }[] = [
   { prefix: "/visits/", title: "Visit Planner" },
   { prefix: "/visits", title: "Visits" },
   { prefix: "/assignments", title: "Agent Assignment" },
-  { prefix: "/beneficiaries", title: "Beneficiaries" },
+  { prefix: "/model-farmers", title: "Model Farmers" },
   { prefix: "/grievances", title: "Grievances" },
   { prefix: "/knowledge/", title: "Article" },
   { prefix: "/knowledge", title: "Knowledge Base" },
