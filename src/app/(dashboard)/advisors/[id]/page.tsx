@@ -1,14 +1,9 @@
 import type { Metadata } from "next";
-import { getAdvisor } from "@/features/communication";
 import { AdvisorDetails } from "./components/AdvisorDetails";
 
-export async function generateMetadata(props: PageProps<"/advisors/[id]">): Promise<Metadata> {
-  const { id } = await props.params;
-  const advisor = getAdvisor(id);
-  return { title: advisor ? `${advisor.name} | OpenAgriNet` : "Advisor Details | OpenAgriNet" };
-}
+export const metadata: Metadata = { title: "Advisor Details | OpenAgriNet" };
 
-// The record is read from the client-side advisors store, so an advisor the Admin added this session opens too.
+// The record is read in the browser (GET /advisors/{id}) with the signed-in user's session.
 export default async function AdvisorDetailsPage(props: PageProps<"/advisors/[id]">) {
   const { id } = await props.params;
   return <AdvisorDetails id={decodeURIComponent(id)} />;

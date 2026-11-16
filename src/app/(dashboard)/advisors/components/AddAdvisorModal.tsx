@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Modal } from "@/components/ui/Modal";
+import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { cn } from "@/lib/utils";
-import { ADVISOR_REGIONS, EXPERTISE_AREAS, nextAdvisorId, useAdvisorsStore, type Advisor, type AdvisorStatus, type ExpertiseArea } from "@/features/communication";
+import { listAreas, type AdminArea } from "@/features/assignments";
+import { EXPERTISE_AREAS, createAdvisor, describeAdvisorError, type Advisor, type AdvisorStatus, type ExpertiseArea } from "@/features/communication";
 
 const STATUSES: AdvisorStatus[] = ["Active", "On leave", "Inactive"];
 
@@ -23,9 +25,9 @@ interface Form {
   availability: string;
 }
 
-const EMPTY: Form = { name: "", expertise: EXPERTISE_AREAS[0], unit: "", region: ADVISOR_REGIONS[0], woreda: "", phone: "", email: "", status: "Active", availability: "" };
+const EMPTY: Form = { name: "", expertise: EXPERTISE_AREAS[0], unit: "", region: "", woreda: "", phone: "", email: "", status: "Active", availability: "" };
 
-type ErrorKey = "name" | "unit" | "woreda" | "phone" | "email";
+type ErrorKey = "name" | "unit" | "region" | "woreda" | "phone" | "email";
 type Errors = Partial<Record<ErrorKey, string>>;
 
 // Compact field: 13px semibold label, h-9 control (matches the Add user design).
@@ -36,13 +38,6 @@ const CONTROL = "h-9 border-zinc-200 text-[13.5px]";
 const note = (rule: string, error?: string, broken = false) => ({ hint: error ?? rule, hintTone: error || broken ? ("error" as const) : ("muted" as const) });
 const tooShort = (value: string, min: number) => value.trim().length > 0 && value.trim().length < min;
 const breaks = (value: string, rule: RegExp) => value.trim().length > 0 && !rule.test(value.trim());
-
-/** "12 Oct 2026, 15:20" — same shape as the seeded `updatedAt`. */
-const nowStamp = () => {
-  const d = new Date();
-  const date = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-  return `${date}, ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-};
 
 function Section({ title, children, first }: { title: string; children: ReactNode; first?: boolean }) {
   return (
@@ -55,41 +50,64 @@ function Section({ title, children, first }: { title: string; children: ReactNod
 
 // Admin adds an MoA subject-matter expert to the directory DAs reference.
 export function AddAdvisorModal({ onClose, onAdded }: { onClose: () => void; onAdded: (advisor: Advisor) => void }) {
-  const rows = useAdvisorsStore((s) => s.rows);
-  const add = useAdvisorsStore((s) => s.add);
   const [form, setForm] = useState<Form>(EMPTY);
   const [errors, setErrors] = useState<Errors>({});
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  // Region and Woreda come from the administrative master data (GET /master/areas). A Woreda sits under a
+  // Zone, and the Zone under a Region, so the Zones are read too. The form keeps the area codes; the names
+  // are what is saved, as the directory shows them.
+  const [areas, setAreas] = useState<{ regions: AdminArea[]; zones: AdminArea[]; woredas: AdminArea[] } | null>(null);
+  const [areasError, setAreasError] = useState(false);
+  useEffect(() => {
+    let current = true;
+    Promise.all([listAreas({ level: "Region" }), listAreas({ level: "Zone" }), listAreas({ level: "Woreda" })])
+      .then(([regions, zones, woredas]) => current && setAreas({ regions, zones, woredas }))
+      .catch(() => current && setAreasError(true));
+    return () => {
+      current = false;
+    };
+  }, []);
+  const regionZones = new Set((areas?.zones ?? []).filter((z) => z.parent_area === form.region).map((z) => z.code));
+  const regionWoredas = (areas?.woredas ?? []).filter((w) => w.parent_area != null && regionZones.has(w.parent_area));
+  const areaName = (list: AdminArea[] | undefined, code: string) => list?.find((a) => a.code === code)?.name_en ?? code;
 
   const set = <K extends keyof Form>(key: K, value: Form[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
     setErrors((e) => ({ ...e, [key]: undefined }));
   };
 
-  const submit = () => {
+  const submit = async () => {
     const next: Errors = {};
     if (form.name.trim().length < 3) next.name = "Enter the advisor's full name";
     if (!form.unit.trim()) next.unit = "Enter the MoA unit or directorate";
-    if (!form.woreda.trim()) next.woreda = "Enter the woreda";
+    if (!form.region) next.region = "Select the region";
+    if (!form.woreda) next.woreda = "Select the woreda";
     if (!/^\+?251\s?9\d(\s?\d){7}$/.test(form.phone.trim())) next.phone = "Use an Ethiopian mobile number, e.g. +251 91 234 5678";
     if (!/^\S+@\S+\.\S+$/.test(form.email.trim())) next.email = "Enter a valid email";
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
-    const advisor: Advisor = {
-      id: nextAdvisorId(rows),
-      name: form.name.trim(),
-      expertise: form.expertise,
-      unit: form.unit.trim(),
-      region: form.region,
-      woreda: form.woreda.trim(),
-      phone: form.phone.trim(),
-      email: form.email.trim(),
-      status: form.status,
-      updatedAt: nowStamp(),
-      availability: form.availability.trim() || (form.status === "Active" ? "Mon–Fri, 08:30–17:00" : "Not taking requests"),
-    };
-    add(advisor);
-    onAdded(advisor);
+    setSaving(true);
+    setSaveError(null);
+    try {
+      // A blank availability is filled in by the server from the status.
+      const advisor = await createAdvisor({
+        name: form.name.trim(),
+        expertise: form.expertise,
+        unit: form.unit.trim(),
+        region: areaName(areas?.regions, form.region),
+        woreda: areaName(areas?.woredas, form.woreda),
+        phone: form.phone.trim(),
+        email: form.email.trim(),
+        status: form.status,
+        availability: form.availability.trim(),
+      });
+      onAdded(advisor);
+    } catch (err) {
+      setSaveError(describeAdvisorError(err));
+      setSaving(false);
+    }
   };
 
   return (
@@ -102,11 +120,12 @@ export function AddAdvisorModal({ onClose, onAdded }: { onClose: () => void; onA
       bodyClassName="p-0"
       footer={
         <>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button variant="brand" onClick={submit} className="px-6">Save</Button>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button variant="brand" onClick={submit} disabled={saving} className="px-6">{saving ? "Saving…" : "Save"}</Button>
         </>
       }
     >
+      {saveError && <div className="px-4 pt-4 sm:px-6"><Banner tone="error" onDismiss={() => setSaveError(null)}>{saveError}</Banner></div>}
       <Section title="Advisor details" first>
         <FormField label="Full name" htmlFor="adv-name" required {...note("At least 3 characters.", errors.name, tooShort(form.name, 3))} className={cn(FIELD, "sm:col-span-2")}>
           <Input id="adv-name" value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Dr. Hanna Girma" className={CONTROL} />
@@ -127,13 +146,26 @@ export function AddAdvisorModal({ onClose, onAdded }: { onClose: () => void; onA
       </Section>
 
       <Section title="Location">
-        <FormField label="Region" htmlFor="adv-region" required className={FIELD}>
-          <Select id="adv-region" value={form.region} onChange={(e) => set("region", e.target.value)} className={CONTROL}>
-            {ADVISOR_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+        <FormField label="Region" htmlFor="adv-region" required hint={errors.region ?? (areasError ? "Couldn't load regions. Close the form and try again." : undefined)} hintTone="error" className={FIELD}>
+          <Select
+            id="adv-region"
+            value={form.region}
+            disabled={!areas}
+            onChange={(e) => {
+              setForm((f) => ({ ...f, region: e.target.value, woreda: "" }));
+              setErrors((er) => ({ ...er, region: undefined, woreda: undefined }));
+            }}
+            className={CONTROL}
+          >
+            <option value="">{areas ? "Select Region…" : areasError ? "Not available" : "Loading…"}</option>
+            {areas?.regions.map((r) => <option key={r.code} value={r.code}>{r.name_en}</option>)}
           </Select>
         </FormField>
-        <FormField label="Woreda" htmlFor="adv-woreda" required hint={errors.woreda} hintTone="error" className={FIELD}>
-          <Input id="adv-woreda" value={form.woreda} onChange={(e) => set("woreda", e.target.value)} placeholder="e.g. Bako Tibe" className={CONTROL} />
+        <FormField label="Woreda" htmlFor="adv-woreda" required hint={errors.woreda ?? (form.region && regionWoredas.length === 0 ? "No Woreda in this Region yet." : undefined)} hintTone={errors.woreda ? "error" : "muted"} className={FIELD}>
+          <Select id="adv-woreda" value={form.woreda} disabled={!form.region} onChange={(e) => set("woreda", e.target.value)} className={CONTROL}>
+            <option value="">{form.region ? "Select Woreda…" : "Select a Region first"}</option>
+            {regionWoredas.map((w) => <option key={w.code} value={w.code}>{w.name_en}</option>)}
+          </Select>
         </FormField>
       </Section>
 

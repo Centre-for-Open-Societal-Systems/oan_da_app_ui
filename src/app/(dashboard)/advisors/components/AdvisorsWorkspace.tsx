@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Banner } from "@/components/ui/Banner";
 import { BackLink } from "@/components/ui/BackLink";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { useAdvisorsStore } from "@/features/communication";
+import { describeAdvisorError, listAdvisors, type Advisor } from "@/features/communication";
 import { useAuthStore } from "@/store/useAuthStore";
 import { AdvisorDirectory } from "./AdvisorDirectory";
 import { AddAdvisorModal } from "./AddAdvisorModal";
@@ -12,7 +12,27 @@ import { AddAdvisorModal } from "./AddAdvisorModal";
 // DAs reach the directory from My Teams and only read it; the Admin maintains it.
 export function AdvisorsWorkspace() {
   const role = useAuthStore((s) => s.role);
-  const advisors = useAdvisorsStore((s) => s.rows);
+  const [advisors, setAdvisors] = useState<Advisor[]>([]);
+  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+  const [error, setError] = useState<string | null>(null);
+  const fetchAdvisors = useCallback(() => {
+    listAdvisors()
+      .then((rows) => {
+        setAdvisors(rows);
+        setState("ready");
+      })
+      .catch((err: unknown) => {
+        setError(describeAdvisorError(err));
+        setState("error");
+      });
+  }, []);
+  useEffect(() => {
+    fetchAdvisors();
+  }, [fetchAdvisors]);
+  const reload = () => {
+    setState("loading");
+    fetchAdvisors();
+  };
   const [adding, setAdding] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const isAdmin = role === "Admin";
@@ -39,13 +59,15 @@ export function AdvisorsWorkspace() {
         }
       />
       {notice && <Banner tone="success" onDismiss={() => setNotice(null)}>{notice}</Banner>}
-      <AdvisorDirectory advisors={advisors} />
+      {state === "error" && error && <Banner tone="error">{error}</Banner>}
+      <AdvisorDirectory advisors={advisors} state={state} onRetry={reload} />
 
       {adding && (
         <AddAdvisorModal
           onClose={() => setAdding(false)}
           onAdded={(a) => {
             setAdding(false);
+            fetchAdvisors();
             setNotice(`${a.name} (${a.id}) added to the advisor directory as ${a.expertise} · ${a.woreda}, ${a.region}.`);
           }}
         />
