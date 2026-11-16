@@ -4,6 +4,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Banner } from "@/components/ui/Banner";
 import type { Farmer } from "../types";
+import { DaPicker } from "./DaPicker";
 import { FarmerPicker } from "./FarmerPicker";
 import { FarmerSearch } from "./FarmerSearch";
 import { ADVISORY_VISIT, FORM_ID, type VisitPreset } from "./planVisit";
@@ -85,6 +86,7 @@ export function PlanVisitModal({ farmer, farmers, isOpen, onClose, mode = "plan"
         }}
       >
         {v.error && <Banner tone="error" title="Visit not saved">{v.error}</Banner>}
+        {v.isOfficer && <DaPicker agents={v.agents} error={v.agentsError} value={v.assignee} onChange={v.setAssignee} />}
         <FarmerSearch query={v.query} onQueryChange={v.changeQuery} onSearch={v.runSearch} />
         <FarmerPicker
           selected={v.selected}

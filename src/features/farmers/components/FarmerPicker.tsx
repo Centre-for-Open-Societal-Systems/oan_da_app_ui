@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "@/lib/utils";
 import type { Farmer } from "../types";
 import { FarmerAvatar } from "./FarmerAvatar";
 import { MAX_BATCH_FARMERS, registryCode } from "./planVisit";
@@ -21,10 +22,9 @@ interface FarmerPickerProps {
   onClearSearch: () => void;
 }
 
-// The picked farmers, then the search results / no-match message to add more (results show while nothing is picked
-// or a search term is typed).
+// The picked farmers, then the farmer list (narrowed by the search) with a checkbox per row: tick up to
+// MAX_BATCH_FARMERS of them for a batch visit.
 export function FarmerPicker({ selected, onToggle, onRemove, isFull, matches, emptyText, query, showCount, onClearSearch }: FarmerPickerProps) {
-  const showResults = selected.length === 0 || query.trim() !== "";
   const isPicked = (f: Farmer) => selected.some((s) => s.id === f.id);
 
   return (
@@ -61,9 +61,13 @@ export function FarmerPicker({ selected, onToggle, onRemove, isFull, matches, em
         </ul>
       )}
 
-      {!showResults ? (
-        <p className="text-[12.5px] text-muted">{isFull ? "Remove a farmer to add another." : "Search above to add more farmers to this visit."}</p>
-      ) : matches.length === 0 && !query.trim() ? (
+      {matches.length > 0 && (
+        <p className={isFull ? "text-[12.5px] font-medium text-orange-600" : "text-[12.5px] text-muted"}>
+          {isFull ? `${MAX_BATCH_FARMERS} farmers selected. Untick one to choose another.` : "Tick the farmers to visit. Select more than one to plan a batch visit."}
+        </p>
+      )}
+
+      {matches.length === 0 && !query.trim() ? (
         <p className="rounded-lg border border-dashed border-slate-300 bg-surface px-4 py-5 text-center text-[14px] font-semibold text-ink">{emptyText}</p>
       ) : matches.length === 0 ? (
         <div className="flex flex-col items-center gap-1 rounded-lg border border-dashed border-slate-300 bg-surface px-4 py-5 text-center">
@@ -91,8 +95,24 @@ export function FarmerPicker({ selected, onToggle, onRemove, isFull, matches, em
                   disabled={blocked}
                   aria-pressed={picked}
                   title={blocked ? `You can select up to ${MAX_BATCH_FARMERS} farmers` : undefined}
-                  className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+                  className={cn(
+                    "flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent",
+                    picked ? "bg-brand-mint hover:bg-brand-mint" : "hover:bg-surface",
+                  )}
                 >
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded border transition-colors",
+                      picked ? "border-brand-green bg-brand-green text-white" : "border-slate-300 bg-white",
+                    )}
+                  >
+                    {picked && (
+                      <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </span>
                   <FarmerAvatar name={f.name} avatar={f.avatar} />
                   <span className="min-w-0 flex-1">
                     <span className="block text-[14px] font-medium text-ink">{f.name}</span>

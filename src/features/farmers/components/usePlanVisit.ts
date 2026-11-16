@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import type { Farmer } from "../types";
 import { useAdvisoryStore } from "../advisoryStore";
-import { planVisit } from "../visitsApi";
+import { useAuthStore } from "@/store/useAuthStore";
+import { listAgents, type ApiAgent } from "@/features/agents";
 import { apiFarmerToFarmer, describeFarmerError, listFarmers } from "../farmersApi";
 import {
   ADVISORY_VISIT,
@@ -9,7 +10,7 @@ import {
   joinNames,
   matchFarmers,
   MAX_BATCH_FARMERS,
-  planEach,
+  planFarmers,
   readVisitDetails,
   readWhen,
   registryCode,
@@ -70,6 +71,22 @@ export function usePlanVisit(initial: Farmer[], preset: VisitPreset | undefined)
   };
 
   const addAdvisory = useAdvisoryStore((s) => s.add);
+  // A DA plans for themself (their Frappe User); an officer picks the DA whose plan the visit goes to.
+  const user = useAuthStore((s) => s.user?.id);
+  const isOfficer = useAuthStore((s) => s.role) !== "DA";
+  const [assignee, setAssignee] = useState<ApiAgent | null>(null);
+  const [agents, setAgents] = useState<ApiAgent[] | null>(null);
+  const [agentsError, setAgentsError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isOfficer) return;
+    let current = true;
+    listAgents({ limit: 500 })
+      .then(({ agents: list }) => current && setAgents(list.filter((a) => a.active_status !== "Separated")))
+      .catch((err: unknown) => current && setAgentsError(err instanceof Error ? err.message : "Could not load the development agents."));
+    return () => {
+      current = false;
+    };
+  }, [isOfficer]);
 
   // Save as draft stays on this device; Plan / Schedule goes to POST /visits once per farmer and only succeeds once the
   // backend has every visit. Farmers whose visit failed stay selected so Plan can be pressed again.
@@ -87,13 +104,32 @@ export function usePlanVisit(initial: Farmer[], preset: VisitPreset | undefined)
         setError("Select a farmer first.");
         return;
       }
+      // The visit's `user` must be the owning DA's Frappe User: their login email for an officer's pick.
+      let owner: { user: string; daId?: string };
+      if (isOfficer) {
+        if (!assignee) {
+          setError("Select the development agent this visit is for.");
+          return;
+        }
+        if (!assignee.email) {
+          setError(`${assignee.full_name || assignee.da_id} has no email in the DA registry, so the visit cannot be assigned to them.`);
+          return;
+        }
+        owner = { user: assignee.email, daId: assignee.da_id };
+      } else if (user) {
+        owner = { user };
+      } else {
+        setError("Your account could not be read. Sign in again and retry.");
+        return;
+      }
       const details = readVisitDetails();
       const priority = splitPriority(details.priority);
       setSubmitting(true);
       setError(null);
-      const { planned, failed } = await planEach(selected, (f) => {
+      // One farmer: single-visit body; 2-5 farmers: one batch body on the same POST /visits.
+      const { planned, failed } = await planFarmers(selected, owner, (f) => {
         const code = registryCode(f);
-        return planVisit({
+        return {
           // A farmer from the farmers API sends its registry id; a sample farmer its mock registry code.
           farmer_id: code,
           date: details.date,
@@ -107,7 +143,7 @@ export function usePlanVisit(initial: Farmer[], preset: VisitPreset | undefined)
           notify_farmer_sms: true,
           ...(isAdvisory && { advisory_qa: items }),
           client_op_id: selected.length === 1 ? clientOpId : `${clientOpId}-${code}`,
-        });
+        };
       });
       setSubmitting(false);
       if (failed.length > 0) {
@@ -128,5 +164,5 @@ export function usePlanVisit(initial: Farmer[], preset: VisitPreset | undefined)
     setResult({ kind, farmer: farmers.length > 0 ? joinNames(farmers.map((f) => f.name)) : undefined, when, visitId: visitIds.join(", ") || undefined, count: farmers.length });
   };
 
-  return { selected, toggle, remove, isFull, visitType, setVisitType, advisoryQa, setAdvisoryQa, query, changeQuery, searched, term, matches, emptyText, runSearch, result, finish, submitting, error };
+  return { isOfficer, agents, agentsError, assignee, setAssignee, selected, toggle, remove, isFull, visitType, setVisitType, advisoryQa, setAdvisoryQa, query, changeQuery, searched, term, matches, emptyText, runSearch, result, finish, submitting, error };
 }
