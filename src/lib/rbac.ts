@@ -101,13 +101,9 @@ export const NAV_GROUPS: NavGroup[] = [
     title: "Performance",
     items: [
       // My Performance (/performance) and Training (/training) are hidden from the sidebar; the pages still open by URL.
-      // The Supervisor's Performance rail: team, appraisal cycle, monitoring, then reviews through training.
+      // Appraisals (/appraisals), Monitoring (/monitoring), Reviews (/reviews), Coaching (/coaching) and Recognition
+      // (/recognition) are Part 2: hidden from the sidebar; the pages that exist still open by URL.
       { title: "My Teams", href: "/performance/teams", roles: ["Supervisor"], part: 1 },
-      { title: "Appraisals", href: "/appraisals", roles: ["Supervisor"], part: 1 },
-      { title: "Monitoring", href: "/monitoring", roles: ["Supervisor"], part: 1 },
-      { title: "Reviews", href: "/reviews", roles: ["Supervisor", "Admin"], part: 1 },
-      { title: "Coaching", href: "/coaching", roles: ["Supervisor"], part: 1 },
-      { title: "Recognition", href: "/recognition", roles: ["Supervisor"], part: 2 },
       { title: "Surveys", href: "/surveys", roles: ["DA", "Supervisor", "Executive", "Admin"], part: 1 },
     ],
   },
