@@ -7,6 +7,7 @@ import { Banner } from "@/components/ui/Banner";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { Textarea } from "@/components/ui/Textarea";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { MultiSelectDropdown } from "@/components/ui/MultiSelectDropdown";
 import { todayIso } from "@/lib/utils";
@@ -14,8 +15,10 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { listAreas, type AdminArea } from "@/features/assignments";
 import { listAgents, type ApiAgent } from "@/features/agents";
 import {
+  DEFAULT_TARGET_FARMERS,
   QUESTION_TYPES,
   SURVEY_LANGUAGES,
+  questionTypesFor,
   SURVEY_TYPES,
   TRANSLATION_LANGUAGES,
   addDaysIso,
@@ -44,12 +47,22 @@ const blankQuestion = (id: number): TemplateQuestion => ({ id, prompt: "", type:
 
 const NO_WOREDAS: string[] = [];
 
+/** Answer boxes shown for a choice question. */
+const CHOICE_SLOTS = 4;
+/** The choices of a question as one box each (kept comma-separated in the draft), padded to CHOICE_SLOTS. */
+const choiceSlots = (options: string) => {
+  const slots = options === "" ? [] : options.split(",");
+  return [...slots, ...Array<string>(Math.max(0, CHOICE_SLOTS - slots.length)).fill("")];
+};
+
 const agentLabel =(a: ApiAgent) => `${a.full_name} · ${a.da_id}`;
 
 // Supervisor / Admin: create = publish (POST /surveys/templates), or edit an existing template (PATCH).
 export function CreateTemplateModal({ onClose, onSaved, template }: CreateTemplateModalProps) {
   const role = useAuthStore((s) => s.role);
   const scopeWoredas = useAuthStore((s) => s.profile?.scope.woredas ?? NO_WOREDAS);
+  // The Woreda as the Supervisor's own profile page shows it (the /me scope label).
+  const scopeLabel = useAuthStore((s) => s.profile?.scopeLabel ?? "");
   const editing = Boolean(template);
   const initial = useMemo<TemplateInput>(
     () =>
@@ -61,8 +74,8 @@ export function CreateTemplateModal({ onClose, onSaved, template }: CreateTempla
             open: todayIso(),
             // Two weeks by default; the Supervisor can change it.
             close: addDaysIso(todayIso(), 14),
-            languages: ["English", "Amharic"],
-            targetFarmers: 20,
+            languages: ["English"],
+            targetFarmers: DEFAULT_TARGET_FARMERS,
             questions: [blankQuestion(1)],
             // A Supervisor with one Woreda publishes there; others pick one.
             woreda: role === "Supervisor" && scopeWoredas.length === 1 ? scopeWoredas[0] : "",
@@ -118,8 +131,6 @@ export function CreateTemplateModal({ onClose, onSaved, template }: CreateTempla
   const patch = (next: Partial<TemplateInput>) => setDraft((d) => ({ ...d, ...next }));
   const patchQuestion = (id: number, next: Partial<TemplateQuestion>) =>
     setDraft((d) => ({ ...d, questions: d.questions.map((q) => (q.id === id ? { ...q, ...next } : q)) }));
-  const toggleLanguage = (lang: string) =>
-    patch({ languages: draft.languages.includes(lang) ? draft.languages.filter((l) => l !== lang) : [...draft.languages, lang] });
 
   const translationLanguages = TRANSLATION_LANGUAGES.filter((l) => draft.languages.includes(l));
   const agentOptions = (agents ?? []).map(agentLabel);
@@ -191,22 +202,19 @@ export function CreateTemplateModal({ onClose, onSaved, template }: CreateTempla
           </FormField>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField label="Opens" htmlFor="tpl-open" required hint={showErrors && !draft.open ? "Pick the date the survey opens." : undefined} hintTone="error">
             <Input id="tpl-open" type="date" min={editing ? undefined : todayIso()} className="h-10" value={draft.open} onChange={(e) => patch({ open: e.target.value })} />
           </FormField>
           <FormField label="Closes" htmlFor="tpl-close" required hint={showErrors && !draft.close ? "Pick the date the survey closes." : "On or after the Opens date."} hintTone={(showErrors && !draft.close) || (draft.close !== "" && draft.close < draft.open) ? "error" : "muted"}>
             <Input id="tpl-close" type="date" className="h-10" value={draft.close} min={draft.open || undefined} onChange={(e) => patch({ close: e.target.value })} />
           </FormField>
-          <FormField label="Farmers per DA" htmlFor="tpl-target" required hint="At least 1.">
-            <Input id="tpl-target" type="number" min={1} className="h-10" value={draft.targetFarmers || ""} onChange={(e) => patch({ targetFarmers: Number(e.target.value) })} />
-          </FormField>
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <FormField label="Woreda" htmlFor="tpl-woreda" required={woredaRequired} hint={editing ? "Can't be changed after publishing." : !woredaRequired ? "Your assigned Woreda." : undefined}>
+          <FormField label="Woreda" htmlFor="tpl-woreda" required={woredaRequired} hint={editing ? "Can't be changed after publishing." : !woredaRequired ? "From your profile." : undefined}>
             {editing || !woredaRequired ? (
-              <Input id="tpl-woreda" className="h-10" value={draft.woreda || "Your assigned Woreda"} disabled readOnly />
+              <Input id="tpl-woreda" className="h-10" value={(!editing && scopeLabel) || draft.woreda || "Your assigned Woreda"} disabled readOnly />
             ) : (
               <Select id="tpl-woreda" className="h-10" value={draft.woreda} onChange={(e) => patch({ woreda: e.target.value, assignedDaIds: [] })}>
                 <option value="">{woredas ? (woredas.length ? "Select Woreda…" : "No Woreda available") : "Loading…"}</option>
@@ -240,7 +248,7 @@ export function CreateTemplateModal({ onClose, onSaved, template }: CreateTempla
           <div className="mt-2 flex flex-wrap gap-5">
             {SURVEY_LANGUAGES.map((lang) => (
               <label key={lang} className="flex cursor-pointer items-center gap-2 text-[13.5px] text-slate-700">
-                <Checkbox checked={draft.languages.includes(lang)} onChange={() => toggleLanguage(lang)} /> {lang}
+                <Checkbox checked={draft.languages.includes(lang)} disabled readOnly /> {lang}
               </label>
             ))}
           </div>
@@ -284,15 +292,33 @@ export function CreateTemplateModal({ onClose, onSaved, template }: CreateTempla
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-[200px_1fr]">
                   <FormField label="Answer type" htmlFor={`tpl-qt-${q.id}`}>
                     <Select id={`tpl-qt-${q.id}`} className="h-10 bg-white" value={q.type} onChange={(e) => patchQuestion(q.id, { type: e.target.value as TemplateQuestion["type"] })}>
-                      {QUESTION_TYPES.map((qt) => <option key={qt.value} value={qt.value}>{qt.label}</option>)}
+                      {questionTypesFor(q.type).map((qt) => <option key={qt.value} value={qt.value}>{qt.label}</option>)}
                     </Select>
                   </FormField>
-                  {withOptions && (
-                    <FormField label="Choices" htmlFor={`tpl-qo-${q.id}`} required hint="At least two; separate choices with commas">
-                      <Input id={`tpl-qo-${q.id}`} className="h-10 bg-white" value={q.options} onChange={(e) => patchQuestion(q.id, { options: e.target.value })} placeholder="Yes, Partly, No" />
-                    </FormField>
-                  )}
                 </div>
+                {withOptions && (
+                  <FormField label="Answers" htmlFor={`tpl-qo-${q.id}-0`} required hint={q.type === "multi" ? "Fill at least two. The farmer can pick more than one." : "Fill at least two. The farmer picks one."}>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {choiceSlots(q.options).map((choice, n, slots) => (
+                        <Input
+                          key={n}
+                          id={`tpl-qo-${q.id}-${n}`}
+                          aria-label={`Answer ${n + 1}`}
+                          className="h-10 bg-white"
+                          value={choice}
+                          placeholder={`Answer ${n + 1}`}
+                          // A comma separates choices in the draft, so it can't be part of one.
+                          onChange={(e) => patchQuestion(q.id, { options: slots.map((c, k) => (k === n ? e.target.value.replace(/,/g, "") : c)).join(",") })}
+                        />
+                      ))}
+                    </div>
+                  </FormField>
+                )}
+                {q.type === "text" && (
+                  <FormField label="Answer" htmlFor={`tpl-qa-${q.id}`} hint="Preview only: the DA types the farmer's answer here (up to 500 characters).">
+                    <Textarea id={`tpl-qa-${q.id}`} rows={3} className="bg-white" placeholder="Farmer's answer…" disabled readOnly />
+                  </FormField>
+                )}
                 <label className="flex w-fit cursor-pointer items-center gap-2 text-[13px] text-slate-700">
                   <Checkbox checked={q.required} onChange={() => patchQuestion(q.id, { required: !q.required })} /> Required
                 </label>
