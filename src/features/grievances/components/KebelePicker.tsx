@@ -35,11 +35,16 @@ function AreaSelect({ id, label, list, value, onChange, enabled }: { id: string;
   );
 }
 
+const WOREDA_CODE = /^ET\d{6}$/;
+
 // Region > Zone > Woreda > Kebele from the Grievance Service's own list: the create call accepts only its Kebele ids.
-export function KebelePicker({ onChange }: { onChange: (kebele: GrievanceArea | null) => void }) {
-  const [region, setRegion] = useState("");
-  const [zone, setZone] = useState("");
-  const [woreda, setWoreda] = useState("");
+// With `woredaCode` (a Supervisor's own Woreda) Region, Zone and Woreda are filled from the code and locked: P-codes
+// nest by prefix (Region ET04 > Zone ET0401 > Woreda ET040101), so only the Kebele is picked.
+export function KebelePicker({ onChange, woredaCode }: { onChange: (kebele: GrievanceArea | null) => void; woredaCode?: string | null }) {
+  const fixed = woredaCode && WOREDA_CODE.test(woredaCode) ? woredaCode : null;
+  const [region, setRegion] = useState(fixed ? `region-${fixed.slice(0, 4)}` : "");
+  const [zone, setZone] = useState(fixed ? `zone-${fixed.slice(0, 6)}` : "");
+  const [woreda, setWoreda] = useState(fixed ? `woreda-${fixed}` : "");
   const [kebele, setKebele] = useState("");
 
   const regions = useAreas("");
@@ -56,17 +61,16 @@ export function KebelePicker({ onChange }: { onChange: (kebele: GrievanceArea | 
   return (
     <div className="flex flex-col gap-2">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <AreaSelect id="grv-region" label="Region" list={regions.areas} value={region} enabled onChange={(v) => { setRegion(v); setZone(""); setWoreda(""); clear(); }} />
-        <AreaSelect id="grv-zone" label="Zone" list={zones.areas} value={zone} enabled={!!region} onChange={(v) => { setZone(v); setWoreda(""); clear(); }} />
-        <AreaSelect id="grv-woreda" label="Woreda" list={woredas.areas} value={woreda} enabled={!!zone} onChange={(v) => { setWoreda(v); clear(); }} />
+        <AreaSelect id="grv-region" label="Region" list={regions.areas} value={region} enabled={!fixed} onChange={(v) => { setRegion(v); setZone(""); setWoreda(""); clear(); }} />
+        <AreaSelect id="grv-zone" label="Zone" list={zones.areas} value={zone} enabled={!fixed && !!region} onChange={(v) => { setZone(v); setWoreda(""); clear(); }} />
+        <AreaSelect id="grv-woreda" label="Woreda" list={woredas.areas} value={woreda} enabled={!fixed && !!zone} onChange={(v) => { setWoreda(v); clear(); }} />
         <AreaSelect id="grv-kebele" label="Kebele" list={kebeles.areas} value={kebele} enabled={!!woreda} onChange={(v) => { setKebele(v); onChange(kebeles.areas?.find((a) => a.area_id === v) ?? null); }} />
       </div>
+      {fixed && <p className="text-[12.5px] text-muted">Region, Zone and Woreda are from your account.</p>}
       {error && <p className="text-[12.5px] text-danger">{error}</p>}
     </div>
   );
 }
-
-const WOREDA_CODE = /^ET\d{6}$/;
 
 interface DaKebeleProps {
   /** From the DA's record: their Woreda code and Kebele name. */

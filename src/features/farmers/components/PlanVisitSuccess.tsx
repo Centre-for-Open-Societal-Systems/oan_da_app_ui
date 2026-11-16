@@ -10,6 +10,8 @@ interface PlanVisitSuccessProps {
 
 export function PlanVisitSuccess({ result, visitType, isSchedule, questionCount = 0 }: PlanVisitSuccessProps) {
   const questions = questionCount > 0 ? ` with ${questionCount} farmer question${questionCount === 1 ? "" : "s"}` : "";
+  const many = (result.count ?? 1) > 1;
+  const visits = many ? `${visitType} visits` : `${visitType} visit`;
   return (
     <div className="flex flex-col items-center py-4 text-center">
       <span className="flex h-14 w-14 animate-check-pop items-center justify-center rounded-full bg-brand-tint text-brand-green">
@@ -18,12 +20,12 @@ export function PlanVisitSuccess({ result, visitType, isSchedule, questionCount 
         </svg>
       </span>
       <h3 className="mt-4 text-[17px] font-semibold text-ink">
-        {result.kind === "draft" ? "Draft saved" : isSchedule ? "Visit scheduled" : "Visit planned"}
+        {result.kind === "draft" ? "Draft saved" : `${many ? `${result.count} visits` : "Visit"} ${isSchedule ? "scheduled" : "planned"}`}
       </h3>
       <p className="mt-2 max-w-[420px] text-[14px] leading-relaxed text-ink-soft">
         {result.kind === "draft"
-          ? `${visitType} visit${result.farmer ? ` with ${result.farmer}` : ""} for ${result.when}${questions} is saved as a draft on this device. Open Plan visit again to finish it.`
-          : `${visitType} visit${result.farmer ? ` with ${result.farmer}` : ""} on ${result.when}${questions}${result.visitId ? ` is saved as ${result.visitId}` : ""}. The farmer is notified by SMS.`}
+          ? `${visits}${result.farmer ? ` with ${result.farmer}` : ""} for ${result.when}${questions} ${many ? "are" : "is"} saved as a draft on this device. Open Plan visit again to finish it.`
+          : `${visits}${result.farmer ? ` with ${result.farmer}` : ""} on ${result.when}${questions}${result.visitId ? ` ${many ? "are" : "is"} saved as ${result.visitId}` : ""}. ${many ? "Each farmer is" : "The farmer is"} notified by SMS.`}
       </p>
     </div>
   );

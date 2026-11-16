@@ -99,6 +99,9 @@ export function AssignmentsWorkspace() {
   const role = useAuthStore((s) => s.role);
   const canAssign = role === "Supervisor" || role === "Admin";
   const isDA = role === "DA";
+  // A Supervisor with one Woreda in scope (from /me) assigns inside it only, so the form starts on it and keeps it.
+  const scopeWoredas = useAuthStore((s) => s.profile?.scope.woredas);
+  const ownWoreda = role === "Supervisor" && scopeWoredas?.length === 1 ? scopeWoredas[0] : "";
   const [reload, setReload] = useState(0);
   const [list, setList] = useState<Loaded<{ rows: AgentAssignment[]; summary: AssignmentSummary | null }> & { key: number } | null>(null);
   const [coverage, setCoverage] = useState<Loaded<CoverageResponse> | null>(null);
@@ -248,8 +251,12 @@ export function AssignmentsWorkspace() {
   const openAssign = (r: AgentAssignment) =>
     openForm({ daId: r.daId, woreda: r.woredaCode ?? "", kebele: r.kebeleCode ?? "", effectiveDate: isoToday(), reason: "", mode: r.mode ?? "Automatic" });
 
-  // Header "Assign agent": every field starts empty and the officer fills it in, agent included.
-  const openNewAssign = () => openForm({ daId: "", woreda: rows.find((r) => r.woredaCode)?.woredaCode ?? "", kebele: "", effectiveDate: isoToday(), reason: "", mode: "", pickAgent: true });
+  // Header "Assign agent": the Woreda starts on the officer's own (or the first in the list); Kebele and agent are picked after it.
+  const openNewAssign = () =>
+    openForm({ daId: "", woreda: ownWoreda || (rows.find((r) => r.woredaCode)?.woredaCode ?? ""), kebele: "", effectiveDate: isoToday(), reason: "", mode: "", pickAgent: true });
+
+  // Agents of the picked Woreda; one with no posting yet has no Woreda and is offered too (the list is already scoped).
+  const agentsInWoreda = (woreda: string) => rows.filter((r) => r.status !== "Separated" && (!r.woredaCode || r.woredaCode === woreda));
 
   const draftAgent = draft ? rows.find((r) => r.daId === draft.daId) : undefined;
   const draftKebeles = kebeles && kebeles.woreda === draft?.woreda ? kebeles : null;
@@ -459,16 +466,18 @@ export function AssignmentsWorkspace() {
         >
           {saveError && <Banner tone="error" title="Assignment not saved" className="mb-4">{saveError}</Banner>}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {draft.pickAgent && (
-              <FormField label="Agent" htmlFor="as-agent" required className="sm:col-span-2" hint={draftAgent?.kebele ? `Currently in ${draftAgent.kebele} — committing supersedes that assignment.` : undefined}>
-                <Select id="as-agent" value={draft.daId} onChange={(e) => setDraft({ ...draft, daId: e.target.value })}>
-                  <option value="">Select agent</option>
-                  {rows.filter((r) => r.status !== "Separated").map((r) => <option key={r.daId} value={r.daId}>{r.agent} · {r.daId}{r.kebele ? ` (${r.kebele})` : " (unassigned)"}</option>)}
-                </Select>
-              </FormField>
-            )}
-            <FormField label="Woreda" htmlFor="as-woreda" required>
-              <Select id="as-woreda" value={draft.woreda} onChange={(e) => setDraft({ ...draft, woreda: e.target.value, kebele: "" })}>
+            <FormField label="Woreda" htmlFor="as-woreda" required hint={ownWoreda ? "Your Woreda." : undefined}>
+              <Select
+                id="as-woreda"
+                value={draft.woreda}
+                disabled={!!ownWoreda}
+                onChange={(e) => {
+                  const woreda = e.target.value;
+                  // A picked agent from another Woreda no longer fits.
+                  const keepAgent = !draft.pickAgent || agentsInWoreda(woreda).some((r) => r.daId === draft.daId);
+                  setDraft({ ...draft, woreda, kebele: "", daId: keepAgent ? draft.daId : "" });
+                }}
+              >
                 <option value="">Select woreda</option>
                 {woredaAreas.map((w) => <option key={w.code} value={w.code}>{w.name_en}</option>)}
                 {draft.woreda && !woredaAreas.some((w) => w.code === draft.woreda) && <option value={draft.woreda}>{draft.woreda}</option>}
@@ -480,6 +489,14 @@ export function AssignmentsWorkspace() {
                 {draftKebeles?.items.map((k) => <option key={k.code} value={k.code}>{k.name_en}</option>)}
               </Select>
             </FormField>
+            {draft.pickAgent && (
+              <FormField label="Agent" htmlFor="as-agent" required className="sm:col-span-2" hint={draftAgent?.kebele ? `Currently in ${draftAgent.kebele} — committing supersedes that assignment.` : undefined}>
+                <Select id="as-agent" value={draft.daId} disabled={!draft.woreda} onChange={(e) => setDraft({ ...draft, daId: e.target.value })}>
+                  <option value="">{draft.woreda ? (agentsInWoreda(draft.woreda).length === 0 ? "No agents in this Woreda" : "Select agent") : "Select woreda first"}</option>
+                  {agentsInWoreda(draft.woreda).map((r) => <option key={r.daId} value={r.daId}>{r.agent} · {r.daId}{r.kebele ? ` (${r.kebele})` : " (unassigned)"}</option>)}
+                </Select>
+              </FormField>
+            )}
             <FormField label="Effective date" htmlFor="as-date" required hint="Today or later." hintTone={!!draft.effectiveDate && draft.effectiveDate < todayIso() ? "error" : "muted"}>
               <Input id="as-date" type="date" min={todayIso()} value={draft.effectiveDate} onChange={(e) => setDraft({ ...draft, effectiveDate: e.target.value })} />
             </FormField>

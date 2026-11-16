@@ -14,7 +14,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { useAuthStore } from "@/store/useAuthStore";
 import { ExportButton } from "@/components/ui/ExportButton";
 import { cn } from "@/lib/utils";
-import { ALL_FARMERS_SEARCH, apiFarmerToFarmer, describeFarmerError, listFarmers } from "@/features/farmers";
+import { ALL_FARMERS_SEARCH, apiFarmerToFarmer, describeFarmerError, listFarmers, MAX_BATCH_FARMERS, PlanVisitModal } from "@/features/farmers";
 import { FarmerAvatar } from "@/features/farmers";
 import { farmerActivity, StatusPill } from "@/features/farmers";
 import {
@@ -73,7 +73,11 @@ export function FarmersTable() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [segmentId, setSegmentId] = useState(SEGMENTS[0].id);
   const linkBeneficiaries = useBeneficiariesStore((s) => s.link);
-  const isDA = useAuthStore((s) => s.role) === "DA";
+  const role = useAuthStore((s) => s.role);
+  const isDA = role === "DA";
+  // POST /visits is open to DA, Supervisor and Admin; the Executive only reads.
+  const canPlanVisit = role === "DA" || role === "Supervisor" || role === "Admin";
+  const [isBatchOpen, setIsBatchOpen] = useState(false);
   // GET /farmers is scoped by the backend: a DA gets farmers in their kebele, a supervisor in their woreda, Admin all.
   // Search and paging run on the server; the column filters only narrow the page on screen.
   const [loaded, setLoaded] = useState<{ key: string; rows: Farmer[]; total: number; error: string | null } | null>(null);
@@ -175,6 +179,18 @@ export function FarmersTable() {
 
           <AdvancedFiltersButton activeCount={activeFilterCount} onClick={() => setIsFiltersOpen(true)} />
 
+          {canPlanVisit && (
+            <Button
+              variant="brandOutline"
+              size="md"
+              disabled={selectedFarmers.length === 0 || selected.size > MAX_BATCH_FARMERS}
+              title={selected.size > MAX_BATCH_FARMERS ? `You can select up to ${MAX_BATCH_FARMERS} farmers for a batch visit` : selected.size === 0 ? `Select 1 to ${MAX_BATCH_FARMERS} farmers to plan a batch visit` : undefined}
+              onClick={() => setIsBatchOpen(true)}
+            >
+              Plan a visit (Batch){selected.size > 0 ? ` (${selected.size})` : ""}
+            </Button>
+          )}
+
           {selected.size > 0 && (
             <Button variant="brand" size="md" onClick={() => { setSegmentId(SEGMENTS[0].id); setIsAddOpen(true); }}>
               Add to beneficiaries ({selected.size})
@@ -197,6 +213,9 @@ export function FarmersTable() {
         </Banner>
       )}
       {notice && <Banner tone="success" className="mx-4 mb-3" onDismiss={() => setNotice(null)}>{notice}</Banner>}
+      {canPlanVisit && selected.size > MAX_BATCH_FARMERS && (
+        <Banner tone="warning" className="mx-4 mb-3">You can select up to {MAX_BATCH_FARMERS} farmers for a batch visit. Unselect {selected.size - MAX_BATCH_FARMERS} to plan it.</Banner>
+      )}
 
       {/* Table */}
       <div className="overflow-x-auto">
@@ -304,6 +323,8 @@ export function FarmersTable() {
           })
         }
       />
+
+      {isBatchOpen && <PlanVisitModal farmers={selectedFarmers} isOpen onClose={() => setIsBatchOpen(false)} />}
 
       <Modal
         isOpen={isAddOpen}

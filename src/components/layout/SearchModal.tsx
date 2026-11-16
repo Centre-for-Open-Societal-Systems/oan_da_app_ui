@@ -4,58 +4,64 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 
-export interface FarmerSearchHit {
+export interface SearchHit {
   id: string;
   name: string;
   details: string;
+  /** The page the hit opens. */
+  href: string;
 }
+
+/** One section of results. Each talks to the backend, so the layout passes it in. */
+export type SearchFn = (searchText: string) => Promise<SearchHit[]>;
 
 interface SearchModalProps {
   isOpen: boolean;
   onClose: () => void;
-  /** Farmers matching the text; it talks to the backend, so the layout passes it in. */
-  searchFarmers?: (searchText: string) => Promise<FarmerSearchHit[]>;
+  searchFarmers?: SearchFn;
+  searchAgents?: SearchFn;
+  searchKebeles?: SearchFn;
 }
 
-const FARMER_SEARCH_DEBOUNCE_MS = 300;
+const SEARCH_DEBOUNCE_MS = 300;
 
-const MOCK_AGENTS = [
-  { id: '1', name: 'Almaz Regassa', details: 'Development Agent, Lume woreda' },
-  { id: '2', name: 'Tadesse Alemu', details: 'Development Agent, Bako Tibe' },
-];
-
-const MOCK_KEBELES = [
-  { id: '1', name: 'Almaz Sefer', details: 'Dendi woreda, Oromia' },
-  { id: '2', name: 'Bako Tibe', details: 'Bako Tibe woreda, Oromia' },
-  { id: '3', name: 'Gedo', details: 'Cheliya woreda, Oromia' },
-];
+/** One section's hits for the typed text: one request per pause in typing; a failed search shows none. */
+function useSearchHits(query: string, search: SearchFn | undefined): SearchHit[] {
+  const [hits, setHits] = useState<{ text: string; items: SearchHit[] }>({ text: "", items: [] });
+  const searchText = query.trim();
+  useEffect(() => {
+    if (!searchText || !search) return;
+    let current = true;
+    const timer = setTimeout(() => {
+      search(searchText)
+        .then((items) => current && setHits({ text: searchText, items }))
+        .catch(() => current && setHits({ text: searchText, items: [] }));
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
+  }, [searchText, search]);
+  return searchText && hits.text === searchText ? hits.items : [];
+}
 
 const RECENT_SEARCHES = [
   'Bako Tibe',
   'Payments overdue'
 ];
 
-export function SearchModal({ isOpen, onClose, searchFarmers }: SearchModalProps) {
+export function SearchModal({ isOpen, onClose, searchFarmers, searchAgents, searchKebeles }: SearchModalProps) {
   const [mounted, setMounted] = useState(false);
   const [query, setQuery] = useState("");
-  const [farmerHits, setFarmerHits] = useState<FarmerSearchHit[]>([]);
   const router = useRouter();
-
-  // Farmers in the caller's scope, one request per pause in typing; a failed search just shows none.
-  useEffect(() => {
-    const searchText = query.trim();
-    if (!searchText || !searchFarmers) return;
-    let current = true;
-    const timer = setTimeout(() => {
-      searchFarmers(searchText)
-        .then((hits) => current && setFarmerHits(hits))
-        .catch(() => current && setFarmerHits([]));
-    }, FARMER_SEARCH_DEBOUNCE_MS);
-    return () => {
-      current = false;
-      clearTimeout(timer);
-    };
-  }, [query, searchFarmers]);
+  // Each section in the caller's scope; an API the role may not call just leaves its section empty.
+  const farmerHits = useSearchHits(query, searchFarmers);
+  const agentHits = useSearchHits(query, searchAgents);
+  const kebeleHits = useSearchHits(query, searchKebeles);
+  const open = (href: string) => {
+    onClose();
+    router.push(href);
+  };
 
   useEffect(() => {
     const t = setTimeout(() => setMounted(true), 0); return () => clearTimeout(t);
@@ -95,13 +101,9 @@ export function SearchModal({ isOpen, onClose, searchFarmers }: SearchModalProps
   
   const filteredFarmers = normalizedQuery ? farmerHits : [];
     
-  const filteredAgents = normalizedQuery 
-    ? MOCK_AGENTS.filter(a => a.name.toLowerCase().includes(normalizedQuery) || a.details.toLowerCase().includes(normalizedQuery))
-    : [];
+  const filteredAgents = normalizedQuery ? agentHits : [];
 
-  const filteredKebeles = normalizedQuery 
-    ? MOCK_KEBELES.filter(k => k.name.toLowerCase().includes(normalizedQuery) || k.details.toLowerCase().includes(normalizedQuery))
-    : [];
+  const filteredKebeles = normalizedQuery ? kebeleHits : [];
 
   const hasResults = filteredFarmers.length > 0 || filteredAgents.length > 0 || filteredKebeles.length > 0;
 
@@ -184,7 +186,7 @@ export function SearchModal({ isOpen, onClose, searchFarmers }: SearchModalProps
                 <div className="mb-3">
                   <div className="px-3 py-2 text-[11px] font-bold text-muted tracking-wider uppercase">Farmers</div>
                   {filteredFarmers.map((farmer) => (
-                    <div key={farmer.id} onClick={() => { onClose(); router.push(`/farmers/${farmer.id}`); }} className="flex items-center justify-between px-3 py-2.5 hover:bg-zinc-50 rounded-lg cursor-pointer transition-colors group">
+                    <div key={farmer.id} onClick={() => open(farmer.href)} className="flex items-center justify-between px-3 py-2.5 hover:bg-zinc-50 rounded-lg cursor-pointer transition-colors group">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-zinc-100 text-muted group-hover:bg-brand-green/10 group-hover:text-brand-green transition-colors flex items-center justify-center shrink-0">
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -210,7 +212,7 @@ export function SearchModal({ isOpen, onClose, searchFarmers }: SearchModalProps
                 <div className="mb-3">
                   <div className="px-3 py-2 text-[11px] font-bold text-muted tracking-wider uppercase">Agents</div>
                   {filteredAgents.map(agent => (
-                    <div key={agent.id} className="flex items-center justify-between px-3 py-2.5 hover:bg-zinc-50 rounded-lg cursor-pointer transition-colors group">
+                    <div key={agent.id} onClick={() => open(agent.href)} className="flex items-center justify-between px-3 py-2.5 hover:bg-zinc-50 rounded-lg cursor-pointer transition-colors group">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-zinc-100 text-muted group-hover:bg-brand-green/10 group-hover:text-brand-green transition-colors flex items-center justify-center shrink-0">
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -236,7 +238,7 @@ export function SearchModal({ isOpen, onClose, searchFarmers }: SearchModalProps
                 <div className="mb-3">
                   <div className="px-3 py-2 text-[11px] font-bold text-muted tracking-wider uppercase">Kebeles</div>
                   {filteredKebeles.map(kebele => (
-                    <div key={kebele.id} className="flex items-center justify-between px-3 py-2.5 hover:bg-zinc-50 rounded-lg cursor-pointer transition-colors group">
+                    <div key={kebele.id} onClick={() => open(kebele.href)} className="flex items-center justify-between px-3 py-2.5 hover:bg-zinc-50 rounded-lg cursor-pointer transition-colors group">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-zinc-100 text-muted group-hover:bg-brand-green/10 group-hover:text-brand-green transition-colors flex items-center justify-center shrink-0">
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

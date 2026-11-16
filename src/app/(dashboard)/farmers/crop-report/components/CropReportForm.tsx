@@ -322,7 +322,7 @@ export function CropReportForm() {
       setShowSuccessModal(true);
     } catch (err) {
       setShowConfirmModal(false);
-      showSaveError(err, "Crop report not submitted");
+      showSaveError(err, "Crop Sown Survey not submitted");
     } finally {
       setIsSaving(false);
     }
@@ -368,7 +368,7 @@ export function CropReportForm() {
       {!isEditing && (
         <>
           <Card className="px-5 py-5 shadow-card">
-            <h1 className="text-[20px] font-bold tracking-tight text-ink sm:text-[22px]">Submit Crop Report</h1>
+            <h1 className="text-[20px] font-bold tracking-tight text-ink sm:text-[22px]">Crop Sown Survey</h1>
             <p className="mt-1 text-[13.5px] text-ink-soft">
               Find the farmer by Farmer ID. Their registry details fill in automatically; complete each Crop Sown stage and submit.
             </p>
@@ -680,7 +680,7 @@ export function CropReportForm() {
                 </div>
                 <div>
                   <h3 className="text-[17px] font-bold text-ink sm:text-[18px]">
-                    Submit crop report for {farmer.name}?
+                    Submit Crop Sown Survey for {farmer.name}?
                   </h3>
                   <p className="mt-0.5 text-[13px] text-muted">
                     Review the summary below. Auto-filled registry data and your entries will be recorded together.
@@ -793,10 +793,10 @@ export function CropReportForm() {
 
             {/* Title & Description */}
             <h3 className="mt-4 text-[20px] font-bold text-ink">
-              Crop report submitted!
+              Crop Sown Survey submitted!
             </h3>
             <p className="mt-2 text-[13.5px] leading-relaxed text-muted px-2">
-              The Crop Sown report for {farmer.name} ({registryCode(farmer)}) — {farmer.crop}, {values["identity.crop_year"] || "2026"} {values["identity.production_season"] || "Meher"} season — has been submitted and sent to the Woreda office for review.
+              The Crop Sown Survey for {farmer.name} ({registryCode(farmer)}) — {farmer.crop}, {values["identity.crop_year"] || "2026"} {values["identity.production_season"] || "Meher"} season — has been submitted and sent to the Woreda office for review.
             </p>
 
             {/* Status Pill */}

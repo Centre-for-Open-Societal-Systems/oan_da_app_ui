@@ -14,10 +14,13 @@ import { VisitDetailsFields } from "./VisitDetailsFields";
 import { VisitTypePicker } from "./VisitTypePicker";
 
 export type { VisitPreset } from "./planVisit";
+export { MAX_BATCH_FARMERS } from "./planVisit";
 
 interface PlanVisitModalProps {
   /** Preselected farmer; when omitted the form starts with a search. */
   farmer?: Farmer;
+  /** Preselected farmers for a batch visit (at most MAX_BATCH_FARMERS), e.g. from the farmers list. */
+  farmers?: Farmer[];
   isOpen: boolean;
   onClose: () => void;
   /** "schedule" is the Priority-list flavour: same form, different copy and warning. */
@@ -26,8 +29,8 @@ interface PlanVisitModalProps {
   preset?: VisitPreset;
 }
 
-export function PlanVisitModal({ farmer, isOpen, onClose, mode = "plan", preset }: PlanVisitModalProps) {
-  const v = usePlanVisit(farmer, preset);
+export function PlanVisitModal({ farmer, farmers, isOpen, onClose, mode = "plan", preset }: PlanVisitModalProps) {
+  const v = usePlanVisit(farmers ?? (farmer ? [farmer] : []), preset);
 
   const isSchedule = mode === "schedule";
   const title = isSchedule ? "Schedule Visit" : "Plan a Visit";
@@ -64,7 +67,7 @@ export function PlanVisitModal({ farmer, isOpen, onClose, mode = "plan", preset 
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M5 13l4 4L19 7" />
             </svg>
-            {v.submitting ? "Saving…" : primaryLabel}
+            {v.submitting ? "Saving…" : v.selected.length > 1 ? `${primaryLabel} (${v.selected.length} farmers)` : primaryLabel}
           </Button>
         </>
         )
@@ -85,7 +88,9 @@ export function PlanVisitModal({ farmer, isOpen, onClose, mode = "plan", preset 
         <FarmerSearch query={v.query} onQueryChange={v.changeQuery} onSearch={v.runSearch} />
         <FarmerPicker
           selected={v.selected}
-          onSelect={v.setSelected}
+          onToggle={v.toggle}
+          onRemove={v.remove}
+          isFull={v.isFull}
           matches={v.matches}
           emptyText={v.emptyText}
           query={v.query}

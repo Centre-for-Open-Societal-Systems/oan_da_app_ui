@@ -6,9 +6,9 @@ import { SectionCard } from "./SectionCard";
 // Crop reports saved for the farmer through the Crop Sown API (GET /farmers/{id}/crops); CropSownSection loads them.
 export function SavedCropReports({ crops, error }: { crops: ApiFarmerCrop[] | null; error: string | null }) {
   return (
-    <SectionCard title="Submitted crop reports" description="Crop Sown submissions saved for this farmer." className="mb-5">
+    <SectionCard title="Submitted Crop Sown Surveys" description="Crop Sown Surveys saved for this farmer." className="mb-5">
       {error ? (
-        <Banner tone="error" title="Could not load crop reports">
+        <Banner tone="error" title="Could not load Crop Sown Surveys">
           {error}
         </Banner>
       ) : crops === null ? (
@@ -16,7 +16,7 @@ export function SavedCropReports({ crops, error }: { crops: ApiFarmerCrop[] | nu
           <Spinner className="h-5 w-5" />
         </div>
       ) : crops.length === 0 ? (
-        <p className="text-[14px] text-muted">No crop reports have been submitted for this farmer yet.</p>
+        <p className="text-[14px] text-muted">No Crop Sown Surveys have been submitted for this farmer yet.</p>
       ) : (
         <ul className="divide-y divide-line-soft">
           {crops.map((c) => (
