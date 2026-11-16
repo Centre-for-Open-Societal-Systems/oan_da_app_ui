@@ -8,7 +8,7 @@ import type { Farmer } from "../types";
 import { DURATIONS, PRIORITIES, PRIORITY_BY_LEVEL, type VisitPreset } from "./planVisit";
 
 interface VisitDetailsFieldsProps {
-  selected: Farmer | undefined;
+  selected: Farmer[];
   preset: VisitPreset | undefined;
   isSchedule: boolean;
 }
@@ -44,7 +44,7 @@ export function VisitDetailsFields({ selected, preset, isSchedule }: VisitDetail
           <Input
             id="visit-location"
             className="h-10 border-transparent bg-slate-100 text-ink"
-            value={selected ? `${selected.kebele} 01 · plot 8.191°N, 37.052°E` : ""}
+            value={selected.length > 1 ? "Each farmer's registered parcel" : selected.length === 1 ? `${selected[0].kebele} 01 · plot 8.191°N, 37.052°E` : ""}
             placeholder="Select a farmer first"
             readOnly
             endAdornment={

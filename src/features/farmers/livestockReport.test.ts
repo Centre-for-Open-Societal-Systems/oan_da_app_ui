@@ -307,6 +307,12 @@ describe("reading GET /farmers/{id}/livestock", () => {
     expect(prefill.values[LOCATION][0].region).toBe("Oromia");
   });
 
+  it("takes the place names from the geo chain of a submission not yet approved", () => {
+    const draftOnly = [{ kind: "submission", submission_id: "D", draft_status: "DRAFT", sections: [{ section_id: LOCATION, records: [{ farmer_id: "FR-1", latitude: 13.9, geo_code_hierarchy_json: { hierarchy: [{ level: "region", level_value_mnemonic: "Tigray" }, { level: "zone", level_value_mnemonic: "North Western" }] } }] }] }] as unknown as ApiLivestockRecord[];
+    const prefill = livestockPrefill(readLivestock(draftOnly));
+    expect(prefill.values[LOCATION][0]).toMatchObject({ region: "Tigray", zone: "North Western", latitude: "13.9" });
+  });
+
   it("reads the farmer's real sample response when it is on this machine", () => {
     const path = "C:/Users/sdss2/Downloads/livestock_output.json";
     let raw: string;

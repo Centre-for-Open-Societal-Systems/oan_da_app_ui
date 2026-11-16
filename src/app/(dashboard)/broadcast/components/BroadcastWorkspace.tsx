@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Banner } from "@/components/ui/Banner";
@@ -11,7 +11,7 @@ import { Select } from "@/components/ui/Select";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { SmsPreview } from "@/features/communication";
 import { RECIPIENT_GROUPS, SIGNALS, type RecipientGroup, type SignalSource } from "@/features/communication";
-import { useGeoCascade, type GeoField, type GeoLevel } from "@/features/assignments";
+import { loadScopeAreas, useGeoCascade, type GeoField, type GeoLevel } from "@/features/assignments";
 import { broadcastToWoreda } from "@/features/notifications";
 import { useAuthStore } from "@/store/useAuthStore";
 import { FileDropInput } from "@/components/ui/FileDropInput";
@@ -39,7 +39,11 @@ function GeoSelect({ field, label, level, hint, onSelect, onRetry }: { field: Ge
 // shown but disabled until a gateway is wired.
 export function BroadcastWorkspace() {
   const role = useAuthStore((s) => s.role);
-  const canDispatch = role === "CommsOfficer" || role === "Admin" || role === "DA";
+  const canDispatch = role === "CommsOfficer" || role === "Admin" || role === "DA" || role === "Supervisor";
+  // A Supervisor broadcasts to their own Woreda only (the Woreda on their /me scope).
+  const isSupervisor = role === "Supervisor";
+  const supervisorWoreda = useAuthStore((s) => (s.role === "Supervisor" ? (s.profile?.scope?.woredas?.[0] ?? null) : null));
+  const [supervisorWoredaName, setSupervisorWoredaName] = useState<string | null>(null);
   const params = useSearchParams();
   const signal = SIGNALS.find((s) => s.id === params.get("signal"));
 
@@ -48,6 +52,16 @@ export function BroadcastWorkspace() {
   const [message, setMessage] = useState(signal ? signal.detail : "");
   // Audience is always a whole Woreda. A DA (and any weather/emergency signal) defaults to farmers; officers default to the DA network.
   const { geo, select, retry } = useGeoCascade();
+  useEffect(() => {
+    if (!supervisorWoreda) return;
+    let live = true;
+    loadScopeAreas()
+      .then(({ woredas }) => live && setSupervisorWoredaName(woredas.find((w) => w.code === supervisorWoreda)?.name_en ?? null))
+      .catch(() => undefined); // The code is shown when the name cannot be read.
+    return () => {
+      live = false;
+    };
+  }, [supervisorWoreda]);
   const [group, setGroup] = useState<RecipientGroup>(signal?.source === "Weather" || signal?.source === "Emergency" || role === "DA" ? "Farmers" : "Development Agents");
   // In-app = the real notification-bell broadcast. Checked by default; SMS/Telegram are disabled stubs.
   const [inApp, setInApp] = useState(true);
@@ -57,7 +71,8 @@ export function BroadcastWorkspace() {
   const [evidence, setEvidence] = useState<File[]>([]);
 
   const toDAs = group === "Development Agents";
-  const woreda = geo.woreda.selected;
+  // A Supervisor's Woreda is fixed: their own code is what goes out. Everyone else picks Region, Zone, Woreda.
+  const woreda = isSupervisor ? (supervisorWoreda ? { code: supervisorWoreda, name: supervisorWoredaName ?? supervisorWoreda } : null) : geo.woreda.selected;
   const woredaLabel = woreda ? `${woreda.name} Woreda` : "the selected Woreda";
 
   const dispatch = async () => {
@@ -96,16 +111,24 @@ export function BroadcastWorkspace() {
 
       <Card className="shadow-card">
         <h2 className="text-[15px] font-semibold text-ink">Compose</h2>
-        {!canDispatch && <p className="mt-1 text-[12.5px] text-muted">Only a Development Agent, Communications Officer or Administrator can dispatch. You can preview.</p>}
+        {!canDispatch && <p className="mt-1 text-[12.5px] text-muted">Only a Development Agent, Supervisor, Communications Officer or Administrator can dispatch. You can preview.</p>}
         <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_280px]">
           <div className="flex flex-col gap-4">
             <FormField label="Signal source" htmlFor="bc-source" required hint="Weather appears only as a source feeding this engine.">
               <Select id="bc-source" value={source} onChange={(e) => setSource(e.target.value as SignalSource)}>{SOURCES.map((s) => <option key={s}>{s}</option>)}</Select>
             </FormField>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <GeoSelect field="region" label="Region" level={geo.region} onSelect={(code) => select("region", code)} onRetry={() => retry("region")} />
-              <GeoSelect field="zone" label="Zone" level={geo.zone} onSelect={(code) => select("zone", code)} onRetry={() => retry("zone")} />
-              <GeoSelect field="woreda" label="Woreda" level={geo.woreda} hint="Broadcasts reach a whole Woreda." onSelect={(code) => select("woreda", code)} onRetry={() => retry("woreda")} />
+              {isSupervisor ? (
+                <FormField label="Woreda" htmlFor="bc-woreda" required hint={supervisorWoreda ? "Supervisors broadcast to their own Woreda." : "No Woreda on your account yet."}>
+                  <Input id="bc-woreda" value={woreda?.name ?? ""} readOnly disabled />
+                </FormField>
+              ) : (
+                <>
+                  <GeoSelect field="region" label="Region" level={geo.region} onSelect={(code) => select("region", code)} onRetry={() => retry("region")} />
+                  <GeoSelect field="zone" label="Zone" level={geo.zone} onSelect={(code) => select("zone", code)} onRetry={() => retry("zone")} />
+                  <GeoSelect field="woreda" label="Woreda" level={geo.woreda} hint="Broadcasts reach a whole Woreda." onSelect={(code) => select("woreda", code)} onRetry={() => retry("woreda")} />
+                </>
+              )}
               <FormField label="Recipients" htmlFor="bc-group" required hint={`${toDAs ? "Development Agents" : "Farmers"} in ${woredaLabel}${toDAs ? "" : ". In-app delivery reaches Development Agents only."}`}>
                 <Select id="bc-group" value={group} onChange={(e) => setGroup(e.target.value as RecipientGroup)}>{RECIPIENT_GROUPS.map((g) => <option key={g} value={g}>{g === "Farmers" ? "All farmers" : "All Development Agents"}</option>)}</Select>
               </FormField>

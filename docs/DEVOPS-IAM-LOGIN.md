@@ -89,6 +89,7 @@ The `Dockerfile` now also sets `API_BASE_URL` in the runtime stage, from the sam
 |---|---|---|
 | `API_BASE_URL` | `https://da-backend-development.oanstaging.com` | Required. DA Services backend, including oan_auth_service (`/api/v1/auth/*`). |
 | `CROP_SOWN_BASE_URL` | *(unset)* | Optional. Only if Crop Sown routes must go to a different backend. |
+| `API_PATH_PREFIX` | `/api` | What replaces `/api` on `API_BASE_URL`. `""` behind the APISIX gateway (oan_dev: `https://da-services.development.oanstaging.com`), which publishes the API as `/v1/...`. |
 
 `IAM_BASE_URL` is no longer used and can be removed.
 

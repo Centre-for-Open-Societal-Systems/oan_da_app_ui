@@ -503,12 +503,17 @@ export function livestockPrefill(overview: LivestockOverview): { name: string; v
   const name = overview.holdings.map((h) => str(h.holding.farmer_name)).find(Boolean) ?? "";
   const pick = (keys: string[]): LivestockRow => Object.fromEntries(keys.flatMap((k) => (str(newest[k]) ? [[k, str(newest[k])]] : [])));
   const fayda = str(newest.fayda_id) || str(newest.fayda_fin) || str(newest.fayda_fan_id);
+  // Place names from the holding's columns, else its geo chain: a submission not yet approved has only the chain.
+  const places = Object.fromEntries(["region", "zone", "woreda", "kebele"].flatMap((level) => {
+    const place = placeName(newest, level);
+    return place && place !== "—" ? [[level, place]] : [];
+  }));
   return {
     name,
     values: {
       livestock_farmer_lookup: [fayda ? { fayda_id: fayda } : {}],
       livestock_survey_personnel_section_02: [pick(["surveyor_name", "surveyor_mobile_number", "supervisor_name", "supervisor_mobile_number"])],
-      livestock_livestock_location_section_03: [pick(["region", "zone", "woreda", "kebele", "latitude", "longitude"])],
+      livestock_livestock_location_section_03: [{ ...places, ...pick(["latitude", "longitude"]) }],
     },
   };
 }

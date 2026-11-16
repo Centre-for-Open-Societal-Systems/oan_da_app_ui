@@ -75,7 +75,7 @@ describe("pageTitleFor", () => {
   it.each([
     ["/dashboard", "Dashboard"],
     ["/farmers", "My Farmers"],
-    ["/farmers/new", "Register Farmer"],
+    ["/farmers/new", "Farmer Registration"],
     ["/farmers/f-1", "Farmer Profile"],
     ["/farmers/f-1/services", "Farmer Services"],
     ["/visits/v-1/outcome", "Visit Outcome"],
@@ -88,6 +88,8 @@ describe("pageTitleFor", () => {
     ["/admin/users", "Users & Roles"],
     ["/my-teams", "My Teams"],
     ["/performance/teams", "My Teams"],
+    ["/notifications", "Notifications"],
+    ["/404-error", "Page not found"],
     ["/nowhere", "Dashboard"],
   ])("%s → %s", (path, title) => {
     expect(pageTitleFor(path)).toBe(title);

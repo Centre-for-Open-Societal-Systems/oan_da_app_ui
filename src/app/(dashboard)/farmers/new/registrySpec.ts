@@ -30,9 +30,10 @@ export const OPTION_LISTS = {
   marital_status: ["marital_status"],
   education_level: ["education_level"],
   income_sources: ["income_sources", "income_source"],
-  relationship: ["relationship"],
+  // The registry names these lists relationship_to_the_head and commodity.
+  relationship: ["relationship", "relationship_to_the_head"],
   ownership: ["ownership", "land_ownership_type"],
-  crop: ["crop", "crops", "crop_name"],
+  crop: ["crop", "crops", "crop_name", "commodity"],
   season: ["season", "crop_season"],
   animal: ["animal", "livestock_type"],
   livestock_system: ["system", "livestock_system"],

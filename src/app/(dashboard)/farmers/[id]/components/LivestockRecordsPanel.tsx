@@ -15,7 +15,7 @@ export function LivestockRecordsPanel({ overview, error, farmer }: { overview: L
     return (
       <div className="flex flex-col gap-4">
         <Banner tone="info" title="No livestock on record">
-          The registry returned no livestock submissions or records for {farmer.regId ?? farmer.id}. A submitted livestock report shows here.
+          The registry returned no livestock submissions or records for {farmer.regId ?? farmer.id}. A submitted Livestock Survey shows here.
         </Banner>
         {/* The Livestock collection: calls are forwarded to the staff host and need the SSO token and its CSRF value. */}
         {!signedInWithSso && (

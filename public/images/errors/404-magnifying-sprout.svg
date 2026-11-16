@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 144 144" fill="none">
+  <!-- Soft mint circular backdrop -->
+  <circle cx="72" cy="72" r="56" fill="#ECFDF3" />
+  <circle cx="72" cy="72" r="44" fill="#DCFCE7" fill-opacity="0.55" />
+
+  <!-- Decorative sparkles and dots -->
+  <circle cx="28" cy="46" r="3.5" fill="#99E8B5" />
+  <circle cx="117" cy="42" r="3" fill="#99E8B5" />
+  <circle cx="34" cy="108" r="2.5" fill="#99E8B5" />
+  <path d="M22 72h8M26 68v8" stroke="#16A34A" stroke-width="2" stroke-linecap="round" />
+  <path d="M114 72h8M118 68v8" stroke="#16A34A" stroke-width="2" stroke-linecap="round" />
+
+  <!-- Magnifying glass -->
+  <circle cx="66" cy="66" r="24" fill="#FFFFFF" stroke="#0B8535" stroke-width="5" />
+  <path d="M84 84l17 17" stroke="#0B8535" stroke-width="6.5" stroke-linecap="round" />
+
+  <!-- Sprout inside lens -->
+  <path d="M66 78V62" stroke="#16A34A" stroke-width="2.6" stroke-linecap="round" />
+  <path d="M66 66c0-5.2 3.8-8.2 9.2-8.2 0 5.2-3.8 8.2-9.2 8.2z" stroke="#16A34A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="#DCFCE7" />
+  <path d="M66 69.5c0-4.4-3.3-7-8-7 0 4.4 3.3 7 8 7z" stroke="#16A34A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="#DCFCE7" />
+</svg>
+

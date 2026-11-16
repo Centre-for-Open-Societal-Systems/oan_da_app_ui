@@ -24,8 +24,47 @@ export interface VisitPreset {
 }
 export const QUICK_FILTERS = ["Registered", "Input voucher redeemed this season"];
 
-/** Outcome shown in place of the form after Plan/Schedule (sent to the visits API) or Save as draft (kept on this device). */
-export type PlanVisitResult = { kind: "planned" | "draft"; farmer?: string; when: string; visitId?: string };
+/**
+ * Outcome shown in place of the form after Plan/Schedule (sent to the visits API) or Save as draft (kept on this device).
+ * `farmer` and `visitId` list every farmer / visit of a batch; `count` is the number of farmers.
+ */
+export type PlanVisitResult = { kind: "planned" | "draft"; farmer?: string; when: string; visitId?: string; count?: number };
+
+/** A batch visit plans one visit per farmer, for at most this many farmers at once. */
+export const MAX_BATCH_FARMERS = 5;
+
+/** Adds the farmer, or removes them when already picked; a full batch stays as it is. */
+export function toggleFarmer(picked: Farmer[], farmer: Farmer, max = MAX_BATCH_FARMERS): Farmer[] {
+  if (picked.some((f) => f.id === farmer.id)) return picked.filter((f) => f.id !== farmer.id);
+  return picked.length >= max ? picked : [...picked, farmer];
+}
+
+/** "A", "A and B", "A, B and C". */
+export function joinNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+export interface BatchOutcome<T> {
+  planned: { farmer: Farmer; visit: T }[];
+  failed: { farmer: Farmer; reason: string }[];
+}
+
+/**
+ * Plans one visit per farmer, one call after the other, and keeps going past a failure so the caller can report each
+ * farmer: the backend plans a single farmer per call.
+ */
+export async function planEach<T>(farmers: Farmer[], plan: (farmer: Farmer) => Promise<T>): Promise<BatchOutcome<T>> {
+  const outcome: BatchOutcome<T> = { planned: [], failed: [] };
+  for (const farmer of farmers) {
+    try {
+      outcome.planned.push({ farmer, visit: await plan(farmer) });
+    } catch (err) {
+      outcome.failed.push({ farmer, reason: err instanceof Error ? err.message : "Could not plan the visit." });
+    }
+  }
+  return outcome;
+}
 
 /** "45 min" → 45. */
 export const durationMinutes = (label: string) => parseInt(label, 10) || 45;
