@@ -35,6 +35,8 @@ export interface VisitQuery {
   to?: string;
   /** Planned / Confirmed / Completed / Missed or a physical status. */
   status?: string;
+  /** Only this farmer's visits (the profile's Visit history). */
+  farmer_id?: string;
   /** Only this DA's visits. Without it a DA gets every visit in their assigned Kebeles. */
   da_id?: string;
   limit?: number;

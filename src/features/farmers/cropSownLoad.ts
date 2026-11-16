@@ -85,6 +85,9 @@ export function registerSections(tab: ApiRegisterTab, intake: ApiIntakeForm | nu
 /** The register record among a farmer's crop rows (the row with internal_record_id), if any. */
 export const registerRowOf = (crops: ApiFarmerCrop[]): ApiFarmerCrop | undefined => crops.find((c) => !c.submission_id && !!c.internal_record_id);
 
+/** Every register record of the farmer (one per season / crop sown ID), in the order the list gives them. */
+export const registerRowsOf = (crops: ApiFarmerCrop[]): ApiFarmerCrop[] => crops.filter((c) => !c.submission_id && !!c.internal_record_id);
+
 /** The intake submissions in a crops list (the register's own row has no submission), newest first. */
 export function submissionsOf(crops: ApiFarmerCrop[]): ApiFarmerCrop[] {
   const stamp = (c: ApiFarmerCrop) => c.last_updated_at ?? c.first_created_at ?? "";
@@ -140,53 +143,57 @@ export interface LoadCropOptions {
   register?: boolean;
 }
 
+/** The register record's id when `register` is asked for and the list has one. */
+const registerIdOf = (crops: ApiFarmerCrop[], register: boolean) => (register ? registerRowOf(crops)?.internal_record_id : undefined);
+
+/** The sections of one register tab; none when it cannot be read, so the submission can stand in. */
+async function readRegisterTab(farmerCode: string, registerId: string | undefined, tabId: string, intake: ApiIntakeForm | null, fallback: string) {
+  if (!registerId) return [];
+  try {
+    return registerSections(await fetchRegisterTab(farmerCode, registerId, tabId), intake, fallback);
+  } catch {
+    return [];
+  }
+}
+
 /**
- * Reads the farmer's earlier Crop Sown records and turns them into form values. `listed` is the list when the caller
- * already has it (submission and register rows); see LoadCropOptions for the rest.
+ * One stage's values: its intake form, then the register record's tab (with `register`), else the newest submission of
+ * that stage. Empty when the stage has nothing. Lets a view load a stage only when its tab is opened.
  */
-export async function loadCropDetails(farmerCode: string, listed?: ApiFarmerCrop[], { display = false, register = false }: LoadCropOptions = {}): Promise<LoadedCropDetails> {
-  const crops = listed ?? (await listFarmerCrops(farmerCode, "submission"));
-  if (crops.length === 0) return { values: {}, stages: [], total: 0 };
-  const submissions = submissionsOf(crops);
-  const registerId = register ? registerRowOf(crops)?.internal_record_id : undefined;
+export async function loadStageValues(farmerCode: string, crops: ApiFarmerCrop[], form: CropSownForm, { display = false, register = false }: LoadCropOptions = {}): Promise<CropSownValues> {
+  const intake = await loadIntakeForm(form);
+  const fromRegister = await readRegisterTab(farmerCode, registerIdOf(crops, register), REGISTER_TAB_IDS[form], intake, form);
+  const registerValues = fromRegister.length ? stageValues(form, fromRegister, intake, display) : {};
+  if (Object.keys(registerValues).length) return registerValues;
+  // Newest first; the stage's form id tells which submission belongs to which tab.
+  const latest = intake ? submissionsOf(crops).find((c) => c.form_id === intake.form_id) : undefined;
+  if (!latest?.submission_id) return {};
+  try {
+    const detail = (await fetchFarmerCrop(farmerCode, latest.submission_id)) as { sections?: unknown; tabs?: unknown; section_payloads?: unknown };
+    return stageValues(form, sectionRows([detail.sections, detail.tabs, detail.section_payloads]), intake, display);
+  } catch {
+    // One unreadable submission must not hide the rest.
+    return {};
+  }
+}
 
-  /** The sections of one register tab; none when it cannot be read, so the submission can stand in. */
-  const registerTab = async (tabId: string, intake: ApiIntakeForm | null, fallback: string) => {
-    if (!registerId) return [];
-    try {
-      return registerSections(await fetchRegisterTab(farmerCode, registerId, tabId), intake, fallback);
-    } catch {
-      return [];
-    }
-  };
+/** The register record's Production tab sections that hold rows; none without a register record. */
+export async function loadProductionSections(farmerCode: string, crops: ApiFarmerCrop[], registerId = registerIdOf(crops, true)): Promise<{ sectionId: string; rows: Row[] }[]> {
+  const sections = await readRegisterTab(farmerCode, registerId, REGISTER_TAB_IDS.production, null, "Production");
+  return sections.filter((section) => section.rows.length > 0);
+}
 
-  const productionTab = registerTab(REGISTER_TAB_IDS.production, null, "Production");
-  const perStage = await Promise.all(
-    STAGES.map(async (form) => {
-      const intake = await loadIntakeForm(form);
-      const fromRegister = await registerTab(REGISTER_TAB_IDS[form], intake, form);
-      const registerValues = fromRegister.length ? stageValues(form, fromRegister, intake, display) : {};
-      if (Object.keys(registerValues).length) return { form, mine: registerValues };
-      // Newest first; the stage's form id tells which submission belongs to which tab.
-      const latest = intake ? submissions.find((c) => c.form_id === intake.form_id) : undefined;
-      if (!latest?.submission_id) return { form, mine: {} as CropSownValues };
-      try {
-        const detail = (await fetchFarmerCrop(farmerCode, latest.submission_id)) as { sections?: unknown; tabs?: unknown; section_payloads?: unknown };
-        return { form, mine: stageValues(form, sectionRows([detail.sections, detail.tabs, detail.section_payloads]), intake, display) };
-      } catch {
-        // One unreadable submission must not hide the rest.
-        return { form, mine: {} as CropSownValues };
-      }
-    }),
-  );
-
-  // The list's summaries first; what a stage's own sections hold wins. Identity is shared by the four tabs: the first stage
-  // (in stage order) to give a value wins.
+/**
+ * The list's summary values with the loaded stages' values on top; what a stage's own sections hold wins. Identity is
+ * shared by the four tabs: the first stage (in stage order) to give a value wins. Stages not loaded yet are skipped.
+ */
+export function mergeStageValues(crops: ApiFarmerCrop[], perStage: Partial<Record<CropSownForm, CropSownValues>>, display = false): { values: CropSownValues; stages: CropSownForm[] } {
   const values: CropSownValues = (display ? summaryDisplay : summaryValues)(summaryOf(crops));
   const stages: CropSownForm[] = [];
   const taken = new Set<string>();
-  for (const { form, mine } of perStage) {
-    if (Object.keys(mine).length === 0) continue;
+  for (const form of STAGES) {
+    const mine = perStage[form];
+    if (!mine || Object.keys(mine).length === 0) continue;
     stages.push(form);
     for (const [key, value] of Object.entries(mine)) {
       const shared = key.startsWith("identity.");
@@ -195,6 +202,108 @@ export async function loadCropDetails(farmerCode: string, listed?: ApiFarmerCrop
       values[key] = value;
     }
   }
-  const production = (await productionTab).filter((section) => section.rows.length > 0);
-  return { values, stages, total: submissions.length, ...(registerId ? { production } : {}) };
+  return { values, stages };
+}
+
+/**
+ * Reads the farmer's earlier Crop Sown records and turns them into form values. `listed` is the list when the caller
+ * already has it (submission and register rows); see LoadCropOptions for the rest.
+ */
+export async function loadCropDetails(farmerCode: string, listed?: ApiFarmerCrop[], options: LoadCropOptions = {}): Promise<LoadedCropDetails> {
+  const crops = listed ?? (await listFarmerCrops(farmerCode, "submission"));
+  if (crops.length === 0) return { values: {}, stages: [], total: 0 };
+  const production = registerIdOf(crops, !!options.register) ? loadProductionSections(farmerCode, crops) : undefined;
+  const loaded = await Promise.all(STAGES.map(async (form) => [form, await loadStageValues(farmerCode, crops, form, options)] as const));
+  const { values, stages } = mergeStageValues(crops, Object.fromEntries(loaded), !!options.display);
+  return { values, stages, total: submissionsOf(crops).length, ...(production ? { production: await production } : {}) };
+}
+
+/** One section of a stage as its intake form lays it out, with the farmer's values. A list section has one entry per row. */
+export interface IntakeDisplaySection {
+  sectionId: string;
+  title: string;
+  isList: boolean;
+  /** The section's fields as the intake form names them (a list section's table columns). */
+  columns: { key: string; label: string }[];
+  rows: { key: string; label: string; value: string }[][];
+}
+
+export interface StageDisplay {
+  /** The intake form's sections in its order; empty when the intake form could not be read. */
+  sections: IntakeDisplaySection[];
+  /** Whether any field holds a value (else the tab shows "nothing submitted"). */
+  hasData: boolean;
+  /** The same records as form values, for the identity and summary the other tabs share. */
+  values: CropSownValues;
+}
+
+const EMPTY = "—";
+const humanizeKey = (key: string) => key.replace(/^(cs_|cropsown_)+/, "").replace(/_section_\d+$/, "").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+
+/** The section title: the portal's own for a section it knows, else the intake form's mnemonic made readable. */
+function sectionTitle(form: CropSownForm, section: ApiIntakeForm["sections"][number]): string {
+  const plan = STAGE_PLANS[form];
+  const uiId = section.section_id === "crop_farmer_lookup" || section.section_id === plan?.season ? "identity" : plan?.sections.find((s) => s.sectionId === section.section_id)?.ui[0];
+  const ui = uiId && CROP_SOWN_FORM.flatMap((t) => t.sections).find((s) => s.id === uiId);
+  return ui ? ui.title : humanizeKey(section.section_mnemonic || section.section_id);
+}
+
+/** A stored value as the intake form shows it: an option's label for its code, Yes/No for booleans, lists joined. */
+export function intakeDisplayValue(raw: unknown, field: ApiIntakeField): string {
+  if (raw === null || raw === undefined || raw === "") return EMPTY;
+  if (Array.isArray(raw)) return raw.map((one) => intakeDisplayValue(one, field)).filter((v) => v !== EMPTY).join(", ") || EMPTY;
+  if (typeof raw === "boolean") return raw ? "Yes" : "No";
+  if (typeof raw === "object") {
+    const o = raw as Record<string, unknown>;
+    const named = o.value_display ?? o.label ?? o.name;
+    return typeof named === "string" && named ? named : Object.values(o).filter((v) => v !== null && v !== "" && typeof v !== "object").join(", ") || EMPTY;
+  }
+  // Static options (label/value) and catalog choices (value_display/value_id) both name the code they store.
+  const choices = (field as { choices?: unknown }).choices;
+  const all = [...(field.options ?? []), ...(Array.isArray(choices) ? choices : [])] as Parameters<typeof optionId>[0][];
+  const match = all.find((o) => optionId(o).toLowerCase() === String(raw).toLowerCase());
+  return match ? optionLabel(match) : String(raw);
+}
+
+/**
+ * One stage laid out by its intake form (GET /crop-sown/intake-form?form=): every section and field label as the form
+ * names them, filled from the register record's tab (with `register`), else from the newest submission of the stage.
+ */
+export async function loadStageDisplay(farmerCode: string, crops: ApiFarmerCrop[], form: CropSownForm, { registerId = registerIdOf(crops, true) }: { registerId?: string } = {}): Promise<StageDisplay> {
+  const intake = await loadIntakeForm(form);
+  const hasRows = (sections: { rows: Row[] }[]) => sections.some((s) => s.rows.some((r) => Object.values(r).some((v) => v !== null && v !== "")));
+  let records = await readRegisterTab(farmerCode, registerId, REGISTER_TAB_IDS[form], intake, form);
+  // An empty register tab falls back to the stage's newest submission, unless the farmer has several register records:
+  // then the chosen one shows only its own data, as another season's submission would be misleading.
+  if (!hasRows(records) && !(registerId && registerRowsOf(crops).length > 1)) {
+    const latest = intake ? submissionsOf(crops).find((c) => c.form_id === intake.form_id) : undefined;
+    records = [];
+    if (latest?.submission_id) {
+      try {
+        const detail = (await fetchFarmerCrop(farmerCode, latest.submission_id)) as { sections?: unknown; tabs?: unknown; section_payloads?: unknown };
+        records = sectionRows([detail.sections, detail.tabs, detail.section_payloads]);
+      } catch {
+        // One unreadable submission must not hide the rest.
+      }
+    }
+  }
+
+  // The farmer lookup, season and location sections repeat on every form; the "Crop Sown" tab shows them once, so a
+  // stage tab shows only its own sections (Planning: crop planning and cluster details).
+  const shared = new Set(["crop_farmer_lookup", "cropsown_cropsown_location_section_03", STAGE_PLANS[form]?.season]);
+  const sections: IntakeDisplaySection[] = (intake?.sections ?? []).filter((section) => !shared.has(section.section_id)).map((section) => {
+    const found = records.find((r) => r.sectionId === section.section_id)?.rows ?? [];
+    // A list keeps only records that hold something: an empty row would show as a second "Record".
+    const filled = found.filter((r) => Object.values(r).some((v) => v !== null && v !== "" && !(Array.isArray(v) && v.length === 0)));
+    const rows = section.is_list ? filled : [found[0] ?? {}];
+    return {
+      sectionId: section.section_id,
+      title: sectionTitle(form, section),
+      isList: section.is_list,
+      columns: section.fields.map((f) => ({ key: f.field_name, label: f.label || humanizeKey(f.field_name) })),
+      rows: rows.map((row) => section.fields.map((f) => ({ key: f.field_name, label: f.label || humanizeKey(f.field_name), value: intakeDisplayValue(row[f.field_name], f) }))),
+    };
+  });
+  const hasData = sections.some((s) => s.rows.some((row) => row.some((f) => f.value !== EMPTY)));
+  return { sections, hasData, values: records.length ? stageValues(form, records, intake, true) : {} };
 }
