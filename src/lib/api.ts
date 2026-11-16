@@ -11,6 +11,8 @@ export class ApiError extends Error {
     readonly details?: Record<string, string>,
     /** The error `code` the backend sent, e.g. VALIDATION_ERROR or PERMISSION_DENIED. */
     readonly code?: string,
+    /** The parsed error body as sent, for routes that put a result in it (e.g. a batch's 400 with `data.failed`). */
+    readonly body?: unknown,
   ) {
     super(message);
     this.name = "ApiError";
@@ -59,7 +61,7 @@ export async function apiRequest<T>(path: string, { method = "GET", body, access
   }
 
   const data = await res.json().catch(() => null);
-  if (!res.ok) throw new ApiError(errorMessage(data) ?? `Request failed (${res.status}).`, res.status, errorDetails(data), errorCode(data));
+  if (!res.ok) throw new ApiError(errorMessage(data) ?? `Request failed (${res.status}).`, res.status, errorDetails(data), errorCode(data), data);
   return data as T;
 }
 

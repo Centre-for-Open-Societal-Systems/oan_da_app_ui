@@ -1,5 +1,6 @@
 import { FARMERS } from "../data";
 import type { Farmer } from "../types";
+import { planVisit, planVisitsBatch, type BatchVisitItem, type PlannedVisit } from "../visitsApi";
 
 // "Advisory" visits capture the farmer's questions and the advice given (see AdvisoryQaFields).
 export const ADVISORY_VISIT = "Advisory";
@@ -50,18 +51,68 @@ export interface BatchOutcome<T> {
   failed: { farmer: Farmer; reason: string }[];
 }
 
+/** One farmer on the batch result: planned (visitId, when) or failed (reason). */
+export interface BatchRow {
+  farmer: Farmer;
+  visitId?: string;
+  /** Human-readable date/time the visit was planned for. */
+  when?: string;
+  /** The backend's error; set only when the visit was not planned. */
+  reason?: string;
+  /** What was sent for a failed farmer: edited on the result and sent again by Resubmit / Retry failed. */
+  request?: BatchVisitItem;
+}
+
 /**
- * Plans one visit per farmer, one call after the other, and keeps going past a failure so the caller can report each
- * farmer: the backend plans a single farmer per call.
+ * The batch result after a (re)try: a farmer's latest outcome replaces their earlier row, in the original order;
+ * farmers new to the batch are added at the end.
  */
-export async function planEach<T>(farmers: Farmer[], plan: (farmer: Farmer) => Promise<T>): Promise<BatchOutcome<T>> {
-  const outcome: BatchOutcome<T> = { planned: [], failed: [] };
-  for (const farmer of farmers) {
+export function mergeBatchRows(prev: BatchRow[], planned: BatchRow[], failed: BatchRow[]): BatchRow[] {
+  const latest = new Map<string, BatchRow>([...planned, ...failed].map((r) => [r.farmer.id, r]));
+  const rows = prev.map((r) => latest.get(r.farmer.id) ?? r);
+  const seen = new Set(prev.map((r) => r.farmer.id));
+  return [...rows, ...[...latest.values()].filter((r) => !seen.has(r.farmer.id))];
+}
+
+const PLAN_FAILED = "Could not plan the visit.";
+const reasonOf = (err: unknown) => (err instanceof Error && err.message ? err.message : PLAN_FAILED);
+
+/**
+ * Plans the farmers' visits on POST /visits: one farmer sends the single-visit body, 2-5 farmers one batch body
+ * (`visits: [...]`, envelope `user`). Each farmer ends up planned or failed with the backend's reason.
+ */
+export async function planFarmers(
+  farmers: Farmer[],
+  /** Whose plan the visits go to: the DA's Frappe User, plus their DA-ID when an officer plans for them. */
+  { user, daId }: { user: string; daId?: string },
+  itemFor: (farmer: Farmer) => BatchVisitItem,
+): Promise<BatchOutcome<PlannedVisit>> {
+  const owner = { user, ...(daId && { da_id: daId }) };
+  if (farmers.length === 1) {
+    const [farmer] = farmers;
     try {
-      outcome.planned.push({ farmer, visit: await plan(farmer) });
+      return { planned: [{ farmer, visit: await planVisit({ ...itemFor(farmer), ...owner }) }], failed: [] };
     } catch (err) {
-      outcome.failed.push({ farmer, reason: err instanceof Error ? err.message : "Could not plan the visit." });
+      return { planned: [], failed: [{ farmer, reason: reasonOf(err) }] };
     }
+  }
+
+  const items = farmers.map((farmer) => ({ farmer, body: itemFor(farmer) }));
+  let result;
+  try {
+    result = await planVisitsBatch({ ...owner, visits: items.map((i) => i.body) });
+  } catch (err) {
+    // 400: none of the visits was created.
+    return { planned: [], failed: farmers.map((farmer) => ({ farmer, reason: reasonOf(err) })) };
+  }
+
+  // Both lists carry the farmer_id sent (the failures echo the item received).
+  const failedReason = new Map(result.failed.map((f) => [f.farmer_id, f.reason]));
+  const outcome: BatchOutcome<PlannedVisit> = { planned: [], failed: [] };
+  for (const { farmer, body } of items) {
+    const visit = result.created.find((v) => v.farmer_id === body.farmer_id);
+    if (visit) outcome.planned.push({ farmer, visit });
+    else outcome.failed.push({ farmer, reason: failedReason.get(body.farmer_id) || PLAN_FAILED });
   }
   return outcome;
 }
@@ -98,11 +149,13 @@ const isSampleFarmer = (farmer: Farmer) => FARMERS.some((f) => f.id === farmer.i
 export const registryCode = (farmer: Farmer) =>
   isSampleFarmer(farmer) ? `FR-${(88000 + farmer.name.length * 31 + farmer.kebele.length * 7).toString().slice(0, 5)}` : farmer.regId ?? farmer.id;
 
-/** Human-readable date/time from the (uncontrolled) date and time inputs. */
-export const readWhen = () => {
-  const date = (document.getElementById("visit-date") as HTMLInputElement | null)?.value;
-  const time = (document.getElementById("visit-time") as HTMLInputElement | null)?.value;
+/** "2026-11-20", "10:00" → "20 Nov 2026 at 10:00". */
+export function formatWhen(date: string | undefined, time: string | undefined) {
   if (!date) return "the chosen date";
   const label = new Date(`${date}T00:00:00`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
   return time ? `${label} at ${time}` : label;
-};
+}
+
+/** Human-readable date/time from the (uncontrolled) date and time inputs. */
+export const readWhen = () =>
+  formatWhen((document.getElementById("visit-date") as HTMLInputElement | null)?.value, (document.getElementById("visit-time") as HTMLInputElement | null)?.value);

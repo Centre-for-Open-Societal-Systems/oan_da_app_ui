@@ -4,6 +4,9 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Banner } from "@/components/ui/Banner";
 import type { Farmer } from "../types";
+import { cn } from "@/lib/utils";
+import { DaPicker } from "./DaPicker";
+import { PlanVisitBatchResult } from "./PlanVisitBatchResult";
 import { FarmerPicker } from "./FarmerPicker";
 import { FarmerSearch } from "./FarmerSearch";
 import { ADVISORY_VISIT, FORM_ID, type VisitPreset } from "./planVisit";
@@ -36,6 +39,44 @@ export function PlanVisitModal({ farmer, farmers, isOpen, onClose, mode = "plan"
   const title = isSchedule ? "Schedule Visit" : "Plan a Visit";
   const subtitle = isSchedule ? "Schedule a field visit and notify the farmer" : "Plan a field visit and notify the farmer";
   const primaryLabel = isSchedule ? "Schedule" : "Plan visit";
+  const showBatch = v.view === "batch" && !!v.batch;
+  const batchFailed = v.batch?.filter((r) => r.reason) ?? [];
+
+  const footer = v.result ? (
+    <Button type="button" variant="brand" onClick={onClose}>
+      Done
+    </Button>
+  ) : showBatch ? (
+    batchFailed.length === 0 ? (
+      <Button type="button" variant="brand" onClick={onClose}>
+        Done
+      </Button>
+    ) : (
+      <>
+        <Button type="button" variant="outline" className="mr-auto" onClick={v.discardFailed} disabled={v.submitting}>
+          Discard failed
+        </Button>
+        <Button type="button" variant="brand" className="gap-2" onClick={() => void v.retryFailed()} disabled={v.submitting}>
+          {v.submitting ? "Retrying…" : `Retry failed (${batchFailed.length})`}
+        </Button>
+      </>
+    )
+  ) : (
+    <>
+      <Button type="button" variant="outline" className="mr-auto" onClick={onClose}>
+        Cancel
+      </Button>
+      <Button type="button" variant="outline" onClick={() => v.finish("draft")} disabled={v.submitting}>
+        Save as draft
+      </Button>
+      <Button type="submit" form={FORM_ID} variant="brand" className="gap-2" disabled={v.submitting}>
+        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M5 13l4 4L19 7" />
+        </svg>
+        {v.submitting ? "Saving…" : v.selected.length > 1 ? `${primaryLabel} (${v.selected.length} farmers)` : primaryLabel}
+      </Button>
+    </>
+  );
 
   return (
     <Modal
@@ -50,41 +91,25 @@ export function PlanVisitModal({ farmer, farmers, isOpen, onClose, mode = "plan"
         </span>
       }
       bodyClassName="px-4 py-4 sm:px-6"
-      footer={
-        v.result ? (
-          <Button type="button" variant="brand" onClick={onClose}>
-            Done
-          </Button>
-        ) : (
-        <>
-          <Button type="button" variant="outline" className="mr-auto" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="button" variant="outline" onClick={() => v.finish("draft")} disabled={v.submitting}>
-            Save as draft
-          </Button>
-          <Button type="submit" form={FORM_ID} variant="brand" className="gap-2" disabled={v.submitting}>
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M5 13l4 4L19 7" />
-            </svg>
-            {v.submitting ? "Saving…" : v.selected.length > 1 ? `${primaryLabel} (${v.selected.length} farmers)` : primaryLabel}
-          </Button>
-        </>
-        )
-      }
+      footer={footer}
     >
-      {v.result ? (
+      {v.result && (
         <PlanVisitSuccess result={v.result} visitType={v.visitType} isSchedule={isSchedule} questionCount={v.visitType === ADVISORY_VISIT ? v.advisoryQa.filter((qa) => qa.question.trim()).length : 0} />
-      ) : (
+      )}
+      {showBatch && !v.result && (
+        <PlanVisitBatchResult rows={v.batch!} onDiscard={v.discard} onResubmit={v.resubmit} submitting={v.submitting} />
+      )}
+      {/* Kept mounted (hidden) under a result so "Change details" / "Retry failed" reuse the values entered. */}
       <form
         id={FORM_ID}
-        className="flex flex-col gap-4"
+        className={cn("flex flex-col gap-4", (v.result || showBatch) && "hidden")}
         onSubmit={(e) => {
           e.preventDefault();
           v.finish("planned");
         }}
       >
         {v.error && <Banner tone="error" title="Visit not saved">{v.error}</Banner>}
+        {v.isOfficer && <DaPicker agents={v.agents} error={v.agentsError} value={v.assignee} onChange={v.setAssignee} />}
         <FarmerSearch query={v.query} onQueryChange={v.changeQuery} onSearch={v.runSearch} />
         <FarmerPicker
           selected={v.selected}
@@ -101,7 +126,6 @@ export function PlanVisitModal({ farmer, farmers, isOpen, onClose, mode = "plan"
         {v.visitType === ADVISORY_VISIT && <AdvisoryQaFields items={v.advisoryQa} onChange={v.setAdvisoryQa} />}
         <VisitDetailsFields selected={v.selected} preset={preset} isSchedule={isSchedule} />
       </form>
-      )}
     </Modal>
   );
 }

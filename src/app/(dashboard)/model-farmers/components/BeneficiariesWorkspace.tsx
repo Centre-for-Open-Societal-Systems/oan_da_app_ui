@@ -41,7 +41,7 @@ const SEGMENT_ICONS: Record<Segment["icon"], ReactNode> = {
 
 const STATUSES = ["Enrolled", "Pending verification"];
 
-const SEARCH_PLACEHOLDER = searchPlaceholder(["Farmer", "Kebele", "Primary crop", "Primary livestock", "Segment", "Status", "Linked"]);
+const SEARCH_PLACEHOLDER = searchPlaceholder(["Farmer", "Kebele", "Primary crop", "Primary livestock", "Package", "Status", "Linked"]);
 
 const optionsOf = (values: string[], order?: readonly string[], label?: (v: string) => string): FilterOption[] =>
   (order ?? [...new Set(values)]).map((value) => ({ value, label: label ? label(value) : value, count: values.filter((v) => v === value).length }));
@@ -121,7 +121,7 @@ export function BeneficiariesWorkspace() {
     { key: "kebele", label: "Kebele", allLabel: "All kebeles", placeholder: "All Kebeles", options: kebeleOptions },
     { key: "crop", label: "Primary crop", allLabel: "All crops", placeholder: "All Crops", options: cropOptions },
     { key: "livestock", label: "Primary livestock", allLabel: "All livestock", placeholder: "All Livestock", options: livestockOptions },
-    { key: "segment", label: "Segment", allLabel: "All segments", placeholder: "All Segments", options: segmentOptions },
+    { key: "segment", label: "Package", allLabel: "All packages", placeholder: "All Packages", options: segmentOptions },
     { key: "status", label: "Status", allLabel: "All Status", placeholder: "All Status", options: statusOptions },
   ];
 
@@ -166,8 +166,8 @@ export function BeneficiariesWorkspace() {
     setAddOpen(false);
     const { added, skipped } = linkFarmers((farmers ?? []).filter((f) => addFarmers.has(f.id)), addSegment);
     const parts = [
-      added.length > 0 && `${added.length === 1 ? added[0] : `${added.length} farmers`} added to “${segmentName(addSegment)}” — Pending verification against the segment rule. The Farmer Registry record is untouched.`,
-      skipped.length > 0 && `Already in this segment: ${skipped.join(", ")}.`,
+      added.length > 0 && `${added.length === 1 ? added[0] : `${added.length} farmers`} added to “${segmentName(addSegment)}” — Pending verification against the package rule. The Farmer Registry record is untouched.`,
+      skipped.length > 0 && `Already in this package: ${skipped.join(", ")}.`,
     ].filter(Boolean);
     setNotice(parts.join(" "));
   };
@@ -175,7 +175,7 @@ export function BeneficiariesWorkspace() {
   const remove = () => {
     if (!removing) return;
     removeLink(removing.id);
-    setNotice(`Link removed for ${removing.name}. This only detaches the beneficiary segment — the farmer's master record in the Farmer Registry is never deleted from here.`);
+    setNotice(`Link removed for ${removing.name}. This only detaches the Model Farmer package — the farmer's master record in the Farmer Registry is never deleted from here.`);
     setRemoving(null);
   };
 
@@ -197,7 +197,7 @@ export function BeneficiariesWorkspace() {
     {
       key: "segment",
       align: "center",
-      header: <FilterDropdown label="Segments" allLabel="All segments" options={segmentOptions} selected={filters.segment} onApply={setFilter("segment")} />,
+      header: <FilterDropdown label="Packages" allLabel="All packages" options={segmentOptions} selected={filters.segment} onApply={setFilter("segment")} />,
       cell: (b) => {
         const seg = SEGMENTS.find((x) => x.id === b.segmentId)!;
         return <Pill tone={seg.tone} className="font-semibold">{seg.name}</Pill>;
@@ -226,11 +226,11 @@ export function BeneficiariesWorkspace() {
   return (
     <>
       <PageHeader
-        title="Beneficiaries"
-        description="Rule-based segments that link farmers to schemes. Removing a link never deletes a Farmer Registry record."
+        title="Model Farmers"
+        description="Rule-based packages that link farmers to schemes. Removing a link never deletes a Farmer Registry record."
         actions={
           <Button variant="brand" size="md" className="px-6" onClick={() => { setAddFarmers(new Set()); setFarmerQuery(""); setPickerOpen(false); setAddOpen(true); }}>
-            Add beneficiary
+            Add Model Farmer
           </Button>
         }
       />
@@ -277,15 +277,15 @@ export function BeneficiariesWorkspace() {
       <Card className="overflow-hidden p-0 shadow-card">
         <div className="flex flex-col gap-3 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 className="text-[16px] font-semibold text-ink">{singleSegment ? segmentName(singleSegment) : "All beneficiaries"}</h2>
-            <p className="mt-0.5 text-[12.5px] text-muted">Browse and manage all farmers linked to active segments</p>
+            <h2 className="text-[16px] font-semibold text-ink">{singleSegment ? segmentName(singleSegment) : "All Model Farmers"}</h2>
+            <p className="mt-0.5 text-[12.5px] text-muted">Browse and manage all farmers linked to active packages</p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end">
             <SearchInput value={query} onChange={setQuery} placeholder={SEARCH_PLACEHOLDER} />
             <AdvancedFiltersButton activeCount={activeFilterCount} onClick={() => setIsFiltersOpen(true)} />
           </div>
         </div>
-        <DataTable itemLabel="beneficiaries" columns={columns} rows={visible} rowKey={(b) => b.id} minWidth="1080px" emptyTitle="No beneficiaries match the selected filters" emptyHint="Clear a filter or try a different search." />
+        <DataTable itemLabel="Model Farmers" columns={columns} rows={visible} rowKey={(b) => b.id} minWidth="1080px" emptyTitle="No Model Farmers match the selected filters" emptyHint="Clear a filter or try a different search." />
 
         <AdvancedFiltersDrawer
           isOpen={isFiltersOpen}
@@ -305,7 +305,7 @@ export function BeneficiariesWorkspace() {
         />
       </Card>
 
-      <Modal isOpen={addOpen} onClose={() => setAddOpen(false)} title="Add Beneficiary" subtitle="Link farmers from your list to a segment"
+      <Modal isOpen={addOpen} onClose={() => setAddOpen(false)} title="Add Model Farmer" subtitle="Link farmers from your list to a package"
         footer={<><Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button><Button variant="brand" onClick={add} disabled={addFarmers.size === 0}>{addFarmers.size > 1 ? `Add ${addFarmers.size} farmers` : "Add"}</Button></>}
       >
         <div className="flex flex-col gap-4">
@@ -367,17 +367,17 @@ export function BeneficiariesWorkspace() {
             )}
             </div>
           </FormField>
-          <FormField label="Segment" htmlFor="ben-segment" required hint="Membership is verified against the segment rule before enrolment.">
+          <FormField label="Package" htmlFor="ben-segment" required hint="Membership is verified against the package rule before enrolment.">
             <Select id="ben-segment" value={addSegment} onChange={(e) => setAddSegment(e.target.value)}>{SEGMENTS.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Select>
           </FormField>
         </div>
       </Modal>
 
       {removing && (
-        <Modal isOpen onClose={() => setRemoving(null)} title="Remove Beneficiary Link?" subtitle={removing.name}
+        <Modal isOpen onClose={() => setRemoving(null)} title="Remove Model Farmer Link?" subtitle={removing.name}
           footer={<><Button variant="outline" onClick={() => setRemoving(null)}>Cancel</Button><Button className="bg-danger text-white hover:bg-red-700" onClick={remove}>Remove link</Button></>}
         >
-          <p className="text-[14px] leading-relaxed text-ink-soft">This detaches the farmer from the segment and its scheme. It never deletes the farmer&apos;s master record — that lives in the Farmer Registry.</p>
+          <p className="text-[14px] leading-relaxed text-ink-soft">This detaches the farmer from the package and its scheme. It never deletes the farmer&apos;s master record — that lives in the Farmer Registry.</p>
         </Modal>
       )}
     </>
