@@ -168,14 +168,14 @@ export function NotificationBell() {
         type="button"
         onClick={open}
         aria-label={effectiveUnreadCount > 0 ? `Notifications — ${effectiveUnreadCount} unread` : "Notifications"}
-        className="relative flex h-10 w-10 items-center justify-center rounded-full border border-zinc-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 lg:ml-2"
+        className="relative flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full border border-zinc-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 lg:ml-1"
       >
-        <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+        <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
           <path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9" />
           <path d="M10.3 21a1.94 1.94 0 003.4 0" />
         </svg>
         {effectiveUnreadCount > 0 && (
-          <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-red-600 px-1 text-[10px] font-bold leading-none text-white">
+          <span className="absolute -right-1 -top-1 sm:-right-1.5 sm:-top-1.5 flex h-4 min-w-4 sm:h-5 sm:min-w-5 items-center justify-center rounded-full border-2 border-white bg-red-600 px-0.5 sm:px-1 text-[9px] sm:text-[10px] font-bold leading-none text-white">
             {effectiveUnreadCount > 9 ? "9+" : effectiveUnreadCount}
           </span>
         )}

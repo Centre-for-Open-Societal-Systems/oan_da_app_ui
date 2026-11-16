@@ -23,7 +23,7 @@ export default function DashboardPage() {
       comms={<CommsDashboard />}
       superAdmin={<SuperAdminDashboard />}
       agent={
-        <div className="flex w-full flex-col gap-4">
+        <div className="flex w-full flex-col gap-3 sm:gap-4">
           <AgentOverview />
           <TodayPlanListSection />
           <QuickActionsSection />
