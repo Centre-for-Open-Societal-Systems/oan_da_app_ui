@@ -31,10 +31,17 @@ const IAM_COOKIES = ["X-Access-Token", "X-ID-Token", "X-Session-Id", "X-CSRF-Tok
 
 const apiBase = () => process.env.API_BASE_URL ?? "http://127.0.0.1:8200";
 
+/**
+ * The path on API_BASE_URL for this app's `/api/v1/...`: API_PATH_PREFIX takes the place of `/api`. The default `/api`
+ * suits Frappe itself; the APISIX gateway publishes the API without it (`/v1/...`), so it is set to "" there.
+ */
+const apiPath = (pathname: string) => `${process.env.API_PATH_PREFIX ?? "/api"}${pathname.slice("/api".length)}`;
+
 function targetFor(request: NextRequest): URL {
   const { pathname, search } = request.nextUrl;
-  const base = (CROP_SOWN.test(pathname) ? process.env.CROP_SOWN_BASE_URL : undefined) ?? apiBase();
-  return new URL(`${pathname}${search}`, base);
+  const cropSown = CROP_SOWN.test(pathname) ? process.env.CROP_SOWN_BASE_URL : undefined;
+  if (cropSown) return new URL(`${pathname}${search}`, cropSown);
+  return new URL(`${apiPath(pathname)}${search}`, apiBase());
 }
 
 /** The value of IAM cookie `base`, under its plain name or a login-option prefix. */
@@ -90,7 +97,7 @@ const drain = (res: http.IncomingMessage) => new Promise<Buffer>((resolve) => {
 /** POST /api/v1/auth/refresh for the cookie session: the new access token (or null) and IAM's Set-Cookie headers. */
 async function refreshIam(request: NextRequest, accessToken: string): Promise<{ token: string | null; setCookies: string[] }> {
   const body = Buffer.from(JSON.stringify({ access_token: accessToken }));
-  const up = await send(new URL("/api/v1/auth/refresh", apiBase()), "POST", { "content-type": "application/json", accept: "application/json", cookie: iamCookieHeader(request) }, body);
+  const up = await send(new URL(apiPath("/api/v1/auth/refresh"), apiBase()), "POST", { "content-type": "application/json", accept: "application/json", cookie: iamCookieHeader(request) }, body);
   if (!up) return { token: null, setCookies: [] };
   await drain(up.res);
   const ok = (up.res.statusCode ?? 0) < 300;

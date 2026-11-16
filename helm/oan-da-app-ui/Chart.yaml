@@ -1,0 +1,23 @@
+apiVersion: v2
+name: oan-da-app-ui
+description: OAN DA app (registry portal) Next.js UI; deploys the OAN ui-service chart with the DA defaults.
+type: application
+version: 0.0.1
+appVersion: latest
+keywords:
+- oan
+- openagrinet
+- nextjs
+- da
+home: https://github.com/Centre-for-Open-Societal-Systems/oan_da_app_ui
+sources:
+- https://github.com/Centre-for-Open-Societal-Systems/oan_da_app_ui
+maintainers:
+- name: OpenAgriNet (OAN)
+  url: https://github.com/Centre-for-Open-Societal-Systems/oan-helm
+dependencies:
+- name: ui-service
+  alias: ui
+  version: 0.1.0
+annotations:
+  oan.org/owner: OpenAgriNet (OAN)

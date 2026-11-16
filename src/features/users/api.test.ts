@@ -54,6 +54,14 @@ describe("createRbacAssignment", () => {
     expect(sentBody(0)).toEqual({ user: "abc@id", role: "Development Agent", da_id: "DA-000003", region_scope: "Oromia", woreda_scope: "Bako Tibe", effective_from: "2026-10-15" });
   });
 
+  it("sends the Zone code with the Woreda", async () => {
+    fetchMock.mockResolvedValueOnce(json(201, { data: { name: "DA-RBAC-3" } }));
+
+    await createRbacAssignment("abc@id", { ...base, role: "Supervisor", regionScope: "ET12", zoneScope: "ET1202", woredaScope: "ET120205" });
+
+    expect(sentBody(0)).toEqual({ user: "abc@id", role: "Supervisor", region_scope: "ET12", zone_scope: "ET1202", woreda_scope: "ET120205", effective_from: "2026-10-15" });
+  });
+
   it("leaves out DA-ID and woreda for a region-wide Executive", async () => {
     fetchMock.mockResolvedValueOnce(json(201, { data: { name: "DA-RBAC-2" } }));
 

@@ -241,7 +241,6 @@ export function GrievancesTable() {
           key={uploading.ticketId}
           ticketId={uploading.ticketId}
           onClose={() => setUploading(null)}
-          // DUMMY until the backend releases the evidence-upload API: records the document in this browser only.
           onUpload={async (ticketId, file) => {
             await uploadEvidenceDocument(ticketId, file);
           }}

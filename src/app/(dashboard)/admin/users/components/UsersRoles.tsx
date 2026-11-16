@@ -33,6 +33,7 @@ interface RbacAssignment {
   daId: string;
   active: boolean;
   regionScope: string;
+  zoneScope?: string;
   woredaScope: string;
   effectiveFrom: string;
   effectiveTo: string;
@@ -82,6 +83,7 @@ function toRow(r: RbacAssignmentRecord): RbacAssignment | null {
     daId: r.da_id ?? "",
     active: !!r.active,
     regionScope: r.region_scope ?? "",
+    zoneScope: r.zone_scope ?? "",
     woredaScope: r.woreda_scope ?? "",
     effectiveFrom: formatIso(r.effective_from),
     effectiveTo: formatIso(r.effective_to),
@@ -176,6 +178,7 @@ export function UsersRoles() {
       role,
       daId: draft.daId,
       regionScope: draft.regionScope,
+      zoneScope: draft.zoneScope || undefined,
       // Region-wide roles carry no Woreda (the form gives "").
       woredaScope: draft.woredaScope || undefined,
       effectiveFrom: parseDisplayDate(draft.effectiveFrom),
@@ -247,6 +250,7 @@ export function UsersRoles() {
       try {
         let record = await updateRbacAssignment(editing.assignmentId, {
           ...(values.regionScope && { region_scope: values.regionScope }),
+          ...(values.zoneScope && { zone_scope: values.zoneScope }),
           ...(values.woredaScope && { woreda_scope: values.woredaScope }),
           ...(parseDisplayDate(values.effectiveFrom) && { effective_from: parseDisplayDate(values.effectiveFrom) }),
           ...(parseDisplayDate(values.effectiveTo) && { effective_to: parseDisplayDate(values.effectiveTo) }),
