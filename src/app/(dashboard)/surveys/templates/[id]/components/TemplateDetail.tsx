@@ -22,6 +22,7 @@ import {
   reopenSurveyTemplate,
   type SurveyTask,
 } from "@/features/surveys";
+import { AnswersTile, writtenQuestions } from "../../../components/AnswersTile";
 import { CreateTemplateModal } from "../../../components/CreateTemplateModal";
 
 const Icon = ({ d, className = "h-4 w-4" }: { d: string; className?: string }) => (
@@ -97,7 +98,7 @@ export function TemplateDetail({ id }: { id: string }) {
     }
   };
 
-  const params = template.parameters ?? [];
+  const questions = writtenQuestions(template.parameters);
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -137,30 +138,42 @@ export function TemplateDetail({ id }: { id: string }) {
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_340px]">
         <Card className="self-start overflow-hidden p-0 shadow-card">
           <div className="border-b border-line px-4 py-3.5">
-            <h2 className="text-[17px] font-semibold text-ink">Parameters <span className="font-normal text-ink-soft">({params.length})</span></h2>
-            <p className="text-[12.5px] text-ink-soft">Shown to the farmer in this order · consent, Farmer ID and Kebele are added by the server</p>
+            <h2 className="text-[17px] font-semibold text-ink">Questions <span className="font-normal text-ink-soft">({questions.length})</span></h2>
+            <p className="text-[12.5px] text-ink-soft">Asked in this order, after the farmer&apos;s consent · Farmer ID and Kebele are filled in automatically</p>
           </div>
-          <ol>
-            {params.map((p, i) => (
-              <li key={p.id} className="flex items-start gap-3 border-b border-line-soft px-4 py-3 last:border-b-0">
-                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-line bg-white text-[11.5px] text-ink-soft">{i + 1}</span>
-                <div className="min-w-0 flex-1">
-                  <p className="flex flex-wrap items-center gap-2 text-[14px] font-semibold text-ink">
-                    {p.prompt}
-                    {p.required && <span className="whitespace-nowrap rounded-full border border-brand-border bg-brand-mint px-2 py-px text-[10.5px] font-semibold uppercase tracking-wide text-brand-green">Required</span>}
-                  </p>
-                  {p.options && p.options.length > 0 && <p className="mt-0.5 text-[12.5px] text-ink-soft">{p.options.join(" · ")}</p>}
-                  {p.helper && <p className="mt-0.5 text-[12.5px] text-muted">{p.helper}</p>}
-                  {TRANSLATION_LANGUAGES.filter((l) => p.translations?.[l]).map((l) => (
-                    <p key={l} className="mt-0.5 text-[12.5px] text-ink-soft"><span className="font-medium text-ink">{l}:</span> {p.translations![l]}</p>
-                  ))}
-                </div>
-                <span className={cn("whitespace-nowrap rounded-full border px-2 py-px text-[10.5px] font-semibold uppercase tracking-wide", p.type === "auto" || p.type === "consent" ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-200 bg-slate-50 text-slate-600")}>
-                  {TYPE_LABEL[p.type] ?? p.type}
-                </span>
-              </li>
-            ))}
-          </ol>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] border-collapse text-left text-[13.5px]">
+              <thead>
+                <tr className="border-b border-line bg-surface text-[12px] font-semibold uppercase tracking-wide text-ink-soft">
+                  <th scope="col" className="w-12 px-4 py-2.5">No.</th>
+                  <th scope="col" className="px-3 py-2.5">Question</th>
+                  <th scope="col" className="px-3 py-2.5">Answer type</th>
+                  <th scope="col" className="px-4 py-2.5">Required</th>
+                </tr>
+              </thead>
+              <tbody>
+                {questions.map((p, i) => (
+                  <tr key={p.id} className="border-b border-line-soft align-top last:border-b-0">
+                    <td className="px-4 py-3 text-ink-soft">{i + 1}</td>
+                    <td className="px-3 py-3">
+                      <p className="font-semibold text-ink">{p.prompt}</p>
+                      {p.options && p.options.length > 0 && <p className="mt-0.5 text-[12.5px] text-ink-soft">Options: {p.options.join(", ")}</p>}
+                      {p.helper && <p className="mt-0.5 text-[12.5px] text-muted">{p.helper}</p>}
+                      {TRANSLATION_LANGUAGES.filter((l) => p.translations?.[l]).map((l) => (
+                        <p key={l} className="mt-0.5 text-[12.5px] text-ink-soft"><span className="font-medium text-ink">{l}:</span> {p.translations![l]}</p>
+                      ))}
+                    </td>
+                    <td className="px-3 py-3">
+                      <span className={cn("whitespace-nowrap rounded-full border px-2 py-px text-[10.5px] font-semibold uppercase tracking-wide", p.type === "auto" || p.type === "consent" ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-200 bg-slate-50 text-slate-600")}>
+                        {TYPE_LABEL[p.type] ?? p.type}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-ink">{p.required ? "Yes" : "No"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
 
         <div className="flex flex-col gap-4">
@@ -170,7 +183,6 @@ export function TemplateDetail({ id }: { id: string }) {
               <Row label="Survey type">{template.type}</Row>
               <Row label="Woreda">{template.woreda ?? "—"}</Row>
               <Row label="Assigned to">{template.assignmentMode === "Selected" ? `${template.assignedDaIds?.length ?? 0} selected DAs` : "Every DA in the Woreda"}</Row>
-              <Row label="Farmers per DA">{template.targetFarmers}</Row>
               <Row label="Languages">{template.languages.join(", ")}</Row>
               <Row label="Collected">{template.collected}{template.queued ? ` · ${template.queued} queued` : ""}</Row>
               <Row label="Version">{template.templateVersion}</Row>
@@ -186,6 +198,8 @@ export function TemplateDetail({ id }: { id: string }) {
           )}
         </div>
       </div>
+
+      <AnswersTile key={template.id} surveyId={template.id} questions={questions} />
 
       {editing && (
         <CreateTemplateModal

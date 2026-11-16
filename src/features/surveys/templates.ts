@@ -2,7 +2,10 @@ import type { TemplateBody, TemplatePatch, TemplateQuestionBody } from "./api";
 import type { AssignmentMode, ResponseType, SurveyTask, SurveyType } from "./data";
 
 export const SURVEY_TYPES: SurveyType[] = ["Satisfaction", "Service quality", "Needs assessment"];
-export const SURVEY_LANGUAGES = ["English", "Amharic", "Afaan Oromoo"];
+/** Languages offered when publishing: English only. The API still accepts Amharic / Afaan Oromoo on older templates. */
+export const SURVEY_LANGUAGES = ["English"];
+/** Sent for a new template: the form has no "Farmers per DA" field, but the API requires a target of at least 1. */
+export const DEFAULT_TARGET_FARMERS = 20;
 /** Languages a custom question can carry a translation for; English is the prompt itself. */
 export const TRANSLATION_LANGUAGES = ["Amharic", "Afaan Oromoo"];
 
@@ -13,6 +16,8 @@ export const QUESTION_TYPES: { value: TemplateQuestionBody["type"]; label: strin
   { value: "multi", label: "Multiple choice", hasOptions: true },
   { value: "text", label: "Free text", hasOptions: false },
 ];
+/** Types offered for a question: single choice is no longer offered, but a question that already is one keeps it. */
+export const questionTypesFor = (current: TemplateQuestionBody["type"]) => QUESTION_TYPES.filter((qt) => qt.value !== "single" || current === "single");
 
 export interface TemplateQuestion {
   id: number;
@@ -124,7 +129,7 @@ export function templateInputFrom(task: SurveyTask): TemplateInput {
       prompt: p.prompt,
       // Seed templates may carry lookup questions; they edit as single choice.
       type: p.type === "lookup" ? "single" : (p.type as TemplateQuestion["type"]),
-      options: (p.options ?? []).join(", "),
+      options: (p.options ?? []).join(","),
       required: p.required,
       translations: { ...(p.translations ?? {}) },
     })),
