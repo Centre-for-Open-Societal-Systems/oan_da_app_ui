@@ -4,7 +4,8 @@ import { cn } from "@/lib/utils";
 
 interface StatCardProps {
   label: string;
-  value: string;
+  /** Text, or a placeholder node while the value loads. */
+  value: ReactNode;
   icon: ReactNode;
   /** Tailwind border-colour class for the left accent bar, e.g. "border-l-brand-green". */
   accent: string;
