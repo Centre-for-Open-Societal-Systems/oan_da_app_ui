@@ -23,6 +23,8 @@ export interface NewUser {
   /** Required by the backend for a Development Agent; ignored for other roles. */
   daId?: string;
   regionScope: string;
+  /** The Zone the Woreda sits in. Omitted for region-wide roles. */
+  zoneScope?: string;
   /** Omitted for region-wide roles. */
   woredaScope?: string;
   /** ISO dates, "2026-10-15". */
@@ -47,6 +49,7 @@ export interface RbacAssignmentRecord {
   role: string;
   da_id: string | null;
   region_scope: string | null;
+  zone_scope?: string | null;
   woreda_scope: string | null;
   effective_from: string;
   effective_to: string | null;
@@ -63,6 +66,7 @@ export async function createRbacAssignment(userId: string, u: NewUser): Promise<
       role: BACKEND_ROLE[u.role],
       ...(u.role === "DA" && { da_id: u.daId }),
       region_scope: u.regionScope,
+      ...(u.zoneScope && { zone_scope: u.zoneScope }),
       ...(u.woredaScope && { woreda_scope: u.woredaScope }),
       effective_from: u.effectiveFrom,
       ...(u.effectiveTo && { effective_to: u.effectiveTo }),
@@ -103,6 +107,7 @@ export async function fetchRbacAssignment(id: string): Promise<RbacAssignmentRec
 
 export interface RbacAssignmentPatch {
   region_scope?: string;
+  zone_scope?: string;
   woreda_scope?: string;
   /** ISO dates, "2026-10-15". A role change is a new assignment, not a patch. */
   effective_from?: string;

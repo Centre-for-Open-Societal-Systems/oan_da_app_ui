@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GeoArea, GeoField } from "./api";
-import { geoCascadeReducer, initialGeoCascade, type GeoAction, type GeoCascade } from "./geoCascade";
+import { geoCascadeReducer, initialGeoCascade, presetGeoCascade, type GeoAction, type GeoCascade } from "./geoCascade";
 
 const area = (code: string, name: string, field_name: GeoField, parent: string): GeoArea => ({ id: code, code, name, field_name, parent, sort_order: 0 });
 
@@ -8,6 +8,7 @@ const gambela = area("ET12", "Gambela", "region", "ET");
 const oromia = area("ET04", "Oromia", "region", "ET");
 const agnewak = area("ET1202", "Agnewak", "zone", "ET12");
 const dima = area("ET120205", "Dima (Gm)", "woreda", "ET1202");
+const nuer = area("ET1203", "Nuer", "zone", "ET12");
 
 const run = (actions: GeoAction[], from: GeoCascade = initialGeoCascade) => actions.reduce(geoCascadeReducer, from);
 
@@ -78,5 +79,41 @@ describe("geo cascade", () => {
     const retrying = run([{ type: "retry", field: "zone" }], failed);
     expect(retrying.zone).toMatchObject({ parent: "ET12", status: "loading", error: null, attempt: 1 });
     expect(run([zonesLoaded], retrying).zone).toMatchObject({ status: "ready", options: [agnewak] });
+  });
+
+  describe("saved codes (editing an assignment)", () => {
+    const saved = presetGeoCascade({ region: "ET12", woreda: "ET120205" });
+    const zonesBoth: GeoAction = { type: "loaded", field: "zone", parent: "ET12", rows: [agnewak, nuer] };
+
+    it("chooses the saved Region, the Zone the saved Woreda sits in, then the saved Woreda", () => {
+      const afterRegions = run([regionsLoaded], saved);
+      expect(afterRegions.region.selected?.code).toBe("ET12");
+      expect(afterRegions.zone).toMatchObject({ parent: "ET12", status: "loading" });
+
+      const afterZones = run([zonesBoth], afterRegions);
+      expect(afterZones.zone.selected?.code).toBe("ET1202");
+      expect(afterZones.woreda).toMatchObject({ parent: "ET1202", status: "loading" });
+
+      expect(run([woredasLoaded], afterZones).woreda.selected).toMatchObject({ code: "ET120205", name: "Dima (Gm)" });
+    });
+
+    it("leaves a saved code that Master Data does not have unchosen, with nothing below it", () => {
+      const next = run([regionsLoaded], presetGeoCascade({ region: "TIG", woreda: "TIG-NW-SHIRE" }));
+      expect(next.region.selected).toBeNull();
+      expect(next.zone).toMatchObject({ parent: null, status: "idle", pending: null });
+      expect(next.woreda.pending).toBeNull();
+    });
+
+    it("drops the saved codes once the Admin chooses by hand", () => {
+      const next = run([regionsLoaded, pickRegion("ET04")], saved);
+      expect(next.zone).toMatchObject({ parent: "ET04", pending: null });
+      expect(next.woreda.pending).toBeNull();
+    });
+
+    it("chooses no Zone when the saved Woreda fits none of them", () => {
+      const next = run([regionsLoaded, zonesBoth], presetGeoCascade({ region: "ET12", woreda: "ET9999" }));
+      expect(next.zone.selected).toBeNull();
+      expect(next.woreda).toMatchObject({ status: "idle", pending: null });
+    });
   });
 });
