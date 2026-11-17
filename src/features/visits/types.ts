@@ -18,6 +18,8 @@ export interface VisitRecord {
   assignedBy?: string;
   /** Backend physical status (e.g. "In progress"); absent on sample records. */
   physicalStatus?: string;
+  /** Visit type chosen at planning (Crop Survey, Advisory …); absent on sample records. */
+  visitType?: string;
 }
 
 export interface VisitTimelineEntry {

@@ -19,6 +19,7 @@ import {
   readWhen,
   registryCode,
   splitPriority,
+  PRIORITY_BY_LEVEL,
   toggleFarmer,
   VISIT_TYPES,
   type AdvisoryQa,
@@ -34,6 +35,8 @@ const newOpId = () => (typeof crypto.randomUUID === "function" ? crypto.randomUU
 // Farmer search / selection (up to MAX_BATCH_FARMERS farmers), visit type and outcome state for the plan-visit form.
 export function usePlanVisit(initial: Farmer[], preset: VisitPreset | undefined) {
   const [selected, setSelected] = useState<Farmer[]>(() => initial.slice(0, MAX_BATCH_FARMERS));
+  // The form does not ask for a priority: a Priority-list preset sends its level and reason, others the default (Medium).
+  const presetPriority = preset ? PRIORITY_BY_LEVEL[preset.level] : "";
   const [visitType, setVisitType] = useState(preset && VISIT_TYPES.includes(preset.visitType) ? preset.visitType : VISIT_TYPES[0]);
   const [query, setQuery] = useState("");
   const [searched, setSearched] = useState(false);
@@ -56,7 +59,7 @@ export function usePlanVisit(initial: Farmer[], preset: VisitPreset | undefined)
   /** The common form's current values, the starting point of a farmer's own details. */
   const commonDetails = (): VisitItemDetails => {
     const d = readVisitDetails();
-    return { visit_type: visitType, priority: splitPriority(d.priority).level, date: d.date, time: d.time, duration_min: durationMinutes(d.duration), purpose: d.purpose };
+    return { visit_type: visitType, priority: splitPriority(presetPriority).level, date: d.date, time: d.time, duration_min: durationMinutes(d.duration), purpose: d.purpose };
   };
   // Whose plan the batch went to, reused when a failed farmer is resubmitted from the result.
   const [owner, setOwner] = useState<Owner | null>(null);
@@ -170,7 +173,7 @@ export function usePlanVisit(initial: Farmer[], preset: VisitPreset | undefined)
         return;
       }
       const details = readVisitDetails();
-      const priority = splitPriority(details.priority);
+      const priority = splitPriority(presetPriority);
       const requests = selected.map((f) => {
         const code = registryCode(f);
         // A farmer's own details (set with "Edit details" on their card) win over the common form below.

@@ -1,35 +1,19 @@
 import type { PillTone } from "@/components/ui/Pill";
+import type { ApiSegment } from "./api";
 
-// Rule-based beneficiary segments (Appendix C.3). Rules are edited by Supervisor/Admin only (Appendix D row 1).
-export interface Segment {
-  id: string;
-  name: string;
-  rule: string;
-  scheme: string;
-  members: number;
-  tone: PillTone;
-  icon: "leaf" | "cash" | "drop" | "people";
-}
+// Beneficiary Segments are the Model Farmer packages (Appendix C.3); they come from GET /beneficiary-segments.
+// The API has no colour or icon, so each package takes one by its place in the list.
 
-export const SEGMENTS: Segment[] = [
-  { id: "seg-input", name: "Package 1", rule: "primary crop ∈ {Teff, Wheat} AND land ≥ 0.5 ha", scheme: "MoA input voucher 2026/27", members: 142, tone: "green", icon: "leaf" },
-  { id: "seg-credit", name: "Package 2", rule: "Fayda verified AND no open credit application", scheme: "Access to Credit (partner banks)", members: 123, tone: "blue", icon: "cash" },
-  { id: "seg-drought", name: "Package 3", rule: "kebele ∈ {Gedo, Adea}", scheme: "Emergency seed distribution", members: 118, tone: "amber", icon: "drop" },
-  { id: "seg-women", name: "Package 4", rule: "household head = female", scheme: "Livelihood grant (ATI)", members: 64, tone: "purple", icon: "people" },
+export type SegmentIcon = "leaf" | "cash" | "drop" | "people";
+
+const LOOKS: { tone: PillTone; icon: SegmentIcon }[] = [
+  { tone: "green", icon: "leaf" },
+  { tone: "blue", icon: "cash" },
+  { tone: "amber", icon: "drop" },
+  { tone: "purple", icon: "people" },
 ];
 
-export const segmentName = (id: string) => SEGMENTS.find((s) => s.id === id)?.name ?? id;
+export const segmentLook = (index: number) => LOOKS[index % LOOKS.length];
 
-export type BeneficiaryStatus = "Enrolled" | "Pending verification" | "Removed";
-
-export interface Beneficiary {
-  avatar?: string;
-  id: string;
-  name: string;
-  kebele: string;
-  crop: string;
-  livestock: string;
-  segmentId: string;
-  status: BeneficiaryStatus;
-  linkedAt: string;
-}
+/** A package's title, or its id while the list is loading or when it is no longer active. */
+export const segmentTitle = (segments: ApiSegment[], id: string) => segments.find((s) => s.name === id)?.title || id;
