@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import type { Farmer } from "../types";
-import { useAdvisoryStore } from "../advisoryStore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { listAgents, type ApiAgent } from "@/features/agents";
 import type { BatchVisitItem } from "../visitsApi";
@@ -96,7 +95,6 @@ export function usePlanVisit(initial: Farmer[], preset: VisitPreset | undefined)
     setSearched(false);
   };
 
-  const addAdvisory = useAdvisoryStore((s) => s.add);
   // A DA plans for themself (their Frappe User); an officer picks the DA whose plan the visit goes to.
   const user = useAuthStore((s) => s.user?.id);
   const isOfficer = useAuthStore((s) => s.role) !== "DA";
@@ -115,7 +113,7 @@ export function usePlanVisit(initial: Farmer[], preset: VisitPreset | undefined)
   }, [isOfficer]);
 
   // Sends these farmers' own bodies (one batch call, or a single one for one farmer) and folds the outcome into the
-  // batch result. Each planned Advisory visit lands in that farmer's Advisory tab.
+  // batch result. An Advisory visit's questions go with it to the backend, which the farmer's Advisory tab reads.
   const send = async (rows: { farmer: Farmer; request: BatchVisitItem }[], by: Owner) => {
     const byId = new Map(rows.map((r) => [r.farmer.id, r.request]));
     const bodyOf = (f: Farmer) => byId.get(f.id)!;
@@ -126,10 +124,6 @@ export function usePlanVisit(initial: Farmer[], preset: VisitPreset | undefined)
       bodyOf,
     );
     setSubmitting(false);
-    for (const { farmer } of planned) {
-      const body = bodyOf(farmer);
-      if (body.visit_type === ADVISORY_VISIT && body.advisory_qa?.length) addAdvisory({ farmerId: farmer.id, when: formatWhen(body.date, body.time), status: "Planned", items: body.advisory_qa });
-    }
     setBatch((prev) =>
       mergeBatchRows(
         prev ?? [],
@@ -146,7 +140,7 @@ export function usePlanVisit(initial: Farmer[], preset: VisitPreset | undefined)
   const finish = async (kind: PlanVisitResult["kind"]) => {
     if (submitting) return;
     const when = readWhen();
-    // Advisory Q&A goes to each farmer's Advisory tab; rows without a question are dropped.
+    // Advisory Q&A is sent with the visit; rows without a question are dropped.
     const items = advisoryQa.filter((qa) => qa.question.trim()).map((qa) => ({ question: qa.question.trim(), answer: qa.answer.trim() }));
     const isAdvisory = visitType === ADVISORY_VISIT && items.length > 0;
 
@@ -216,7 +210,6 @@ export function usePlanVisit(initial: Farmer[], preset: VisitPreset | undefined)
       setSubmitting(true);
       const { planned, failed } = await planFarmers(selected, owner, () => requests[0].request);
       setSubmitting(false);
-      if (isAdvisory) planned.forEach(({ farmer }) => addAdvisory({ farmerId: farmer.id, when, status: "Planned", items }));
       if (failed.length > 0) {
         setError(`${failed[0].farmer.name}: ${failed[0].reason} Change the details and press Plan again.`);
         return;
@@ -225,8 +218,6 @@ export function usePlanVisit(initial: Farmer[], preset: VisitPreset | undefined)
       visitIds = planned.map((p) => p.visit.name).filter(Boolean);
     }
 
-    // Planned visits got their Advisory entry above.
-    if (isAdvisory && kind === "draft") farmers.forEach((f) => addAdvisory({ farmerId: f.id, when, status: "Draft", items }));
     setResult({ kind, farmer: farmers.length > 0 ? joinNames(farmers.map((f) => f.name)) : undefined, when, visitId: visitIds.join(", ") || undefined, count: farmers.length });
   };
 

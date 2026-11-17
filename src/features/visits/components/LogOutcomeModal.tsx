@@ -9,7 +9,7 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
-import { canAddEvidence, fetchVisit, newClientOpId, NEXT_ACTION_TYPES, submitVisitOutcome, type ApiVisit, type ApiVisitDetail, type NextActionType } from "../api";
+import { canAddEvidence, fetchVisit, newClientOpId, NEXT_ACTION_TYPES, submitVisitOutcome, type AdvisoryQa, type ApiVisit, type ApiVisitDetail, type NextActionType } from "../api";
 import type { VisitRecord } from "../types";
 import { VisitEvidence } from "./VisitEvidence";
 
@@ -23,25 +23,34 @@ interface LogOutcomeModalProps {
 type Values = { purpose: string; farmerResponse: string; observed: string; advice: string; inputs: string; nextType: NextActionType; nextNote: string; nextDate: string };
 
 // Log what happened at the farm (POST /visits/{id}/submit). Submitting closes the visit; a follow-up visit or
-// task is created from "Next action" when one is chosen.
+// task is created from "Next action" when one is chosen. An Advisory visit also shows the farmer's questions from
+// planning, so the advice left open then can be filled in now.
 export function LogOutcomeModal({ visit, onClose, onSubmitted }: LogOutcomeModalProps) {
   const [values, setValues] = useState<Values>({ purpose: visit.purpose, farmerResponse: "", observed: "", advice: "", inputs: "", nextType: "None", nextNote: "", nextDate: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clientOpId] = useState(newClientOpId);
   const [attachments, setAttachments] = useState<ApiVisitDetail["attachments"]>();
+  /** The visit's questions with the answers as typed here; empty for other visit types (and until the visit is read). */
+  const [advisory, setAdvisory] = useState<AdvisoryQa[]>([]);
 
-  // Evidence already on the visit, listed in the Evidence section; uploading works without it.
+  // Evidence already on the visit and an Advisory visit's questions; the outcome can be submitted without either.
   useEffect(() => {
     if (!canAddEvidence(visit)) return;
     let live = true;
     fetchVisit(visit.id)
-      .then((detail) => live && setAttachments(detail.attachments))
+      .then((detail) => {
+        if (!live) return;
+        setAttachments(detail.attachments);
+        setAdvisory(detail.advisory_qa ?? []);
+      })
       .catch(() => {});
     return () => {
       live = false;
     };
   }, [visit]);
+
+  const setAnswer = (index: number, answer: string) => setAdvisory((list) => list.map((qa, i) => (i === index ? { ...qa, answer } : qa)));
 
   const set = (key: keyof Values) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setValues((v) => ({ ...v, [key]: e.target.value }));
   const hasNext = values.nextType !== "None";
@@ -62,6 +71,8 @@ export function LogOutcomeModal({ visit, onClose, onSubmitted }: LogOutcomeModal
         advice_given: text(values.advice),
         inputs_actions: text(values.inputs),
         next_action: hasNext ? { type: values.nextType, note: text(values.nextNote), date: values.nextDate || undefined } : { type: "None" },
+        // The backend replaces the stored list with this one, so every question goes back, answered or not.
+        advisory_qa: advisory.length > 0 ? advisory.map((qa) => ({ question: qa.question, answer: qa.answer.trim() })) : undefined,
         client_op_id: clientOpId,
       });
       onSubmitted(closed);
@@ -109,6 +120,23 @@ export function LogOutcomeModal({ visit, onClose, onSubmitted }: LogOutcomeModal
         <FormField label="Advice given" htmlFor="lo-advice">
           <Textarea id="lo-advice" rows={2} value={values.advice} onChange={set("advice")} />
         </FormField>
+
+        {advisory.length > 0 && (
+          <div className="flex flex-col gap-3">
+            <p className="text-[14px] font-medium text-ink">Questions &amp; answers</p>
+            {advisory.map((qa, i) => (
+              <div key={i} className="flex flex-col gap-2 rounded-xl border border-line bg-surface-alt p-3.5">
+                <p className="flex items-start gap-2 text-[14px] font-medium text-ink">
+                  <span className="mt-0.5 shrink-0 rounded-full bg-brand-mint px-2.5 py-0.5 text-[12px] font-semibold text-brand-green">Q{i + 1}</span>
+                  <span className="min-w-0">{qa.question}</span>
+                </p>
+                <FormField label="Answer / advice" htmlFor={`lo-qa-${i}`}>
+                  <Textarea id={`lo-qa-${i}`} rows={2} className="bg-white" value={qa.answer} onChange={(e) => setAnswer(i, e.target.value)} placeholder="Advice given to the farmer" />
+                </FormField>
+              </div>
+            ))}
+          </div>
+        )}
 
         <FormField label="Inputs / actions logged" htmlFor="lo-inputs">
           <Input id="lo-inputs" value={values.inputs} onChange={set("inputs")} placeholder="e.g. 50 kg DAP voucher redeemed" className="h-10" />
