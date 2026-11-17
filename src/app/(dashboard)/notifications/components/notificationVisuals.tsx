@@ -15,7 +15,12 @@ export type NotificationCategory =
   | "Surveys"
   | "Training"
   | "Farmers"
-  | "Performance";
+  | "Performance"
+  | "Knowledge"
+  | "Emergency"
+  | "Weather"
+  | "Informational"
+  | "Broadcast";
 
 export type NotificationTimeBucket =
   | "Today"
@@ -35,6 +40,11 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   "Training",
   "Farmers",
   "Performance",
+  "Knowledge",
+  "Emergency",
+  "Weather",
+  "Informational",
+  "Broadcast",
 ];
 
 export const CATEGORY_TONE: Record<NotificationCategory, PillTone> = {
@@ -48,14 +58,22 @@ export const CATEGORY_TONE: Record<NotificationCategory, PillTone> = {
   Training: "slate",
   Farmers: "green",
   Performance: "blue",
+  Knowledge: "green",
+  Emergency: "red",
+  Weather: "blue",
+  Informational: "slate",
+  Broadcast: "purple",
 };
 
-export function resolveNotificationCategory(n: Pick<AppNotification, "kind" | "title">): NotificationCategory {
+const BROADCAST_SOURCES: NotificationCategory[] = ["Knowledge", "Emergency", "Weather", "Informational"];
+
+export function resolveNotificationCategory(n: Pick<AppNotification, "kind" | "title" | "source">): NotificationCategory {
   const title = n.title;
+  // A Broadcast is tagged with the signal source its sender chose; one sent without a source stays "Broadcast".
+  if (n.kind === "Broadcast") return BROADCAST_SOURCES.find((s) => s === n.source) ?? "Broadcast";
   if (/kyc/i.test(title) || n.kind === "Approval" || n.kind === "Onboarding") return "KYC";
   if (/payment|etb|subsidy|released/i.test(title) || n.kind === "Payment" || n.kind === "Sync") return "Payments";
   if (/leave/i.test(title) || n.kind === "Leave") return "Leave";
-  if (/overdue|visit/i.test(title) || n.kind === "Warning" || n.kind === "Broadcast") return "Visits";
   if (/crop|yield/i.test(title) || n.kind === "Crop") return "Crop records";
   if (/grievance/i.test(title) || n.kind === "Grievance" || n.kind === "Issue") return "Grievances";
   if (/survey/i.test(title) || n.kind === "Task") return "Surveys";
@@ -68,7 +86,7 @@ export function resolveNotificationCategory(n: Pick<AppNotification, "kind" | "t
   return "Visits";
 }
 
-export function getNotificationVisual(n: Pick<AppNotification, "kind" | "title">) {
+export function getNotificationVisual(n: Pick<AppNotification, "kind" | "title" | "source">) {
   const category = resolveNotificationCategory(n);
   return {
     category,

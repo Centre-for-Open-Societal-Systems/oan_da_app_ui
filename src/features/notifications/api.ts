@@ -68,7 +68,7 @@ export interface BroadcastResult {
 /**
  * POST /da-services/notifications/broadcast — send an in-app broadcast to every DA in a Woreda.
  *
- * Roles: Communications Officer / Admin, and the Woreda must be inside the caller's scope.
+ * Roles: Communications Officer / Admin / DA, and the Woreda must be inside the caller's scope (a DA: their own Woreda only).
  *
  * scope_value is the Woreda CODE from Master Data (e.g. "ET120205"), never its name: RBAC woreda_scope holds area
  * codes, and recipients are matched on them exactly. A Woreda with no active DA is a 400. client_op_id makes the
@@ -79,6 +79,8 @@ export async function broadcastToWoreda(input: {
   body?: string;
   href?: string;
   woredaCode: string;
+  /** The signal source chosen on the form; recipients see it as the notification's tag. */
+  source?: string;
   clientOpId?: string;
 }): Promise<BroadcastResult> {
   interface Resp {
@@ -90,6 +92,7 @@ export async function broadcastToWoreda(input: {
       title: input.title,
       body: input.body ?? "",
       href: input.href ?? "/notifications",
+      source: input.source,
       scope: "woreda",
       scope_value: input.woredaCode,
       client_op_id: input.clientOpId ?? crypto.randomUUID(),
