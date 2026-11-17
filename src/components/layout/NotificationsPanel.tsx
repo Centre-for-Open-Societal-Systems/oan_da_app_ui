@@ -15,6 +15,8 @@ export interface AppNotification {
   body: string | null;
   /** Portal route the row opens, e.g. "/visits/DA-VIS-0001"; null when there is nothing to open. */
   href: string | null;
+  /** The signal source the sender of a Broadcast chose (Knowledge, Emergency, Weather or Informational). */
+  source?: string | null;
   read: boolean;
   /** ISO timestamp the notification was created. */
   at: string;

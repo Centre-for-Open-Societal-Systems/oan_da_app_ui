@@ -25,6 +25,11 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
     Training: true,
     Farmers: true,
     Performance: true,
+    Knowledge: true,
+    Emergency: true,
+    Weather: true,
+    Informational: true,
+    Broadcast: true,
   },
 };
 
