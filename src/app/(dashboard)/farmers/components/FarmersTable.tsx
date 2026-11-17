@@ -7,14 +7,14 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { FormField } from "@/components/ui/FormField";
 import { Select } from "@/components/ui/Select";
-import { SEGMENTS, segmentName, useBeneficiariesStore } from "@/features/beneficiaries";
+import { addFarmersToSegment, describeAddResult, listBeneficiarySegments, segmentTitle, type ApiSegment } from "@/features/beneficiaries";
 import { AdvancedFiltersButton } from "@/components/ui/AdvancedFiltersButton";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useAuthStore } from "@/store/useAuthStore";
 import { ExportButton } from "@/components/ui/ExportButton";
 import { cn } from "@/lib/utils";
-import { ALL_FARMERS_SEARCH, apiFarmerToFarmer, describeFarmerError, listFarmers, MAX_BATCH_FARMERS, PlanVisitModal } from "@/features/farmers";
+import { ALL_FARMERS_SEARCH, apiFarmerToFarmer, describeFarmerError, listFarmers, MAX_BATCH_FARMERS, MAX_GATHERING_FARMERS, PlanVisitModal } from "@/features/farmers";
 import { FarmerAvatar } from "@/features/farmers";
 import { farmerActivity, StatusPill } from "@/features/farmers";
 import {
@@ -72,8 +72,11 @@ export function FarmersTable() {
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState<ReactNode>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
-  const [segmentId, setSegmentId] = useState(SEGMENTS[0].id);
-  const linkBeneficiaries = useBeneficiariesStore((s) => s.link);
+  const [noticeTone, setNoticeTone] = useState<"success" | "warning" | "error">("success");
+  const [segments, setSegments] = useState<ApiSegment[] | null>(null);
+  const [segmentsError, setSegmentsError] = useState<string | null>(null);
+  const [segmentId, setSegmentId] = useState("");
+  const [addingToSegment, setAddingToSegment] = useState(false);
   const role = useAuthStore((s) => s.role);
   const isDA = role === "DA";
   // POST /visits is open to DA, Supervisor and Admin; the Executive only reads.
@@ -119,19 +122,36 @@ export function FarmersTable() {
 
   const selectedFarmers = source.filter((f) => selected.has(f.id));
 
-  const addToBeneficiaries = () => {
-    const { added, skipped } = linkBeneficiaries(selectedFarmers, segmentId);
-    const parts = [
-      added.length > 0 && `${added.length} farmer${added.length === 1 ? "" : "s"} added to “${segmentName(segmentId)}” — Pending verification.`,
-      skipped.length > 0 && `Already in this package: ${skipped.join(", ")}.`,
-    ].filter(Boolean);
+  // The packages (GET /beneficiary-segments), read when "Add to Model Farmers" first opens.
+  useEffect(() => {
+    if (!isAddOpen || segments) return;
+    let current = true;
+    listBeneficiarySegments()
+      .then((data) => {
+        if (!current) return;
+        setSegments(data);
+        setSegmentId((prev) => prev || data[0]?.name || "");
+      })
+      .catch((err: unknown) => current && setSegmentsError(err instanceof Error ? err.message : "Could not load the packages."));
+    return () => {
+      current = false;
+    };
+  }, [isAddOpen, segments]);
+
+  const addToBeneficiaries = async () => {
+    if (!segmentId) return;
+    setAddingToSegment(true);
+    const result = await addFarmersToSegment(selectedFarmers, segmentId);
+    setAddingToSegment(false);
+    const { tone, text } = describeAddResult(result, segmentTitle(segments ?? [], segmentId));
+    setNoticeTone(tone);
     setNotice(
       <>
-        {parts.join(" ")}{" "}
+        {text}{" "}
         <Link href="/model-farmers" className="font-semibold underline">View Model Farmers</Link>
       </>,
     );
-    setSelected(new Set());
+    setSelected(new Set(result.failed.map((f) => f.farmer.id)));
     setIsAddOpen(false);
   };
 
@@ -172,6 +192,7 @@ export function FarmersTable() {
             className="flex-1 sm:flex-initial w-full sm:w-[225px] sm:h-10 sm:px-4 sm:text-[14px] text-[13px]"
             onExport={(format) => {
               downloadTable(format, `farmers-report-${fileDate()}`, rows, EXPORT_COLUMNS, "Farmers report");
+              setNoticeTone("success");
               setNotice(`Exported ${rows.length} farmer${rows.length === 1 ? "" : "s"} matching the current search and filters (${formatLabel(format)}).`);
             }}
           />
@@ -199,12 +220,12 @@ export function FarmersTable() {
                 <Button
                   variant="brandOutline"
                   size="md"
-                  disabled={selectedFarmers.length === 0 || selected.size > MAX_BATCH_FARMERS}
+                  disabled={selectedFarmers.length === 0 || selected.size > MAX_GATHERING_FARMERS}
                   title={
-                    selected.size > MAX_BATCH_FARMERS
-                      ? `You can select up to ${MAX_BATCH_FARMERS} farmers for a batch visit`
+                    selected.size > MAX_GATHERING_FARMERS
+                      ? `You can select up to ${MAX_GATHERING_FARMERS} farmers for a gathering`
                       : selected.size === 0
-                        ? `Select 1 to ${MAX_BATCH_FARMERS} farmers to plan a batch visit`
+                        ? `Select up to ${MAX_BATCH_FARMERS} farmers for a visit or ${MAX_GATHERING_FARMERS} for a gathering`
                         : undefined
                   }
                   onClick={() => setIsBatchOpen(true)}
@@ -214,7 +235,7 @@ export function FarmersTable() {
                   )}
                 >
                   <span>
-                    Plan <span className="hidden sm:inline">a </span>visit
+                    Plan <span className="hidden sm:inline">a </span>visit / gathering
                     {selected.size > 0 ? ` (${selected.size})` : ""}
                   </span>
                 </Button>
@@ -225,7 +246,7 @@ export function FarmersTable() {
                   variant="brand"
                   size="md"
                   onClick={() => {
-                    setSegmentId(SEGMENTS[0].id);
+                    setSegmentsError(null);
                     setIsAddOpen(true);
                   }}
                   className="flex-1 sm:flex-initial text-[12px] sm:text-[13px] h-9 sm:h-10 px-2.5 sm:px-3.5 whitespace-nowrap shrink-0"
@@ -265,9 +286,9 @@ export function FarmersTable() {
             {loaded.error}
           </Banner>
         )}
-        {notice && <Banner tone="success" className="mx-3.5 sm:mx-4 mb-3" onDismiss={() => setNotice(null)}>{notice}</Banner>}
-        {canPlanVisit && selected.size > MAX_BATCH_FARMERS && (
-          <Banner tone="warning" className="mx-3.5 sm:mx-4 mb-3">You can select up to {MAX_BATCH_FARMERS} farmers for a batch visit. Unselect {selected.size - MAX_BATCH_FARMERS} to plan it.</Banner>
+        {notice && <Banner tone={noticeTone} className="mx-3.5 sm:mx-4 mb-3" onDismiss={() => setNotice(null)}>{notice}</Banner>}
+        {canPlanVisit && selected.size > MAX_GATHERING_FARMERS && (
+          <Banner tone="warning" className="mx-3.5 sm:mx-4 mb-3">You can select up to {MAX_GATHERING_FARMERS} farmers for a gathering ({MAX_BATCH_FARMERS} for a visit). Unselect {selected.size - MAX_GATHERING_FARMERS} to plan it.</Banner>
         )}
 
         {/* Table (Desktop layout matching Visits tab with horizontal scroll, no fixed columns) */}
@@ -377,19 +398,26 @@ export function FarmersTable() {
           }
         />
 
-        {isBatchOpen && <PlanVisitModal farmers={selectedFarmers} isOpen onClose={() => setIsBatchOpen(false)} />}
+        {isBatchOpen && <PlanVisitModal farmers={selectedFarmers} allowGathering isOpen onClose={() => setIsBatchOpen(false)} />}
 
         <Modal
           isOpen={isAddOpen}
-          onClose={() => setIsAddOpen(false)}
+          onClose={() => !addingToSegment && setIsAddOpen(false)}
           title="Add to Model Farmers"
           subtitle={`${selectedFarmers.length} farmer${selectedFarmers.length === 1 ? "" : "s"} selected`}
-          footer={<><Button variant="outline" onClick={() => setIsAddOpen(false)}>Cancel</Button><Button variant="brand" onClick={addToBeneficiaries}>Add</Button></>}
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setIsAddOpen(false)} disabled={addingToSegment}>Cancel</Button>
+              <Button variant="brand" onClick={() => void addToBeneficiaries()} disabled={!segmentId || addingToSegment}>{addingToSegment ? "Adding…" : "Add"}</Button>
+            </>
+          }
         >
           <div className="flex flex-col gap-4">
-            <FormField label="Package" htmlFor="bulk-segment" required hint="Membership is verified against the package rule before enrolment.">
-              <Select id="bulk-segment" value={segmentId} onChange={(e) => setSegmentId(e.target.value)}>
-                {SEGMENTS.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            {segmentsError && <Banner tone="error" title="Packages could not be loaded">{segmentsError}</Banner>}
+            <FormField label="Package" htmlFor="bulk-segment" required hint="The farmer's kebele, woreda, zone and region are taken from their Farmer Registry record.">
+              <Select id="bulk-segment" value={segmentId} onChange={(e) => setSegmentId(e.target.value)} disabled={!segments}>
+                {!segments && <option value="">{segmentsError ? "No packages" : "Loading packages…"}</option>}
+                {(segments ?? []).map((s) => <option key={s.name} value={s.name}>{s.title || s.name}</option>)}
               </Select>
             </FormField>
             <div>

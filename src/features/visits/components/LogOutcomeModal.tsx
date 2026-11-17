@@ -9,7 +9,8 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
-import { canAddEvidence, fetchVisit, newClientOpId, NEXT_ACTION_TYPES, submitVisitOutcome, type AdvisoryQa, type ApiVisit, type ApiVisitDetail, type NextActionType } from "../api";
+import { AdvisoryQaFields } from "@/features/farmers";
+import { ADVISORY_VISIT_TYPE, canAddEvidence, fetchVisit, newClientOpId, NEXT_ACTION_TYPES, submitVisitOutcome, type AdvisoryQa, type ApiVisit, type ApiVisitDetail, type NextActionType } from "../api";
 import type { VisitRecord } from "../types";
 import { VisitEvidence } from "./VisitEvidence";
 
@@ -23,16 +24,22 @@ interface LogOutcomeModalProps {
 type Values = { purpose: string; farmerResponse: string; observed: string; advice: string; inputs: string; nextType: NextActionType; nextNote: string; nextDate: string };
 
 // Log what happened at the farm (POST /visits/{id}/submit). Submitting closes the visit; a follow-up visit or
-// task is created from "Next action" when one is chosen. An Advisory visit also shows the farmer's questions from
-// planning, so the advice left open then can be filled in now.
+// task is created from "Next action" when one is chosen. The visit type planned is shown (read-only: /submit does not
+// change it); an Advisory visit also takes the farmer's questions and answers here, starting from any saved at planning.
+const toRows = (list: AdvisoryQa[]) => (list.length > 0 ? list : [{ question: "", answer: "" }]).map((qa, i) => ({ id: i + 1, question: qa.question, answer: qa.answer ?? "" }));
+
 export function LogOutcomeModal({ visit, onClose, onSubmitted }: LogOutcomeModalProps) {
-  const [values, setValues] = useState<Values>({ purpose: visit.purpose, farmerResponse: "", observed: "", advice: "", inputs: "", nextType: "None", nextNote: "", nextDate: "" });
+  // A list row shows the visit type in place of an empty purpose; that stand-in is not the purpose, so it starts empty.
+  const [values, setValues] = useState<Values>({ purpose: visit.purpose === visit.visitType ? "" : visit.purpose, farmerResponse:"", observed: "", advice: "", inputs: "", nextType: "None", nextNote: "", nextDate: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clientOpId] = useState(newClientOpId);
   const [attachments, setAttachments] = useState<ApiVisitDetail["attachments"]>();
-  /** The visit's questions with the answers as typed here; empty for other visit types (and until the visit is read). */
-  const [advisory, setAdvisory] = useState<AdvisoryQa[]>([]);
+  /** The planned visit type: from the list row, then from GET /visits/{id}. */
+  const [visitType, setVisitType] = useState(visit.visitType ?? "");
+  const isAdvisory = visitType === ADVISORY_VISIT_TYPE;
+  /** An Advisory visit's questions and answers as edited here (one empty row to start when none was saved). */
+  const [advisory, setAdvisory] = useState(() => toRows([]));
 
   // Evidence already on the visit and an Advisory visit's questions; the outcome can be submitted without either.
   useEffect(() => {
@@ -42,7 +49,10 @@ export function LogOutcomeModal({ visit, onClose, onSubmitted }: LogOutcomeModal
       .then((detail) => {
         if (!live) return;
         setAttachments(detail.attachments);
-        setAdvisory(detail.advisory_qa ?? []);
+        if (detail.visit_type) setVisitType(detail.visit_type);
+        // The purpose saved at planning, unless the DA has already started editing it.
+        setValues((v) => (v.purpose.trim() ? v : { ...v, purpose: detail.purpose ?? "" }));
+        if (detail.advisory_qa?.length) setAdvisory(toRows(detail.advisory_qa));
       })
       .catch(() => {});
     return () => {
@@ -50,14 +60,18 @@ export function LogOutcomeModal({ visit, onClose, onSubmitted }: LogOutcomeModal
     };
   }, [visit]);
 
-  const setAnswer = (index: number, answer: string) => setAdvisory((list) => list.map((qa, i) => (i === index ? { ...qa, answer } : qa)));
-
   const set = (key: keyof Values) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setValues((v) => ({ ...v, [key]: e.target.value }));
   const hasNext = values.nextType !== "None";
 
   const submit = async () => {
-    if (!values.observed.trim()) {
+    // An Advisory visit records its questions and answers instead of an observation and advice.
+    if (!isAdvisory && !values.observed.trim()) {
       setError("Describe what was observed; it becomes the visit's outcome.");
+      return;
+    }
+    const questions = advisory.filter((qa) => qa.question.trim()).map((qa) => ({ question: qa.question.trim(), answer: qa.answer.trim() }));
+    if (isAdvisory && questions.length === 0) {
+      setError("Add at least one question the farmer asked on this Advisory visit.");
       return;
     }
     setSaving(true);
@@ -67,12 +81,12 @@ export function LogOutcomeModal({ visit, onClose, onSubmitted }: LogOutcomeModal
       const closed = await submitVisitOutcome(visit.id, {
         purpose: text(values.purpose),
         farmer_response: text(values.farmerResponse),
-        observed: values.observed.trim(),
-        advice_given: text(values.advice),
+        observed: isAdvisory ? undefined : values.observed.trim(),
+        advice_given: isAdvisory ? undefined : text(values.advice),
         inputs_actions: text(values.inputs),
         next_action: hasNext ? { type: values.nextType, note: text(values.nextNote), date: values.nextDate || undefined } : { type: "None" },
         // The backend replaces the stored list with this one, so every question goes back, answered or not.
-        advisory_qa: advisory.length > 0 ? advisory.map((qa) => ({ question: qa.question, answer: qa.answer.trim() })) : undefined,
+        advisory_qa: isAdvisory ? questions : undefined,
         client_op_id: clientOpId,
       });
       onSubmitted(closed);
@@ -105,37 +119,30 @@ export function LogOutcomeModal({ visit, onClose, onSubmitted }: LogOutcomeModal
         {error && <Banner tone="error" title="Outcome not submitted">{error}</Banner>}
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <FormField label="Visit purpose" htmlFor="lo-purpose">
-            <Input id="lo-purpose" value={values.purpose} onChange={set("purpose")} className="h-10" />
+          <FormField label="Visit type" htmlFor="lo-type" hint="As planned.">
+            <Input id="lo-type" value={visitType || "—"} readOnly className="h-10 border-transparent bg-slate-100 text-ink" />
           </FormField>
           <FormField label="Farmer response" htmlFor="lo-response">
             <Input id="lo-response" value={values.farmerResponse} onChange={set("farmerResponse")} placeholder="e.g. Agreed to apply urea this week" className="h-10" />
           </FormField>
         </div>
 
-        <FormField label="What was observed" htmlFor="lo-observed" required hint="Required. This becomes the visit's outcome.">
-          <Textarea id="lo-observed" rows={2} value={values.observed} onChange={set("observed")} placeholder="Crop stage, pests, plot condition…" />
+        <FormField label="Visit purpose" htmlFor="lo-purpose" hint="Saved at planning; change it if the visit's purpose changed.">
+          <Textarea id="lo-purpose" rows={2} value={values.purpose} onChange={set("purpose")} placeholder="What the visit was for" />
         </FormField>
 
-        <FormField label="Advice given" htmlFor="lo-advice">
-          <Textarea id="lo-advice" rows={2} value={values.advice} onChange={set("advice")} />
-        </FormField>
+        {isAdvisory ? (
+          <AdvisoryQaFields items={advisory} onChange={setAdvisory} />
+        ) : (
+          <>
+            <FormField label="What was observed" htmlFor="lo-observed" required hint="Required. This becomes the visit's outcome.">
+              <Textarea id="lo-observed" rows={2} value={values.observed} onChange={set("observed")} placeholder="Crop stage, pests, plot condition…" />
+            </FormField>
 
-        {advisory.length > 0 && (
-          <div className="flex flex-col gap-3">
-            <p className="text-[14px] font-medium text-ink">Questions &amp; answers</p>
-            {advisory.map((qa, i) => (
-              <div key={i} className="flex flex-col gap-2 rounded-xl border border-line bg-surface-alt p-3.5">
-                <p className="flex items-start gap-2 text-[14px] font-medium text-ink">
-                  <span className="mt-0.5 shrink-0 rounded-full bg-brand-mint px-2.5 py-0.5 text-[12px] font-semibold text-brand-green">Q{i + 1}</span>
-                  <span className="min-w-0">{qa.question}</span>
-                </p>
-                <FormField label="Answer / advice" htmlFor={`lo-qa-${i}`}>
-                  <Textarea id={`lo-qa-${i}`} rows={2} className="bg-white" value={qa.answer} onChange={(e) => setAnswer(i, e.target.value)} placeholder="Advice given to the farmer" />
-                </FormField>
-              </div>
-            ))}
-          </div>
+            <FormField label="Advice given" htmlFor="lo-advice">
+              <Textarea id="lo-advice" rows={2} value={values.advice} onChange={set("advice")} />
+            </FormField>
+          </>
         )}
 
         <FormField label="Inputs / actions logged" htmlFor="lo-inputs">

@@ -83,6 +83,7 @@ describe("toVisitRecord", () => {
       durationMin: 60,
       assignedBy: undefined,
       physicalStatus: "Planned",
+      visitType: "Advisory",
     });
   });
 

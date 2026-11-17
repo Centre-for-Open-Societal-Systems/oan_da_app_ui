@@ -195,6 +195,7 @@ export function VisitsTable() {
               <th className="whitespace-nowrap px-4 py-3 font-semibold">
                 <FilterDropdown label="Kebele" allLabel="All kebeles" options={kebeleOptions} selected={filters.kebele} onApply={setFilter("kebele")} />
               </th>
+              <th className="whitespace-nowrap px-4 py-3 font-semibold">Visit type</th>
               <th className="whitespace-nowrap px-4 py-3 font-semibold">Purpose</th>
               <th className="whitespace-nowrap px-4 py-3 text-center font-semibold">
                 <FilterDropdown label="Status" allLabel="All Status" options={statusOptions} selected={filters.status} onApply={setFilter("status")} />
@@ -205,17 +206,17 @@ export function VisitsTable() {
           <tbody className="text-[14px] text-slate-700">
             {loading && (
               <tr>
-                <td colSpan={isDA ? 6 : 7} className="px-4 py-8 text-center text-[13.5px] text-muted">Loading visits…</td>
+                <td colSpan={isDA ? 7 : 8} className="px-4 py-8 text-center text-[13.5px] text-muted">Loading visits…</td>
               </tr>
             )}
             {error && (
               <tr>
-                <td colSpan={isDA ? 6 : 7} className="px-4 py-6"><EmptyState tone="error" title="Could not load visits" hint={error} /></td>
+                <td colSpan={isDA ? 7 : 8} className="px-4 py-6"><EmptyState tone="error" title="Could not load visits" hint={error} /></td>
               </tr>
             )}
             {!loading && !error && rows.length === 0 && (
               <tr>
-                <td colSpan={isDA ? 6 : 7} className="px-4 py-6">
+                <td colSpan={isDA ? 7 : 8} className="px-4 py-6">
                   {source.length === 0 ? (
                     <EmptyState title={date ? "No visits on this day" : "No visits yet"} hint={date ? "Pick another date, or plan a visit." : "Planned visits will show up here."} />
                   ) : (
@@ -242,6 +243,7 @@ export function VisitsTable() {
                   </div>
                 </td>
                 <td className="px-4 py-3.5">{v.kebele}</td>
+                <td className="whitespace-nowrap px-4 py-3.5">{v.visitType ?? "—"}</td>
                 <td className="px-4 py-3.5">{v.purpose}</td>
                 <td className="px-4 py-3.5 text-center">
                   <VisitStatusPill status={v.status} />

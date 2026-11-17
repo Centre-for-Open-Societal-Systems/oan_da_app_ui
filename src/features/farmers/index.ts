@@ -5,6 +5,7 @@ export * from "./data";
 export * from "./filters";
 export * from "./qualifications";
 export * from "./types";
+export { AdvisoryQaFields } from "./components/AdvisoryQaFields";
 export * from "./components/AttributionCard";
 export * from "./components/CertificateDocuments";
 export * from "./components/ConsentWithdrawalModal";

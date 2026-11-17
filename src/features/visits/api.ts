@@ -85,6 +85,7 @@ export function toVisitRecord(v: ApiVisit): VisitRecord {
     durationMin: v.duration_min,
     assignedBy: v.assigned_by ?? undefined,
     physicalStatus: v.physical_status,
+    visitType: v.visit_type || undefined,
   };
 }
 

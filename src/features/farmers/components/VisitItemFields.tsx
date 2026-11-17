@@ -10,8 +10,6 @@ import { DURATIONS, durationMinutes, VISIT_TYPES } from "./planVisit";
 /** The details one farmer's visit can have of its own in a batch. */
 export type VisitItemDetails = Pick<BatchVisitItem, "visit_type" | "priority" | "date" | "time" | "duration_min" | "purpose">;
 
-const PRIORITY_LEVELS = ["High", "Medium", "Low"] as const;
-
 interface VisitItemFieldsProps {
   /** Unique per farmer, keeps the input ids apart. */
   idPrefix: string;
@@ -19,25 +17,18 @@ interface VisitItemFieldsProps {
   onChange: (patch: Partial<VisitItemDetails>) => void;
 }
 
-// One farmer's visit type, priority, date, time, duration and purpose (batch: per-farmer details and the result's Edit).
+// One farmer's visit type, date, time, duration and purpose (priority is not asked; it keeps the common value) (batch: per-farmer details and the result's Edit).
 export function VisitItemFields({ idPrefix, value, onChange }: VisitItemFieldsProps) {
   const id = (name: string) => `${idPrefix}-${name}`;
   const pastDate = value.date !== "" && value.date < todayIso();
 
   return (
     <>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <FormField label="Visit type" htmlFor={id("type")}>
-          <Select id={id("type")} className="h-9" value={value.visit_type} onChange={(e) => onChange({ visit_type: e.target.value })}>
-            {VISIT_TYPES.map((t) => <option key={t}>{t}</option>)}
-          </Select>
-        </FormField>
-        <FormField label="Priority" htmlFor={id("priority")}>
-          <Select id={id("priority")} className="h-9" value={value.priority} onChange={(e) => onChange({ priority: e.target.value as VisitItemDetails["priority"] })}>
-            {PRIORITY_LEVELS.map((p) => <option key={p}>{p}</option>)}
-          </Select>
-        </FormField>
-      </div>
+      <FormField label="Visit type" htmlFor={id("type")}>
+        <Select id={id("type")} className="h-9" value={value.visit_type} onChange={(e) => onChange({ visit_type: e.target.value })}>
+          {VISIT_TYPES.map((t) => <option key={t}>{t}</option>)}
+        </Select>
+      </FormField>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <FormField label="Date" htmlFor={id("date")} required hint={pastDate ? "You cannot select past date for visit" : undefined} hintTone={pastDate ? "error" : "muted"}>
           <Input id={id("date")} type="date" className="h-9" min={todayIso()} value={value.date} onChange={(e) => onChange({ date: e.target.value })} required />
@@ -59,4 +50,4 @@ export function VisitItemFields({ idPrefix, value, onChange }: VisitItemFieldsPr
 }
 
 /** "20 Nov 2026 at 10:00 · Crop Survey · 45 min · High". */
-export const summarizeDetails = (d: VisitItemDetails, when: string) => `${when} · ${d.visit_type} · ${d.duration_min} min · ${d.priority}`;
+export const summarizeDetails = (d: VisitItemDetails, when: string) => `${when} · ${d.visit_type} · ${d.duration_min} min`;
