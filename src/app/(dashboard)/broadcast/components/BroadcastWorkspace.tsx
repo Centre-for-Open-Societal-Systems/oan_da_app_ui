@@ -40,29 +40,34 @@ function GeoSelect({ field, label, level, hint, onSelect, onRetry }: { field: Ge
 export function BroadcastWorkspace() {
   const role = useAuthStore((s) => s.role);
   const canDispatch = role === "CommsOfficer" || role === "Admin" || role === "DA" || role === "Supervisor";
-  // A Supervisor broadcasts to their own Woreda only (the Woreda on their /me scope).
-  const isSupervisor = role === "Supervisor";
-  const supervisorWoreda = useAuthStore((s) => (s.role === "Supervisor" ? (s.profile?.scope?.woredas?.[0] ?? null) : null));
-  const [supervisorWoredaName, setSupervisorWoredaName] = useState<string | null>(null);
+  // A Supervisor or a DA broadcasts to their own Woreda only: the Woreda on their /me scope, else the DA's posting.
+  const ownWoredaOnly = role === "Supervisor" || role === "DA";
+  const ownWoreda = useAuthStore((s) => {
+    if (s.role !== "Supervisor" && s.role !== "DA") return null;
+    const posted = s.role === "DA" ? s.profile?.agent?.woreda : null;
+    return s.profile?.scope?.woredas?.[0] ?? (typeof posted === "string" && posted ? posted : null);
+  });
+  const [ownWoredaName, setOwnWoredaName] = useState<string | null>(null);
   const params = useSearchParams();
   const signal = SIGNALS.find((s) => s.id === params.get("signal"));
 
   const [title, setTitle] = useState(signal ? signal.title : "");
   const [source, setSource] = useState<SignalSource>(signal?.source ?? "Informational");
   const [message, setMessage] = useState(signal ? signal.detail : "");
-  // Audience is always a whole Woreda. A DA (and any weather/emergency signal) defaults to farmers; officers default to the DA network.
+  // Audience is always a whole Woreda.
   const { geo, select, retry } = useGeoCascade();
   useEffect(() => {
-    if (!supervisorWoreda) return;
+    if (!ownWoreda) return;
     let live = true;
     loadScopeAreas()
-      .then(({ woredas }) => live && setSupervisorWoredaName(woredas.find((w) => w.code === supervisorWoreda)?.name_en ?? null))
+      .then(({ woredas }) => live && setOwnWoredaName(woredas.find((w) => w.code === ownWoreda)?.name_en ?? null))
       .catch(() => undefined); // The code is shown when the name cannot be read.
     return () => {
       live = false;
     };
-  }, [supervisorWoreda]);
-  const [group, setGroup] = useState<RecipientGroup>(signal?.source === "Weather" || signal?.source === "Emergency" || role === "DA" ? "Farmers" : "Development Agents");
+  }, [ownWoreda]);
+  // In-app, the only live channel, reaches Development Agents only, so that is the default for everyone until SMS / Telegram reach farmers.
+  const [group, setGroup] = useState<RecipientGroup>("Development Agents");
   // In-app = the real notification-bell broadcast. Checked by default; SMS/Telegram are disabled stubs.
   const [inApp, setInApp] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
@@ -71,8 +76,8 @@ export function BroadcastWorkspace() {
   const [evidence, setEvidence] = useState<File[]>([]);
 
   const toDAs = group === "Development Agents";
-  // A Supervisor's Woreda is fixed: their own code is what goes out. Everyone else picks Region, Zone, Woreda.
-  const woreda = isSupervisor ? (supervisorWoreda ? { code: supervisorWoreda, name: supervisorWoredaName ?? supervisorWoreda } : null) : geo.woreda.selected;
+  // A Supervisor's or DA's Woreda is fixed: their own code is what goes out. Everyone else picks Region, Zone, Woreda.
+  const woreda = ownWoredaOnly ? (ownWoreda ? { code: ownWoreda, name: ownWoredaName ?? ownWoreda } : null) : geo.woreda.selected;
   const woredaLabel = woreda ? `${woreda.name} Woreda` : "the selected Woreda";
 
   const dispatch = async () => {
@@ -86,7 +91,7 @@ export function BroadcastWorkspace() {
     if (!woreda) return;
     setSending(true);
     try {
-      const res = await broadcastToWoreda({ title: title.trim(), body: message.trim(), href: "/notifications", woredaCode: woreda.code });
+      const res = await broadcastToWoreda({ title: title.trim(), body: message.trim(), href: "/notifications", woredaCode: woreda.code, source });
       setNotice(
         res.duplicate
           ? `Already sent to ${woreda.name} Woreda — no duplicate created.`
@@ -118,8 +123,8 @@ export function BroadcastWorkspace() {
               <Select id="bc-source" value={source} onChange={(e) => setSource(e.target.value as SignalSource)}>{SOURCES.map((s) => <option key={s}>{s}</option>)}</Select>
             </FormField>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {isSupervisor ? (
-                <FormField label="Woreda" htmlFor="bc-woreda" required hint={supervisorWoreda ? "Supervisors broadcast to their own Woreda." : "No Woreda on your account yet."}>
+              {ownWoredaOnly ? (
+                <FormField label="Woreda" htmlFor="bc-woreda" required hint={ownWoreda ? "You broadcast to your own Woreda." : "No Woreda on your account yet."}>
                   <Input id="bc-woreda" value={woreda?.name ?? ""} readOnly disabled />
                 </FormField>
               ) : (
