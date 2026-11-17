@@ -1,42 +1,51 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Pill } from "@/components/ui/Pill";
-import { useAdvisoryStore } from "@/features/farmers";
+import { describeFarmerError } from "@/features/farmers";
+import { AdvisoryQaList, formatVisitTime, listFarmerAdvisory, VisitStatusPill, type FarmerAdvisory, type VisitStatus } from "@/features/visits";
 import { SectionCard } from "./SectionCard";
 
-// Questions and answers captured on this farmer's Advisory visits (Plan a visit → Visit type: Advisory).
-export function AdvisorySection({ farmerId }: { farmerId: string }) {
-  const allEntries = useAdvisoryStore((s) => s.entries);
-  const entries = allEntries.filter((e) => e.farmerId === farmerId);
+const PILL_STATUSES: readonly VisitStatus[] = ["Confirmed", "Planned", "Completed", "Missed"];
+/** Cancelled / rescheduled visits show as Missed, the closest pill (as the Visits table does). */
+const pillStatus = (status: string): VisitStatus => ((PILL_STATUSES as readonly string[]).includes(status) ? (status as VisitStatus) : "Missed");
 
+// Questions and answers captured on this farmer's Advisory visits (Plan a visit → Visit type: Advisory), read from
+// the backend each time the tab opens, so they survive a reload and every user who may see the visit sees them.
+export function AdvisorySection({ farmerCode }: { farmerCode: string }) {
+  const [loaded, setLoaded] = useState<{ entries: FarmerAdvisory[]; error: string | null } | null>(null);
+
+  useEffect(() => {
+    let current = true;
+    listFarmerAdvisory(farmerCode).then(
+      (entries) => current && setLoaded({ entries, error: null }),
+      (err: unknown) => current && setLoaded({ entries: [], error: describeFarmerError(err) }),
+    );
+    return () => {
+      current = false;
+    };
+  }, [farmerCode]);
+
+  if (!loaded) return <p className="py-8 text-center text-[13.5px] text-muted">Loading advisory…</p>;
+
+  const { entries, error } = loaded;
   return (
     <SectionCard title="Advisory" bodyClassName={entries.length ? "flex flex-col gap-4" : undefined}>
-      {entries.length === 0 ? (
+      {error ? (
+        <EmptyState tone="error" title="Advisory could not be loaded" hint={error} />
+      ) : entries.length === 0 ? (
         <EmptyState
           title="No advisory questions yet"
           hint="Use Plan a visit and choose the Advisory visit type to record the farmer's questions and your answers."
         />
       ) : (
         entries.map((entry) => (
-          <article key={entry.id} className="overflow-hidden rounded-xl border border-line">
+          <article key={entry.visitId} className="overflow-hidden rounded-xl border border-line">
             <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-surface px-4 py-2.5">
-              <p className="text-[13.5px] font-semibold text-ink">Advisory visit · {entry.when}</p>
-              <Pill tone={entry.status === "Planned" ? "green" : "amber"}>{entry.status}</Pill>
+              <p className="text-[13.5px] font-semibold text-ink">Advisory visit · {formatVisitTime(entry.scheduledAt)}</p>
+              <VisitStatusPill status={pillStatus(entry.status)} />
             </header>
-            <ol>
-              {entry.items.map((qa, i) => (
-                <li key={i} className="flex gap-3 border-b border-line-soft px-4 py-3.5 last:border-0">
-                  <span className="mt-0.5 flex h-6 shrink-0 items-center rounded-full bg-brand-mint px-2 text-[12px] font-semibold text-brand-green">Q{i + 1}</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[14px] font-medium text-ink">{qa.question}</p>
-                    <p className={qa.answer ? "mt-1 text-[13.5px] leading-relaxed text-slate-600" : "mt-1 text-[13.5px] italic text-muted"}>
-                      {qa.answer || "Answer to be added during the visit"}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ol>
+            <AdvisoryQaList items={entry.items} />
           </article>
         ))
       )}
