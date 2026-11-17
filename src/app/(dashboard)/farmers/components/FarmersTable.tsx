@@ -169,7 +169,7 @@ export function FarmersTable() {
         actions={
           <ExportButton
             disabled={rows.length === 0}
-            className="flex-1 sm:flex-initial sm:h-10 sm:px-4 sm:text-[14px] text-[13px]"
+            className="flex-1 sm:flex-initial w-full sm:w-[225px] sm:h-10 sm:px-4 sm:text-[14px] text-[13px]"
             onExport={(format) => {
               downloadTable(format, `farmers-report-${fileDate()}`, rows, EXPORT_COLUMNS, "Farmers report");
               setNotice(`Exported ${rows.length} farmer${rows.length === 1 ? "" : "s"} matching the current search and filters (${formatLabel(format)}).`);
@@ -180,7 +180,7 @@ export function FarmersTable() {
 
       <Card className="overflow-hidden p-0 shadow-card">
         {/* Toolbar */}
-        <div className="flex flex-col gap-2.5 sm:gap-3 p-3.5 sm:p-4 lg:flex-row lg:items-center lg:justify-between border-b border-line-soft">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 xl:gap-3 p-3.5 sm:p-4 border-b border-line-soft xl:flex-nowrap xl:justify-between">
           {/* Left side: My Farmers, count, badge */}
           <div className="flex shrink-0 items-center gap-2 sm:gap-2.5 whitespace-nowrap">
             <h2 className="text-[15px] sm:text-[16px] font-semibold text-ink">My Farmers</h2>
@@ -192,52 +192,71 @@ export function FarmersTable() {
             </span>
           </div>
 
-          {/* Right side: Plan a visit, Add to Model Farmers, Search, Advanced Filters */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 lg:justify-end flex-wrap lg:flex-nowrap">
-            {/* Batch Actions Group */}
-            {(canPlanVisit || selected.size > 0) && (
-              <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
-                {canPlanVisit && (
-                  <Button
-                    variant="brandOutline"
-                    size="md"
-                    disabled={selectedFarmers.length === 0 || selected.size > MAX_BATCH_FARMERS}
-                    title={selected.size > MAX_BATCH_FARMERS ? `You can select up to ${MAX_BATCH_FARMERS} farmers for a batch visit` : selected.size === 0 ? `Select 1 to ${MAX_BATCH_FARMERS} farmers to plan a batch visit` : undefined}
-                    onClick={() => setIsBatchOpen(true)}
-                    className="flex-1 sm:flex-initial text-[12px] sm:text-[13px] h-9 sm:h-10 px-2.5 sm:px-3 whitespace-nowrap shrink-0"
-                  >
-                    <span>Plan <span className="hidden sm:inline">a </span>visit<span className="hidden xl:inline"> (Batch)</span>{selected.size > 0 ? ` (${selected.size})` : ""}</span>
-                  </Button>
-                )}
+          {/* Batch Actions Group */}
+          {(canPlanVisit || selected.size > 0) && (
+            <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto shrink-0">
+              {canPlanVisit && (
+                <Button
+                  variant="brandOutline"
+                  size="md"
+                  disabled={selectedFarmers.length === 0 || selected.size > MAX_BATCH_FARMERS}
+                  title={
+                    selected.size > MAX_BATCH_FARMERS
+                      ? `You can select up to ${MAX_BATCH_FARMERS} farmers for a batch visit`
+                      : selected.size === 0
+                        ? `Select 1 to ${MAX_BATCH_FARMERS} farmers to plan a batch visit`
+                        : undefined
+                  }
+                  onClick={() => setIsBatchOpen(true)}
+                  className={cn(
+                    "text-[12px] sm:text-[13px] h-9 sm:h-10 px-2.5 sm:px-3.5 whitespace-nowrap shrink-0",
+                    selected.size > 0 ? "flex-1 sm:flex-initial" : "w-full sm:w-auto"
+                  )}
+                >
+                  <span>
+                    Plan <span className="hidden sm:inline">a </span>visit
+                    {selected.size > 0 ? ` (${selected.size})` : ""}
+                  </span>
+                </Button>
+              )}
 
-                {selected.size > 0 && (
-                  <Button
-                    variant="brand"
-                    size="md"
-                    onClick={() => { setSegmentId(SEGMENTS[0].id); setIsAddOpen(true); }}
-                    className="flex-1 sm:flex-initial text-[12px] sm:text-[13px] h-9 sm:h-10 px-2.5 sm:px-3 whitespace-nowrap shrink-0"
-                  >
-                    <span><span className="hidden sm:inline">Add to </span>Model Farmers{selected.size > 0 ? ` (${selected.size})` : ""}</span>
-                  </Button>
-                )}
-              </div>
-            )}
-
-            {/* Search & Filters Group */}
-            <div className="flex items-center gap-2 flex-1 sm:flex-initial shrink-0 w-full sm:w-auto">
-              <SearchInput
-                value={query}
-                onChange={setQuery}
-                placeholder={SEARCH_PLACEHOLDER}
-                className="flex-1 sm:w-[150px] md:w-[170px] lg:w-[150px] xl:w-[190px] 2xl:w-[230px] [&_input]:w-full"
-              />
-
-              <AdvancedFiltersButton
-                activeCount={activeFilterCount}
-                onClick={() => setIsFiltersOpen(true)}
-                className="h-9 sm:h-10 px-2.5 sm:px-3 text-[12px] sm:text-[13px] shrink-0 whitespace-nowrap"
-              />
+              {selected.size > 0 && (
+                <Button
+                  variant="brand"
+                  size="md"
+                  onClick={() => {
+                    setSegmentId(SEGMENTS[0].id);
+                    setIsAddOpen(true);
+                  }}
+                  className="flex-1 sm:flex-initial text-[12px] sm:text-[13px] h-9 sm:h-10 px-2.5 sm:px-3.5 whitespace-nowrap shrink-0"
+                >
+                  <span>
+                    <span className="hidden sm:inline">Add to </span>Model Farmers ({selected.size})
+                  </span>
+                </Button>
+              )}
             </div>
+          )}
+
+          {/* Search & Filters Group */}
+          <div
+            className={cn(
+              "flex items-center gap-2 shrink-0 min-w-0 w-full xl:w-auto",
+              !(canPlanVisit || selected.size > 0) && "sm:ml-auto"
+            )}
+          >
+            <SearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder={SEARCH_PLACEHOLDER}
+              className="flex-1 min-w-0 sm:w-auto xl:w-[240px] 2xl:w-[280px] xl:flex-initial [&_input]:w-full [&_input]:h-9 sm:[&_input]:h-10 text-[13px] sm:text-sm"
+            />
+
+            <AdvancedFiltersButton
+              activeCount={activeFilterCount}
+              onClick={() => setIsFiltersOpen(true)}
+              className="h-9 sm:h-10 px-2.5 sm:px-3.5 text-[12px] sm:text-[13px] shrink-0 whitespace-nowrap"
+            />
           </div>
         </div>
 
