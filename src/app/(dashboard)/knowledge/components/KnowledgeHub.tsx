@@ -101,9 +101,10 @@ export function KnowledgeHub() {
       {notice && <Banner tone="success" onDismiss={() => setNotice(null)}>{notice}</Banner>}
       {actionError && <Banner tone="error" onDismiss={() => setActionError(null)}>{actionError}</Banner>}
       <Card className="p-0 shadow-card">
-        {/* Category tabs, with search, YouTube switch and Add at the right end of the bar */}
-        <div className="flex flex-col gap-3 border-b border-line xl:flex-row xl:items-center xl:justify-between">
-          <div role="tablist" aria-label="Category" className="flex flex-wrap rounded-tl-xl">
+        {/* Category tabs on their own row (scrolls sideways on narrow screens), then the search / filter toolbar */}
+        <div className="border-b border-line">
+          <div role="tablist" aria-label="Category" className="flex overflow-x-auto rounded-t-xl border-b border-line">
+
             {["", ...categories].map((c) => {
               const active = category === c;
               return (
@@ -123,8 +124,8 @@ export function KnowledgeHub() {
               );
             })}
           </div>
-          <div className="flex flex-col gap-3 px-4 pb-3 sm:flex-row sm:items-center xl:pb-0 xl:pl-0">
-            <SearchInput value={query} onChange={setQuery} placeholder={isYoutube ? "Search by Videos…" : "Search by Articles…"} className="sm:[&_input]:w-[190px]" />
+          <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <SearchInput value={query} onChange={setQuery} placeholder={isYoutube ? "Search videos…" : "Search articles…"} className="sm:mr-auto sm:[&_input]:w-[260px]" />
             {canCreate && (
               <Select aria-label="Status" value={status} onChange={(e) => setStatus(e.target.value as KbStatus | "")} className="sm:w-[140px]">
                 <option value="">All statuses</option>
@@ -150,7 +151,7 @@ export function KnowledgeHub() {
                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" aria-hidden="true">
                   <path d="M12 5v14M5 12h14" />
                 </svg>
-                Add Content
+                Create Template
               </Button>
             )}
           </div>
@@ -162,14 +163,14 @@ export function KnowledgeHub() {
           <EmptyState tone="error" title="Could not load the Knowledge Base" hint={error} actionLabel="Try again" onAction={() => setReload((n) => n + 1)} />
         ) : isYoutube ? (
           visibleVideos.length === 0 ? (
-            <EmptyState title="No videos yet" hint={query ? "Try another search term." : canCreate ? "Use Add Content to link a YouTube video." : "Videos published for your area will appear here."} />
+            <EmptyState title="No videos yet" hint={query ? "Try another search term." : canCreate ? "Use Create Template to link a YouTube video." : "Videos published for your area will appear here."} />
           ) : (
             <div className="grid grid-cols-1 gap-6 p-4 md:grid-cols-2 xl:grid-cols-3">
               {visibleVideos.map((v) => <VideoCard key={v.name} video={v} showStatus={canCreate} onEdit={canCreate ? () => editVideo(v) : undefined} onArchive={canCreate ? () => setArchiving(v) : undefined} />)}
             </div>
           )
         ) : visibleArticles.length === 0 ? (
-          <EmptyState title="No articles yet" hint={query || category ? "Try another category or search term." : canCreate ? "Use Add Content to write the first article." : "Articles published for your area will appear here."} />
+          <EmptyState title="No articles yet" hint={query || category ? "Try another category or search term." : canCreate ? "Use Create Template to write the first article." : "Articles published for your area will appear here."} />
         ) : (
           <div className="grid grid-cols-1 gap-6 p-4 md:grid-cols-2 xl:grid-cols-3">
             {visibleArticles.map((a) => (

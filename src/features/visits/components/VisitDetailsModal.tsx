@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
@@ -66,12 +65,6 @@ function VisitDetails({ visit, onClose, onReschedule }: VisitDetailsModalProps &
       size="xl"
       footer={
         <>
-          <Link
-            href={`/visits/${visit.id}`}
-            className="mr-auto text-[13.5px] font-semibold text-brand-green hover:underline"
-          >
-            Open visit planner &rarr;
-          </Link>
           <Button type="button" variant="outline" onClick={onClose}>
             Cancel
           </Button>

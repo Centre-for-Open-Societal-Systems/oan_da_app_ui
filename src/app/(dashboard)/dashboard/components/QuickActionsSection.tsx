@@ -5,7 +5,7 @@ export function QuickActionsSection() {
   const actions = [
     { title: "Crop Sown Survey", desc: "Log yield and pest surveys", icon: "clipboard-list", href: "/farmers/crop-report" },
     { title: "Livestock Survey", desc: "Log herd counts and vaccinations", icon: "livestock", href: "/farmers/livestock-report" },
-    { title: "Start Farm Visit", desc: "Activate GPS route and inspection logs", icon: "location", href: "/visits/v-1001" },
+    { title: "Start Farm Visit", desc: "Activate GPS route and inspection logs", icon: "location", href: "/visits" },
     { title: "Sync Queue", desc: "Offline captures and conflicts", icon: "sync", href: "/sync" },
   ];
 
