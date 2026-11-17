@@ -238,7 +238,7 @@ export function CropSownSection({ farmer }: { farmer: Farmer }) {
         />
       </div>
 
-      <div key={active} className="flex animate-fade-in flex-col gap-5 p-5">
+      <div key={active} className="flex animate-fade-in flex-col gap-4 sm:gap-5 p-3.5 sm:p-5">
         {listError && <Banner tone="error" title="Could not load crop details">{listError}</Banner>}
         {active === PRODUCTION_TAB ? (
           <>

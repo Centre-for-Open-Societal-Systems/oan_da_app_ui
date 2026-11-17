@@ -26,66 +26,102 @@ const ICONS = {
   arrow: "M5 12h14M13 6l6 6-6 6",
 };
 
-// Secondary actions: a full-width strip under the profile info (FR-04c onward actions + FR-03c consent).
-// Every cell uses the same brand-green icon tile as Plan visit so the strip reads as one control.
-const SECONDARY: { key: Secondary | "services"; label: string; hint: string; icon: string }[] = [
-  { key: "services", label: "Services", hint: "Credit & marketplace", icon: ICONS.services },
-  { key: "grievance", label: "Raise grievance", hint: "Via Grievance Service", icon: ICONS.grievance },
-  { key: "correction", label: "Request update", hint: "Routed to Woreda", icon: ICONS.correction },
-  { key: "consent", label: "Consent", hint: "View or withdraw", icon: ICONS.consent },
-];
-
 export function ProfileActionStrip({ farmer }: { farmer: Farmer }) {
   const [openModal, setOpenModal] = useState<Secondary | "visit" | null>(null);
   const close = () => setOpenModal(null);
 
-  const cell =
-    "group flex items-center gap-3 border-line px-4 py-3 text-left transition-colors border-b last:border-b-0 sm:even:border-r lg:border-b-0 lg:border-r lg:last:border-r-0";
+  const ALL_ACTIONS: {
+    key: Secondary | "services" | "visit";
+    label: string;
+    hint: string;
+    icon: string;
+    href?: string;
+  }[] = [
+    { key: "visit", label: "Plan visit", hint: "Schedule a field visit", icon: ICONS.calendar },
+    { key: "services", label: "Services", hint: "Credit & marketplace", icon: ICONS.services, href: `/farmers/${farmer.id}/services` },
+    { key: "grievance", label: "Raise grievance", hint: "Via Grievance Service", icon: ICONS.grievance },
+    { key: "correction", label: "Request update", hint: "Routed to Woreda", icon: ICONS.correction },
+    { key: "consent", label: "Consent", hint: "View or withdraw", icon: ICONS.consent },
+  ];
 
   return (
     <>
-      <div className="grid grid-cols-1 border-t border-line bg-surface-alt sm:grid-cols-2 lg:grid-cols-5">
-        {/* Plan visit leads the strip (FR-05b-i). It reads like the other cells and is highlighted only while active. */}
-        {(() => {
-          const active = openModal === "visit";
-          return (
-            <button
-              type="button"
-              onClick={() => setOpenModal("visit")}
-              aria-pressed={active}
-              className={cn(
-                "group flex items-center gap-3 border-b border-line px-4 py-3 text-left transition-colors sm:border-r lg:border-b-0",
-                active ? "bg-gradient-to-r from-brand-green-bright to-brand-green text-white" : "hover:bg-brand-wash",
-              )}
-            >
-              <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-transform group-hover:scale-110", active ? "bg-white/20" : "bg-brand-tint text-brand-green")}>
-                <Icon d={ICONS.calendar} className="h-[18px] w-[18px]" />
-              </span>
-              <span className="flex min-w-0 flex-1 flex-col leading-tight">
-                <span className={cn("text-[13.5px] font-semibold", !active && "text-ink")}>Plan visit</span>
-                <span className={cn("text-[11.5px]", active ? "text-white/75" : "text-muted")}>Schedule a field visit</span>
-              </span>
-              <Icon d={ICONS.arrow} className={cn("h-4 w-4 transition-all group-hover:translate-x-0.5", active ? "text-white/70" : "text-slate-300 group-hover:text-brand-green")} />
-            </button>
+      <div className="grid grid-cols-1 border-t border-line bg-surface-alt sm:grid-cols-2 xl:grid-cols-5">
+        {ALL_ACTIONS.map((a, index) => {
+          const isLast = index === ALL_ACTIONS.length - 1;
+          const isVisit = a.key === "visit";
+          const active = openModal === a.key;
+
+          const itemBorderClasses = cn(
+            !isLast && "border-b border-line",
+            index < 4 && "sm:border-b",
+            (index === 0 || index === 2) && "sm:border-r border-line",
+            "xl:border-b-0",
+            !isLast && "xl:border-r xl:border-line",
+            isLast && "sm:col-span-2 xl:col-span-1 xl:border-r-0 xl:border-b-0",
           );
-        })()}
-        {SECONDARY.map((a) => {
+
           const inner = (
             <>
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-tint text-brand-green transition-transform group-hover:scale-110">
+              <span
+                className={cn(
+                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-transform group-hover:scale-110",
+                  isVisit && active ? "bg-white/20" : "bg-brand-tint text-brand-green",
+                )}
+              >
                 <Icon d={a.icon} className="h-[18px] w-[18px]" />
               </span>
               <span className="flex min-w-0 flex-1 flex-col leading-tight">
-                <span className="text-[13.5px] font-semibold text-ink">{a.label}</span>
-                <span className="text-[11.5px] text-muted">{a.hint}</span>
+                <span className={cn("text-[13.5px] font-semibold", isVisit && active ? "text-white" : "text-ink")}>
+                  {a.label}
+                </span>
+                <span className={cn("text-[11.5px] truncate", isVisit && active ? "text-white/75" : "text-muted")}>
+                  {a.hint}
+                </span>
               </span>
-              <Icon d={ICONS.arrow} className="h-4 w-4 text-slate-300 transition-all group-hover:translate-x-0.5 group-hover:text-brand-green" />
+              <Icon
+                d={ICONS.arrow}
+                className={cn(
+                  "h-4 w-4 shrink-0 transition-all group-hover:translate-x-0.5",
+                  isVisit && active ? "text-white/70" : "text-slate-300 group-hover:text-brand-green",
+                )}
+              />
             </>
           );
-          return a.key === "services" ? (
-            <Link key={a.key} href={`/farmers/${farmer.id}/services`} className={cn(cell, "hover:bg-brand-wash")}>{inner}</Link>
-          ) : (
-            <button key={a.key} type="button" aria-pressed={openModal === a.key} onClick={() => setOpenModal(a.key === "services" ? null : a.key)} className={cn(cell, "hover:bg-brand-wash", openModal === a.key && "bg-brand-wash")}>{inner}</button>
+
+          if (a.href) {
+            return (
+              <Link
+                key={a.key}
+                href={a.href}
+                className={cn(
+                  "group flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-brand-wash",
+                  itemBorderClasses,
+                )}
+              >
+                {inner}
+              </Link>
+            );
+          }
+
+          return (
+            <button
+              key={a.key}
+              type="button"
+              aria-pressed={active}
+              onClick={() => setOpenModal(a.key === "services" ? null : a.key)}
+              className={cn(
+                "group flex items-center gap-3 px-4 py-3 text-left transition-colors",
+                itemBorderClasses,
+                isVisit && active
+                  ? "bg-gradient-to-r from-brand-green-bright to-brand-green text-white"
+                  : active
+                    ? "bg-brand-wash"
+                    : "hover:bg-brand-wash",
+              )}
+            >
+              {inner}
+            </button>
           );
         })}
       </div>
