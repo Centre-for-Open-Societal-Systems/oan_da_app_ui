@@ -42,7 +42,7 @@ export function CertificateDocuments({ certificates, onAdd, inputRef, className 
       <div>
         <h3 className="text-[15px] font-semibold text-ink">Certificates &amp; documents</h3>
         <p className="mt-1 text-[13px] text-ink-soft">
-          Agrilearn certificates appear automatically. Upload external certificates for supervisor verification.
+          Upload certificates for supervisor verification.
         </p>
       </div>
 
@@ -83,12 +83,6 @@ export function CertificateDocuments({ certificates, onAdd, inputRef, className 
                     </svg>
                     View
                   </a>
-                  <button type="button" onClick={() => fileInput.current?.click()} className={cn(ACTION, "border-zinc-200 bg-white text-ink hover:bg-zinc-50")}>
-                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M21 12a9 9 0 11-3-6.7L21 8" /><path d="M21 3v5h-5" />
-                    </svg>
-                    Replace
-                  </button>
                 </div>
               </div>
             </li>

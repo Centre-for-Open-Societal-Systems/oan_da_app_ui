@@ -160,7 +160,7 @@ export function CreateKnowledgeModal({ isOpen, initialKind = "article", editing,
     <Modal
       isOpen={isOpen}
       onClose={close}
-      title={editing ? (kind === "video" ? "Edit Video" : "Edit Article") : "Add to Knowledge Base"}
+      title={editing ? (kind === "video" ? "Edit Video" : "Edit Article") : "Create Template"}
       subtitle={editing ? item?.title : "Published content is visible to Development Agents in the selected areas"}
       size="xl"
       footer={

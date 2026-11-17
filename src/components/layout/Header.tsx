@@ -8,6 +8,7 @@ import { UserProfile } from "@/components/layout/UserProfile";
 import { LanguageSelector } from "@/components/layout/LanguageSelector";
 import { SearchModal, type SearchFn } from "@/components/layout/SearchModal";
 import { pageTitleFor } from "@/lib/rbac";
+import { useAuthStore } from "@/store/useAuthStore";
 
 interface HeaderProps {
   /** The notification bell; it talks to the backend, so the layout passes it in (components never import features). */
@@ -21,7 +22,8 @@ interface HeaderProps {
 export function Header({ notifications, searchFarmers, searchAgents, searchKebeles }: HeaderProps) {
   const { toggle, isOpen, toggleMobile } = useSidebar();
   const pathname = usePathname();
-  const pageTitle = pageTitleFor(pathname);
+  const role = useAuthStore((s) => s.role);
+  const pageTitle = pageTitleFor(pathname, role);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   useEffect(() => {

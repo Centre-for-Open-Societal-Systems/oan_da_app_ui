@@ -10,7 +10,6 @@ export interface AgentHeaderInfo {
   location: string;
   email: string;
   phone: string;
-  joinedOn: string;
   status: string;
 }
 
@@ -39,7 +38,7 @@ export function AgentHeader({ info: p, pending }: AgentHeaderProps) {
           {p.role} · {p.agentId} · {p.location}
         </p>
         <p className="text-[13.5px] text-slate-600">
-          {p.email} · {p.phone} · Joined {p.joinedOn}
+          {p.email} · {p.phone}
         </p>
       </div>
     </Card>

@@ -1,25 +1,23 @@
-export type CertificateStatus = "verified" | "auto" | "pending";
+export type CertificateStatus = "verified" | "pending";
 
 export interface Certificate {
   id: string;
   title: string;
   status: CertificateStatus;
   issuer: string;
-  /** e.g. "PDF · 1.2 MB"; omitted for Agrilearn auto-synced records */
+  /** e.g. "PDF · 1.2 MB" */
   fileMeta?: string;
   url?: string;
 }
 
 export const CERTIFICATE_BADGE: Record<CertificateStatus, { label: string; className: string }> = {
   verified: { label: "Verified", className: "bg-brand-tint text-brand-green" },
-  auto: { label: "Agrilearn · Auto", className: "bg-info-tint text-blue-700" },
   pending: { label: "Pending verification", className: "bg-amber-100 text-amber-700" },
 };
 
 // Shared by the registration wizard (Step 4) and the agent's own profile until the qualifications API lands.
 export const SAMPLE_CERTIFICATES: Certificate[] = [
   { id: "1", title: "Diploma in Plant Science", status: "verified", issuer: "Jimma University · issued 12 Jul 2018", fileMeta: "PDF · 1.2 MB" },
-  { id: "2", title: "Climate-Smart Agriculture", status: "auto", issuer: "Agrilearn · completed 03 Jun 2026" },
   { id: "3", title: "Integrated Pest Management", status: "pending", issuer: "Ethiopian Agricultural Transformation Institute · issued 18 Feb 2026 · expires 18 Feb 2028", fileMeta: "PDF · 842 KB" },
 ];
 

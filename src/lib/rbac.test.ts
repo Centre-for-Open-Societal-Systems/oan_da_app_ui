@@ -41,6 +41,16 @@ describe("navForRole", () => {
     for (const role of ROLES.filter((r) => r !== "DA")) expect(hrefsFor(role)).not.toContain("/my-teams");
   });
 
+  it("names the agents registry My Teams for the Supervisor, with no performance team item", () => {
+    const items = navForRole("Supervisor").flatMap((g) => g.items);
+    expect(items.find((i) => i.href === "/agents")?.title).toBe("My Teams");
+    expect(items.map((i) => i.href)).not.toContain("/performance/teams");
+    expect(items.filter((i) => i.title === "My Teams")).toHaveLength(1);
+    expect(navForRole("Admin").flatMap((g) => g.items).find((i) => i.href === "/agents")?.title).toBe("Agents");
+    expect(pageTitleFor("/agents", "Supervisor")).toBe("My Teams");
+    expect(pageTitleFor("/agents", "Admin")).toBe("Agents");
+  });
+
   it("drops groups with nothing visible", () => {
     for (const role of ROLES) for (const g of navForRole(role)) expect(g.items.length).toBeGreaterThan(0);
   });

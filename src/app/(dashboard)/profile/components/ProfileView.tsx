@@ -11,18 +11,11 @@ import { cancelChangeRequest, changedFields, describeProfileError, fetchMyProfil
 import { ROLE_LABELS } from "@/lib/rbac";
 import { useAuthStore } from "@/store/useAuthStore";
 import { AgentHeader, type AgentHeaderInfo } from "./AgentHeader";
-import { AgentStats } from "./AgentStats";
 import { ChangeRequestsSection } from "./ChangeRequestsSection";
 import { DaDemographicsSection } from "./DaDemographicsSection";
 import { DemographicsSection } from "./DemographicsSection";
 import { DependentsSection } from "./DependentsSection";
 import { QualificationsSection } from "./QualificationsSection";
-
-const formatDate = (iso: string | null | undefined) => {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-};
 
 /** The header line from the registry profile (GET /profile/me). */
 function headerFromProfile(p: DaProfile): AgentHeaderInfo {
@@ -34,7 +27,6 @@ function headerFromProfile(p: DaProfile): AgentHeaderInfo {
     location: place.length ? `${place[0]} kebele, ${place.slice(1).join(", ")}`.replace(/, $/, "") : "—",
     email: p.email || "—",
     phone: p.mobile || "—",
-    joinedOn: formatDate(p.joined_at),
     status: p.active_status || "Active",
   };
 }
@@ -108,7 +100,6 @@ export function ProfileView() {
           location: authProfile?.scopeLabel ?? "—",
           email: authUser?.email ?? "—",
           phone: "—",
-          joinedOn: "—",
           status: "Active",
         }
       : AGENT_PROFILE;
@@ -174,7 +165,6 @@ export function ProfileView() {
         </Banner>
       ))}
 
-      <AgentStats joinedAt={isDa ? (my?.profile.joined_at ?? null) : undefined} kebele={isDa ? (my ? (my.profile.kebele_name ?? my.profile.kebele ?? null) : null) : undefined} />
       {isDa ? (
         <>
           {my && <DaDemographicsSection editing={false} profile={my.profile} editableFields={my.editable_fields} onEdit={startEditing} onCancel={() => setEditing(false)} onSubmit={submitDaChanges} />}
