@@ -169,7 +169,7 @@ function FarmerProfile({ id }: { id: string }) {
           "Livestock history": livestock ? <LivestockHistorySection submissions={livestockValue?.submissions ?? []} error={!!livestockError} /> : <Loading what="livestock history" />,
           "Visit history": visits ? <VisitHistorySection visits={visitRows} /> : <Loading what="visit history" />,
           Documents: <DocumentsSection />,
-          Advisory: <AdvisorySection farmerId={farmer.id} />,
+          Advisory: <AdvisorySection farmerCode={code} />,
         }}
       />
     </>

@@ -17,7 +17,7 @@ export interface SegmentTab<K extends string> {
 export function SegmentTabs<K extends string>({ tabs, active, onChange, className, actions, label, more }: { tabs: SegmentTab<K>[]; active: K; onChange: (key: K) => void; className?: string; actions?: ReactNode; label?: string; more?: SegmentTab<K>[] }) {
   return (
     <div className={cn("flex w-full items-center justify-between rounded-t-xl border border-line bg-white shadow-card overflow-hidden", className)}>
-      <div role="tablist" aria-label={label} className="flex min-w-0 flex-1 items-center overflow-x-auto no-scrollbar">
+      <div role="tablist" aria-label={label} className="flex min-w-0 flex-1 items-center overflow-x-auto no-scrollbar scroll-smooth">
         {tabs.map((tab) => {
           const isActive = tab.key === active;
           return (
@@ -67,7 +67,11 @@ function MoreTab<K extends string>({ tabs, active, onChange }: { tabs: SegmentTa
   const toggle = () => {
     if (open) return setOpen(false);
     const rect = buttonRef.current?.getBoundingClientRect();
-    if (rect) setStyle({ top: rect.bottom + 4, left: rect.left, minWidth: rect.width });
+    if (rect) {
+      const menuWidth = 150;
+      const left = Math.max(12, Math.min(rect.left, window.innerWidth - menuWidth - 12));
+      setStyle({ top: rect.bottom + 4, left, minWidth: Math.max(rect.width, 140) });
+    }
     setOpen(true);
   };
 

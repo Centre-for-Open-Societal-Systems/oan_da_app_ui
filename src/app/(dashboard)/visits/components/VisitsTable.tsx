@@ -3,14 +3,15 @@
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Card } from "@/components/ui/Card";
+import { tabClass } from "@/components/ui/PageTabs";
 import { AdvancedFiltersButton } from "@/components/ui/AdvancedFiltersButton";
 import { SearchInput } from "@/components/ui/SearchInput";
+import { DatePicker } from "@/components/ui/DatePicker";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { RowAction } from "@/components/ui/RowAction";
 import { matchesQuery, searchPlaceholder } from "@/lib/search";
 import { AdvancedFiltersDrawer, type FilterSelection } from "@/components/ui/AdvancedFiltersDrawer";
 import { FilterDropdown, type FilterOption } from "@/components/ui/FilterDropdown";
-import { Input } from "@/components/ui/Input";
 import { TablePagination, usePagination } from "@/components/ui/TablePagination";
 import { FarmerAvatar } from "@/features/farmers";
 import { VisitStatusPill } from "@/features/visits";
@@ -54,6 +55,7 @@ export function VisitsTable() {
   const ownDaId = useAuthStore((s) => s.profile?.daId ?? null);
   const daFilter = (isDA ? ownDaId : null) ?? undefined;
   const [date, setDate] = useState(isoToday);
+  const [selectedDate, setSelectedDate] = useState(isoToday);
   // Rows and the day they were loaded for; a mismatch means a newer day is loading.
   // Bumped after a reschedule: the new visit may be on another day, so the list is read again.
   const [reload, setReload] = useState(0);
@@ -113,22 +115,67 @@ export function VisitsTable() {
   return (
     <Card className="overflow-hidden p-0 shadow-card">
       {notice && <Banner tone="success" onDismiss={() => setNotice(null)} className="m-4 mb-0">{notice}</Banner>}
+
+      {/* Top Filter Tabs (Today / All dates) styled identically to PageTabs */}
+      <div role="tablist" aria-label="Visit date filters" className="flex w-full items-center border-b border-line bg-white overflow-x-auto no-scrollbar">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={date === isoToday()}
+          onClick={() => {
+            setDate(isoToday());
+            setSelectedDate(isoToday());
+          }}
+          className={tabClass(date === isoToday())}
+        >
+          Today
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={date === ""}
+          onClick={() => setDate("")}
+          className={tabClass(date === "")}
+        >
+          All dates
+        </button>
+      </div>
+
       {/* Toolbar */}
-      <div className="flex flex-col gap-3 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-wrap items-center gap-3">
-          <h2 className="text-[15px] font-semibold text-ink">Visits</h2>
-          <Input type="date" aria-label="Visit date" value={date} onChange={(e) => setDate(e.target.value)} className="h-9 w-[160px] text-[13.5px]" />
-          {date ? (
-            <button type="button" onClick={() => setDate("")} className="text-[13px] font-semibold text-brand-green hover:underline">All dates</button>
-          ) : (
-            <button type="button" onClick={() => setDate(isoToday())} className="text-[13px] font-semibold text-brand-green hover:underline">Today</button>
-          )}
+      <div className="flex flex-col gap-2.5 sm:gap-3 p-3.5 sm:p-4 lg:flex-row lg:items-center lg:justify-between border-b border-line-soft">
+        <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap sm:flex-nowrap">
+          <div className="flex items-center gap-2 shrink-0">
+            <h2 className="text-[14px] sm:text-[15px] font-semibold text-ink">Visits</h2>
+            {loaded && !loaded.error && (
+              <span className="text-[12px] sm:text-[13px] text-muted">{loaded.total.toLocaleString()} total</span>
+            )}
+          </div>
+
+          {/* Modern Animated Calendar Popover */}
+          <DatePicker
+            value={date}
+            fallbackDate={selectedDate || isoToday()}
+            onChange={(newDate) => {
+              setDate(newDate);
+              if (newDate) setSelectedDate(newDate);
+            }}
+            className="h-9 sm:h-10 min-w-[150px] sm:min-w-[160px]"
+          />
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end">
-          <SearchInput value={query} onChange={setQuery} placeholder={SEARCH_PLACEHOLDER} />
+        <div className="flex w-full items-center gap-2 sm:gap-2.5 lg:w-auto lg:justify-end">
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder={SEARCH_PLACEHOLDER}
+            className="flex-1 min-w-0 sm:w-auto lg:w-[260px] xl:w-[280px] lg:flex-initial [&_input]:w-full"
+          />
 
-          <AdvancedFiltersButton activeCount={activeFilterCount} onClick={() => setIsFiltersOpen(true)} />
+          <AdvancedFiltersButton
+            activeCount={activeFilterCount}
+            onClick={() => setIsFiltersOpen(true)}
+            className="shrink-0 h-9 sm:h-10"
+          />
         </div>
       </div>
 
@@ -136,23 +183,23 @@ export function VisitsTable() {
       <div className="overflow-x-auto">
         <table className="w-full min-w-[980px] border-collapse text-left">
           <thead>
-            <tr className="border-y border-line bg-surface text-[14px] font-semibold text-slate-500">
+            <tr className="border-y border-line bg-surface text-[13.5px] sm:text-[14px] font-semibold text-slate-500">
               <th className="whitespace-nowrap px-4 py-3 font-semibold">Date &amp; time</th>
               {/* A DA's own visits: no Agent column (it is always them); who assigned them lives on the Assignments page. */}
               {!isDA && (
-                <th className="px-4 py-3 font-semibold">
+                <th className="whitespace-nowrap px-4 py-3 font-semibold">
                   <FilterDropdown label="Agent" allLabel="All agents" options={agentOptions} selected={filters.agent} onApply={setFilter("agent")} />
                 </th>
               )}
-              <th className="px-4 py-3 font-semibold">Farmer</th>
-              <th className="px-4 py-3 font-semibold">
+              <th className="whitespace-nowrap px-4 py-3 font-semibold">Farmer</th>
+              <th className="whitespace-nowrap px-4 py-3 font-semibold">
                 <FilterDropdown label="Kebele" allLabel="All kebeles" options={kebeleOptions} selected={filters.kebele} onApply={setFilter("kebele")} />
               </th>
-              <th className="px-4 py-3 font-semibold">Purpose</th>
-              <th className="px-4 py-3 text-center font-semibold">
+              <th className="whitespace-nowrap px-4 py-3 font-semibold">Purpose</th>
+              <th className="whitespace-nowrap px-4 py-3 text-center font-semibold">
                 <FilterDropdown label="Status" allLabel="All Status" options={statusOptions} selected={filters.status} onApply={setFilter("status")} />
               </th>
-              <th className="px-4 py-3 text-center font-semibold">Action</th>
+              <th className="whitespace-nowrap px-4 py-3 text-center font-semibold">Action</th>
             </tr>
           </thead>
           <tbody className="text-[14px] text-slate-700">

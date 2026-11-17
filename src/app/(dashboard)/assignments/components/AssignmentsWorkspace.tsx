@@ -314,14 +314,14 @@ export function AssignmentsWorkspace() {
     { key: "farmers", header: "Farmers", align: "right", cell: (r) => r.farmers.toLocaleString() },
     {
       key: "status",
-      header: (
-        <span className="inline-flex items-center gap-1.5">
-          <FilterDropdown label="Status" allLabel="All Status" options={statusOptions} selected={filters.status} onApply={setFilter("status")} />
-          <span className="text-subtle">/</span>
-          <FilterDropdown label="Assignment" allLabel="All assignment states" options={assignmentOptions} selected={filters.assignment} onApply={setFilter("assignment")} />
-        </span>
-      ),
-      cell: (r) => <div className="flex flex-col items-start gap-1"><Pill tone={AGENT_STATUS_TONE[r.status]} dot>{r.status}</Pill><Pill tone={ASSIGNMENT_TONE[r.assignmentStatus]}>{r.assignmentStatus}{r.geofence === "Out-of-bounds" ? " · out-of-bounds" : ""}</Pill></div> },
+      header: <FilterDropdown label="Status" allLabel="All Status" options={statusOptions} selected={filters.status} onApply={setFilter("status")} />,
+      cell: (r) => <Pill tone={AGENT_STATUS_TONE[r.status]} dot>{r.status}</Pill>,
+    },
+    {
+      key: "assignment",
+      header: <FilterDropdown label="Assignment" allLabel="All assignment states" options={assignmentOptions} selected={filters.assignment} onApply={setFilter("assignment")} />,
+      cell: (r) => <Pill tone={ASSIGNMENT_TONE[r.assignmentStatus]}>{r.assignmentStatus}{r.geofence === "Out-of-bounds" ? " · out-of-bounds" : ""}</Pill>,
+    },
     ...(isDA ? [] : [assignedByColumn]),
     {
       key: "actions", header: "Actions", align: "center",
@@ -377,11 +377,22 @@ export function AssignmentsWorkspace() {
       {listError && <Banner tone="error" title={isDA ? "Could not load your assignment" : "Could not load assignments"}>{listError}</Banner>}
 
       <Card className="overflow-hidden p-0 shadow-card">
-        <div className="flex flex-col gap-3 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
-          <h2 className="text-[15px] font-semibold text-ink">{isDA ? "My assignment from supervisor" : "Agents by Kebele and Woreda"}</h2>
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end">
-            <SearchInput value={query} onChange={setQuery} placeholder={SEARCH_PLACEHOLDER} />
-            <AdvancedFiltersButton activeCount={countActive(filters)} onClick={() => setIsFiltersOpen(true)} />
+        <div className="flex flex-col gap-2.5 sm:gap-3 p-3.5 sm:p-4 lg:flex-row lg:items-center lg:justify-between border-b border-line-soft">
+          <h2 className="text-[14px] sm:text-[15px] font-semibold text-ink shrink-0">
+            {isDA ? "My assignment from supervisor" : "Agents by Kebele and Woreda"}
+          </h2>
+          <div className="flex w-full items-center gap-2 sm:gap-2.5 lg:w-auto lg:justify-end">
+            <SearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder={SEARCH_PLACEHOLDER}
+              className="flex-1 min-w-0 sm:w-auto lg:w-[260px] xl:w-[280px] lg:flex-initial [&_input]:w-full"
+            />
+            <AdvancedFiltersButton
+              activeCount={countActive(filters)}
+              onClick={() => setIsFiltersOpen(true)}
+              className="shrink-0 h-9 sm:h-10"
+            />
           </div>
         </div>
         <DataTable
@@ -389,7 +400,7 @@ export function AssignmentsWorkspace() {
           columns={columns}
           rows={visible}
           rowKey={(r) => r.daId}
-          minWidth="1000px"
+          minWidth="1080px"
           state={loading ? "loading" : listError ? "error" : "ready"}
           onRetry={() => setReload((n) => n + 1)}
           emptyTitle={rows.length === 0 ? (isDA ? "No assignment yet" : "No agents in this Woreda") : "No agents match the selected filters"}
@@ -417,14 +428,27 @@ export function AssignmentsWorkspace() {
       {/* Read-only Kebele coverage summary — managed separately (§3.5); not part of what a DA receives from their supervisor. */}
       {!isDA && (
       <Card className="overflow-hidden p-0 shadow-card">
-        <div className="flex flex-col gap-3 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-2.5 sm:gap-3 p-3.5 sm:p-4 lg:flex-row lg:items-center lg:justify-between border-b border-line-soft">
           <div>
-            <h2 className="flex items-center gap-2 text-[15px] font-semibold text-ink">Kebele coverage summary <Pill tone="slate">Read-only</Pill></h2>
-            <p className="mt-0.5 text-[12.5px] text-ink-soft">Service coverage across kebeles{coverageWoredaName ? ` in ${coverageWoredaName}` : ""}. This reporting view is managed separately and is not edited from the assignment screen.</p>
+            <h2 className="flex items-center gap-2 text-[14px] sm:text-[15px] font-semibold text-ink">
+              Kebele coverage summary <Pill tone="slate">Read-only</Pill>
+            </h2>
+            <p className="mt-0.5 text-[12px] sm:text-[12.5px] text-ink-soft">
+              Service coverage across kebeles{coverageWoredaName ? ` in ${coverageWoredaName}` : ""}. This reporting view is managed separately and is not edited from the assignment screen.
+            </p>
           </div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end">
-            <SearchInput value={coverageQuery} onChange={setCoverageQuery} placeholder={COVERAGE_SEARCH_PLACEHOLDER} />
-            <AdvancedFiltersButton activeCount={countActive(coverageFilters)} onClick={() => setIsCoverageFiltersOpen(true)} />
+          <div className="flex w-full items-center gap-2 sm:gap-2.5 lg:w-auto lg:justify-end">
+            <SearchInput
+              value={coverageQuery}
+              onChange={setCoverageQuery}
+              placeholder={COVERAGE_SEARCH_PLACEHOLDER}
+              className="flex-1 min-w-0 sm:w-auto lg:w-[260px] xl:w-[280px] lg:flex-initial [&_input]:w-full"
+            />
+            <AdvancedFiltersButton
+              activeCount={countActive(coverageFilters)}
+              onClick={() => setIsCoverageFiltersOpen(true)}
+              className="shrink-0 h-9 sm:h-10"
+            />
           </div>
         </div>
         <DataTable itemLabel="kebeles"

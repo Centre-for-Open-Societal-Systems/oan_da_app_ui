@@ -8,6 +8,7 @@ import { getFarmer } from "@/features/farmers";
 import { canAddEvidence, fetchVisit, formatVisitTime, type ApiVisitDetail } from "../api";
 import { VISIT_TIMELINE } from "../data";
 import type { VisitRecord, VisitTimelineEntry } from "../types";
+import { AdvisoryQaList } from "./AdvisoryQaList";
 import { VisitFarmerCard } from "./VisitFarmerCard";
 import { VisitStatusPill } from "./VisitStatusPill";
 import { VisitEvidence } from "./VisitEvidence";
@@ -123,6 +124,14 @@ function VisitDetails({ visit, onClose, onReschedule }: VisitDetailsModalProps &
             </ol>
           </section>
         </div>
+
+        {/* An Advisory visit's questions and the advice given, from GET /visits/{id}. */}
+        {detail?.advisory_qa && detail.advisory_qa.length > 0 && (
+          <section className="overflow-hidden rounded-lg border border-line">
+            <h3 className="border-b border-line bg-surface px-4 py-3 text-[14.5px] font-semibold text-ink">Questions &amp; answers</h3>
+            <AdvisoryQaList items={detail.advisory_qa} />
+          </section>
+        )}
 
         {/* Visits from the API only: sample records have no backend id to attach evidence to. */}
         {canAddEvidence(visit) && <VisitEvidence visitId={visit.id} existing={detail?.attachments} />}

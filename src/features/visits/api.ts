@@ -1,6 +1,15 @@
 import { authRequest } from "@/features/auth";
 import type { PlannerStatus, VisitRecord, VisitStatus } from "./types";
 
+/** One question a farmer asked and the advice given, on an Advisory visit. */
+export interface AdvisoryQa {
+  question: string;
+  answer: string;
+}
+
+/** The visit type that carries questions and answers. */
+export const ADVISORY_VISIT_TYPE = "Advisory";
+
 /** One row of GET /api/v1/da-services/visits (the fields the portal reads). */
 export interface ApiVisit {
   /** Visit id, e.g. "DA-VIS-2026-0000123". */
@@ -26,6 +35,8 @@ export interface ApiVisit {
   confirmation_note?: string | null;
   location_lat?: number | null;
   location_lng?: number | null;
+  /** An Advisory visit's questions; empty for other types. Always on GET /visits/{id}; on list rows once the backend sends it. */
+  advisory_qa?: AdvisoryQa[];
 }
 
 export interface VisitQuery {
@@ -160,6 +171,30 @@ export async function fetchVisit(visitId: string): Promise<ApiVisitDetail> {
   return res.data;
 }
 
+/** One Advisory visit of a farmer with its questions, for the farmer's Advisory tab. */
+export interface FarmerAdvisory {
+  visitId: string;
+  /** "2026-10-16T10:30:00", server local time. */
+  scheduledAt: string;
+  /** Planned / Confirmed / Completed / Missed, or a raw physical status. */
+  status: string;
+  items: AdvisoryQa[];
+}
+
+/**
+ * A farmer's Advisory visits that carry questions, newest first. GET /visits?farmer_id= has `advisory_qa` on each
+ * row; a backend that does not send it yet is asked for each Advisory visit (GET /visits/{id}) instead.
+ */
+export async function listFarmerAdvisory(farmerId: string): Promise<FarmerAdvisory[]> {
+  const { items } = await listVisits({ farmer_id: farmerId, limit: 200 });
+  const advisory = items.filter((v) => v.visit_type === ADVISORY_VISIT_TYPE);
+  const questions = await Promise.all(advisory.map(async (v) => v.advisory_qa ?? (await fetchVisit(v.name)).advisory_qa ?? []));
+  return advisory
+    .map((v, i) => ({ visitId: v.name, scheduledAt: v.scheduled_at, status: v.ui_status, items: questions[i] }))
+    .filter((entry) => entry.items.length > 0)
+    .reverse();
+}
+
 /** What happens next after a visit; a follow-up visit or task is created by the backend. */
 export const NEXT_ACTION_TYPES = ["None", "Follow-up visit", "Task"] as const;
 export type NextActionType = (typeof NEXT_ACTION_TYPES)[number];
@@ -171,6 +206,8 @@ export interface SubmitOutcomeRequest {
   advice_given?: string;
   inputs_actions?: string;
   next_action?: { type: NextActionType; note?: string; date?: string };
+  /** Advisory visits only: every question with its answer; this list replaces the one stored at planning. */
+  advisory_qa?: AdvisoryQa[];
   /** Same id on a retry returns the completed visit instead of creating a second follow-up. */
   client_op_id: string;
 }

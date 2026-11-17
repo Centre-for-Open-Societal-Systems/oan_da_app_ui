@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuthStore } from "@/store/useAuthStore";
-import { canActOnVisit, canAddEvidence, canCancel, canLogOutcome, canReschedule, canStartVisit, cancelVisit, evidenceProblem, fetchActivityReport, fetchVisit, formatVisitTime, listVisits, rescheduleVisit, startVisit, submitVisitOutcome, toVisitRecord, uploadVisitEvidence, type ApiVisit } from "./api";
+import { canActOnVisit, canAddEvidence, canCancel, canLogOutcome, canReschedule, canStartVisit, cancelVisit, evidenceProblem, fetchActivityReport, fetchVisit, formatVisitTime, listFarmerAdvisory, listVisits, rescheduleVisit, startVisit, submitVisitOutcome, toVisitRecord, uploadVisitEvidence, type ApiVisit } from "./api";
 
 // Minimal in-memory Storage so the persisted auth store runs under Node.
 class MemoryStorage implements Storage {
@@ -175,6 +175,15 @@ describe("visit detail and outcome", () => {
     expect(JSON.parse(init!.body as string)).toEqual(body);
   });
 
+  it("sends an Advisory visit's answers with the outcome", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ data: { ...apiVisit, ui_status: "Completed" } })));
+    const advisory_qa = [{ question: "When to sow teff?", answer: "After the first rains" }, { question: "Which fertiliser?", answer: "" }];
+
+    await submitVisitOutcome("DA-VIS-1", { observed: "Field ready", next_action: { type: "None" }, advisory_qa, client_op_id: "op-3" });
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1]!.body as string).advisory_qa).toEqual(advisory_qa);
+  });
+
   it("offers the outcome once checked in", () => {
     expect(canLogOutcome({ physicalStatus: "In progress" })).toBe(true);
     expect(canLogOutcome({ physicalStatus: "Planned" })).toBe(false);
@@ -183,6 +192,37 @@ describe("visit detail and outcome", () => {
   it("formats site-local timestamps without shifting them", () => {
     expect(formatVisitTime("2026-10-15T15:48:22.563566")).toBe("15 Oct, 15:48");
     expect(formatVisitTime(null)).toBe("");
+  });
+});
+
+describe("listFarmerAdvisory", () => {
+  const qa = [{ question: "When to sow teff?", answer: "" }];
+  const list = (rows: unknown[]) => new Response(JSON.stringify({ data: rows, meta: { total: rows.length } }));
+
+  it("reads the questions from the list, newest visit first, and skips other visits", async () => {
+    fetchMock.mockResolvedValueOnce(
+      list([
+        { ...apiVisit, name: "V-1", scheduled_at: "2026-10-10T09:00:00", advisory_qa: qa },
+        { ...apiVisit, name: "V-2", visit_type: "Routine", advisory_qa: [] },
+        { ...apiVisit, name: "V-3", advisory_qa: [] },
+        { ...apiVisit, name: "V-4", scheduled_at: "2026-10-20T09:00:00", ui_status: "Completed", advisory_qa: qa },
+      ]),
+    );
+
+    await expect(listFarmerAdvisory("FRM-000103")).resolves.toEqual([
+      { visitId: "V-4", scheduledAt: "2026-10-20T09:00:00", status: "Completed", items: qa },
+      { visitId: "V-1", scheduledAt: "2026-10-10T09:00:00", status: "Planned", items: qa },
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toContain("farmer_id=FRM-000103");
+  });
+
+  it("falls back to the visit detail when the list has no questions field", async () => {
+    fetchMock.mockResolvedValueOnce(list([{ ...apiVisit, name: "V-1" }]));
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ data: { ...apiVisit, name: "V-1", timeline: [], attachments: [], advisory_qa: qa } })));
+
+    await expect(listFarmerAdvisory("FRM-000103")).resolves.toMatchObject([{ visitId: "V-1", items: qa }]);
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/v1/da-services/visits/V-1");
   });
 });
 
