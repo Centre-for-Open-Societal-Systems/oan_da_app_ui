@@ -121,8 +121,13 @@ function IdentityFooter({ expanded }: { expanded: boolean }) {
   );
 }
 
-// Routes without their own nav item, mapped to the item that owns them for the active state.
-const OWNERS: Record<string, string> = { "/visits": "/farmers", "/assignments": "/farmers", "/sync": "/dashboard" };
+// Routes without their own nav item, mapped to the item(s) that own them for the active state.
+const OWNERS: Record<string, string | string[]> = {
+  "/visits": "/farmers",
+  "/assignments": "/farmers",
+  "/sync": "/dashboard",
+  "/performance/teams": ["/agents", "/my-teams"],
+};
 // Routes that are a tab of another module's strip (see ModuleStrip) — their parent stays active over their own item.
 const TAB_PARENTS: Record<string, string> = { "/registry-sync": "/agents" };
 
@@ -156,10 +161,13 @@ export function Sidebar() {
   const bestMatch = (path: string) =>
     items.filter((item) => path === item.href || path.startsWith(item.href + "/")).sort((a, b) => b.href.length - a.href.length)[0]?.href;
   // Direct match first; fall back to the owning item only when the route has no nav item of its own for this role.
-  const ownerPath = Object.entries(OWNERS).find(([p]) => pathname === p || pathname.startsWith(p + "/"))?.[1];
+  const ownerEntry = Object.entries(OWNERS).find(([p]) => pathname === p || pathname.startsWith(p + "/"))?.[1];
+  const ownerMatch = ownerEntry
+    ? (Array.isArray(ownerEntry) ? ownerEntry : [ownerEntry]).map((p) => bestMatch(p)).find(Boolean)
+    : undefined;
   // Module tabs always light up their parent module, even when the tab also has its own nav item.
   const tabParent = Object.entries(TAB_PARENTS).find(([p]) => pathname === p || pathname.startsWith(p + "/"))?.[1];
-  const activeHref = (tabParent && bestMatch(tabParent)) || bestMatch(pathname) || (ownerPath ? bestMatch(ownerPath) : undefined);
+  const activeHref = (tabParent && bestMatch(tabParent)) || bestMatch(pathname) || ownerMatch;
 
   const navItemProps = { expanded: isOpen, onNavigate: closeMobile, onHover: setTooltip };
 
