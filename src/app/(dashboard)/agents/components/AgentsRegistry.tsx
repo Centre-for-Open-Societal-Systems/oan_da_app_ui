@@ -175,6 +175,9 @@ export function AgentsRegistry() {
         return (
           <div className="flex items-center justify-center gap-2.5" onClick={(e) => e.stopPropagation()}>
             <RowAction href={`/agents/${a.daId}`} icon="view">View</RowAction>
+            <RowAction href={`/performance/teams/attendance?agent=${encodeURIComponent(a.daId)}`} icon="calendar">
+              View Attendance
+            </RowAction>
             <Switch
               checked={enabled}
               disabled={!canEdit}
@@ -244,7 +247,7 @@ export function AgentsRegistry() {
             columns={columns}
             rows={rows}
             rowKey={(a) => a.daId}
-            minWidth="1280px"
+            minWidth="1380px"
             paginate={false}
             state={loading ? "loading" : loaded?.error ? "error" : "ready"}
             onRetry={() => setAttempt((n) => n + 1)}
