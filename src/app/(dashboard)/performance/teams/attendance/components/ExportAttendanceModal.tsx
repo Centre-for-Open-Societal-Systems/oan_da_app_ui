@@ -15,10 +15,10 @@ interface ExportAttendanceModalProps {
   initialSelectedAgentIds?: Set<string>;
 }
 
-export function ExportAttendanceModal(props: ExportAttendanceModalProps) {
-  if (!props.isOpen) return null;
-  return <ExportAttendanceModalContent {...props} />;
-}
+  export function ExportAttendanceModal(props: ExportAttendanceModalProps) {
+    if (!props.isOpen) return null;
+    return <ExportAttendanceModalContent {...props} />;
+  }
 
 function ExportAttendanceModalContent({
   isOpen,
