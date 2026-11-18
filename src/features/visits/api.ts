@@ -172,46 +172,26 @@ export async function fetchVisit(visitId: string): Promise<ApiVisitDetail> {
   return res.data;
 }
 
-/** One Advisory visit of a farmer with its questions, for the farmer's Advisory tab. */
-export interface FarmerAdvisory {
-  visitId: string;
-  /** "2026-10-16T10:30:00", server local time. */
-  scheduledAt: string;
-  /** Planned / Confirmed / Completed / Missed. */
-  status: VisitStatus;
-  items: AdvisoryQa[];
+/** One question on a farmer's Advisory tab, with when it was saved and last changed. */
+export interface FarmerAdvisoryQa extends AdvisoryQa {
+  /** "2026-11-17 15:29:29.432267", server local time. */
+  createdAt: string;
+  /** Last change, e.g. when the answer was added; same format. */
+  modifiedAt: string;
 }
 
-/** One question of a farmer's Advisory visit, as GET /farmers/{id}/advisory returns it. */
+/** One question row of GET /farmers/{id}/advisory. */
 interface ApiAdvisoryRow {
-  visit: string;
-  /** "2026-11-20 10:00:00", server local time. */
-  scheduled_at: string;
-  physical_status: string;
   question: string;
   answer: string | null;
+  creation: string;
+  modified: string;
 }
 
-/** The pill for a visit's physical status; cancelled / rescheduled visits show as Missed, as in the Visits table. */
-const advisoryStatus = (physical: string): VisitStatus =>
-  physical === "Physical Visit Complete" ? "Completed" : physical === "Confirmed" ? "Confirmed" : physical === "Planned" || physical === "In progress" ? "Planned" : "Missed";
-
-/**
- * A farmer's Advisory visits that carry questions, newest first (GET /farmers/{id}/advisory). The API sends one row
- * per question, already in that order; the rows of one visit are gathered into its entry.
- */
-export async function listFarmerAdvisory(farmerId: string): Promise<FarmerAdvisory[]> {
+/** A farmer's Advisory questions, newest first, as GET /farmers/{id}/advisory sends them. */
+export async function listFarmerAdvisory(farmerId: string): Promise<FarmerAdvisoryQa[]> {
   const res = await authRequest<{ data: ApiAdvisoryRow[] }>(`/da-services/farmers/${encodeURIComponent(farmerId)}/advisory?limit=500`);
-  const visits = new Map<string, FarmerAdvisory>();
-  for (const row of res.data) {
-    let entry = visits.get(row.visit);
-    if (!entry) {
-      entry = { visitId: row.visit, scheduledAt: row.scheduled_at, status: advisoryStatus(row.physical_status), items: [] };
-      visits.set(row.visit, entry);
-    }
-    entry.items.push({ question: row.question, answer: row.answer ?? "" });
-  }
-  return [...visits.values()];
+  return res.data.map((row) => ({ question: row.question, answer: row.answer ?? "", createdAt: row.creation, modifiedAt: row.modified }));
 }
 
 /** What happens next after a visit; a follow-up visit or task is created by the backend. */

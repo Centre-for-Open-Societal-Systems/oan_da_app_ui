@@ -199,38 +199,26 @@ describe("visit detail and outcome", () => {
 describe("listFarmerAdvisory", () => {
   const rows = (data: unknown[]) => new Response(JSON.stringify({ data, meta: { total: data.length } }));
 
-  it("gathers the question rows into one entry per visit, in the order the API sends them", async () => {
+  it("returns the question rows with their dates, in the order the API sends them", async () => {
     fetchMock.mockResolvedValueOnce(
       rows([
-        { visit: "V-4", scheduled_at: "2026-10-20 09:00:00", physical_status: "Physical Visit Complete", question: "Which seed rate?", answer: "25 kg/ha" },
-        { visit: "V-1", scheduled_at: "2026-10-10 09:00:00", physical_status: "Planned", question: "When to sow teff?", answer: "" },
-        { visit: "V-1", scheduled_at: "2026-10-10 09:00:00", physical_status: "Planned", question: "Which fertiliser?", answer: null },
+        { question: "Which seed rate?", answer: "25 kg/ha", creation: "2026-10-20 09:00:00.1", modified: "2026-10-21 11:30:00.2" },
+        { question: "Which fertiliser?", answer: null, creation: "2026-10-10 09:00:00.3", modified: "2026-10-10 09:00:00.3" },
       ]),
     );
 
     await expect(listFarmerAdvisory("FRM-000103")).resolves.toEqual([
-      { visitId: "V-4", scheduledAt: "2026-10-20 09:00:00", status: "Completed", items: [{ question: "Which seed rate?", answer: "25 kg/ha" }] },
-      {
-        visitId: "V-1",
-        scheduledAt: "2026-10-10 09:00:00",
-        status: "Planned",
-        items: [
-          { question: "When to sow teff?", answer: "" },
-          { question: "Which fertiliser?", answer: "" },
-        ],
-      },
+      { question: "Which seed rate?", answer: "25 kg/ha", createdAt: "2026-10-20 09:00:00.1", modifiedAt: "2026-10-21 11:30:00.2" },
+      { question: "Which fertiliser?", answer: "", createdAt: "2026-10-10 09:00:00.3", modifiedAt: "2026-10-10 09:00:00.3" },
     ]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/farmers/FRM-000103/advisory?limit=500");
   });
 
-  it("shows a cancelled visit as Missed and gives nothing for a farmer with no questions", async () => {
-    fetchMock.mockResolvedValueOnce(rows([{ visit: "V-9", scheduled_at: "2026-10-01 09:00:00", physical_status: "Cancelled", question: "Q", answer: "A" }]));
-    await expect(listFarmerAdvisory("FRM-000103")).resolves.toMatchObject([{ visitId: "V-9", status: "Missed" }]);
-
+  it("gives nothing for a farmer with no questions", async () => {
     fetchMock.mockResolvedValueOnce(rows([]));
     await expect(listFarmerAdvisory("FRM-000104")).resolves.toEqual([]);
-    expect(formatVisitTime("2026-10-01 09:00:00")).toBe("1 Oct, 09:00");
+    expect(formatVisitTime("2026-11-17 15:29:29.432267")).toBe("17 Nov, 15:29");
   });
 });
 

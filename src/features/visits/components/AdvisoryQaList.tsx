@@ -1,7 +1,10 @@
-import type { AdvisoryQa } from "../api";
+import { formatVisitTime, type AdvisoryQa } from "../api";
+
+/** A question may carry when it was saved and last changed (the farmer's Advisory tab). */
+type QaItem = AdvisoryQa & { createdAt?: string; modifiedAt?: string };
 
 // The questions a farmer asked on an Advisory visit, each with the advice given (or a note that it is still to come).
-export function AdvisoryQaList({ items }: { items: AdvisoryQa[] }) {
+export function AdvisoryQaList({ items }: { items: QaItem[] }) {
   return (
     <ol>
       {items.map((qa, i) => (
@@ -12,6 +15,12 @@ export function AdvisoryQaList({ items }: { items: AdvisoryQa[] }) {
             <p className={qa.answer ? "mt-1 text-[13.5px] leading-relaxed text-slate-600" : "mt-1 text-[13.5px] italic text-muted"}>
               {qa.answer || "Answer to be added during the visit"}
             </p>
+            {qa.createdAt ? (
+              <p className="mt-1.5 text-[12px] text-muted">
+                Asked {formatVisitTime(qa.createdAt)}
+                {qa.modifiedAt && qa.modifiedAt !== qa.createdAt ? ` · Updated ${formatVisitTime(qa.modifiedAt)}` : ""}
+              </p>
+            ) : null}
           </div>
         </li>
       ))}
