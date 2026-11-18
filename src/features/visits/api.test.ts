@@ -197,33 +197,40 @@ describe("visit detail and outcome", () => {
 });
 
 describe("listFarmerAdvisory", () => {
-  const qa = [{ question: "When to sow teff?", answer: "" }];
-  const list = (rows: unknown[]) => new Response(JSON.stringify({ data: rows, meta: { total: rows.length } }));
+  const rows = (data: unknown[]) => new Response(JSON.stringify({ data, meta: { total: data.length } }));
 
-  it("reads the questions from the list, newest visit first, and skips other visits", async () => {
+  it("gathers the question rows into one entry per visit, in the order the API sends them", async () => {
     fetchMock.mockResolvedValueOnce(
-      list([
-        { ...apiVisit, name: "V-1", scheduled_at: "2026-10-10T09:00:00", advisory_qa: qa },
-        { ...apiVisit, name: "V-2", visit_type: "Routine", advisory_qa: [] },
-        { ...apiVisit, name: "V-3", advisory_qa: [] },
-        { ...apiVisit, name: "V-4", scheduled_at: "2026-10-20T09:00:00", ui_status: "Completed", advisory_qa: qa },
+      rows([
+        { visit: "V-4", scheduled_at: "2026-10-20 09:00:00", physical_status: "Physical Visit Complete", question: "Which seed rate?", answer: "25 kg/ha" },
+        { visit: "V-1", scheduled_at: "2026-10-10 09:00:00", physical_status: "Planned", question: "When to sow teff?", answer: "" },
+        { visit: "V-1", scheduled_at: "2026-10-10 09:00:00", physical_status: "Planned", question: "Which fertiliser?", answer: null },
       ]),
     );
 
     await expect(listFarmerAdvisory("FRM-000103")).resolves.toEqual([
-      { visitId: "V-4", scheduledAt: "2026-10-20T09:00:00", status: "Completed", items: qa },
-      { visitId: "V-1", scheduledAt: "2026-10-10T09:00:00", status: "Planned", items: qa },
+      { visitId: "V-4", scheduledAt: "2026-10-20 09:00:00", status: "Completed", items: [{ question: "Which seed rate?", answer: "25 kg/ha" }] },
+      {
+        visitId: "V-1",
+        scheduledAt: "2026-10-10 09:00:00",
+        status: "Planned",
+        items: [
+          { question: "When to sow teff?", answer: "" },
+          { question: "Which fertiliser?", answer: "" },
+        ],
+      },
     ]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(String(fetchMock.mock.calls[0][0])).toContain("farmer_id=FRM-000103");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/farmers/FRM-000103/advisory?limit=500");
   });
 
-  it("falls back to the visit detail when the list has no questions field", async () => {
-    fetchMock.mockResolvedValueOnce(list([{ ...apiVisit, name: "V-1" }]));
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ data: { ...apiVisit, name: "V-1", timeline: [], attachments: [], advisory_qa: qa } })));
+  it("shows a cancelled visit as Missed and gives nothing for a farmer with no questions", async () => {
+    fetchMock.mockResolvedValueOnce(rows([{ visit: "V-9", scheduled_at: "2026-10-01 09:00:00", physical_status: "Cancelled", question: "Q", answer: "A" }]));
+    await expect(listFarmerAdvisory("FRM-000103")).resolves.toMatchObject([{ visitId: "V-9", status: "Missed" }]);
 
-    await expect(listFarmerAdvisory("FRM-000103")).resolves.toMatchObject([{ visitId: "V-1", items: qa }]);
-    expect(fetchMock.mock.calls[1][0]).toBe("/api/v1/da-services/visits/V-1");
+    fetchMock.mockResolvedValueOnce(rows([]));
+    await expect(listFarmerAdvisory("FRM-000104")).resolves.toEqual([]);
+    expect(formatVisitTime("2026-10-01 09:00:00")).toBe("1 Oct, 09:00");
   });
 });
 

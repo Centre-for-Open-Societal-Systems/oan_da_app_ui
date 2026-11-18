@@ -3,15 +3,11 @@
 import { useEffect, useState } from "react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { describeFarmerError } from "@/features/farmers";
-import { AdvisoryQaList, formatVisitTime, listFarmerAdvisory, VisitStatusPill, type FarmerAdvisory, type VisitStatus } from "@/features/visits";
+import { AdvisoryQaList, formatVisitTime, listFarmerAdvisory, VisitStatusPill, type FarmerAdvisory } from "@/features/visits";
 import { SectionCard } from "./SectionCard";
 
-const PILL_STATUSES: readonly VisitStatus[] = ["Confirmed", "Planned", "Completed", "Missed"];
-/** Cancelled / rescheduled visits show as Missed, the closest pill (as the Visits table does). */
-const pillStatus = (status: string): VisitStatus => ((PILL_STATUSES as readonly string[]).includes(status) ? (status as VisitStatus) : "Missed");
-
 // Questions and answers captured on this farmer's Advisory visits (Plan a visit → Visit type: Advisory), read from
-// the backend each time the tab opens, so they survive a reload and every user who may see the visit sees them.
+// GET /farmers/{id}/advisory each time the tab opens, so they survive a reload and every user who may see the visit sees them.
 export function AdvisorySection({ farmerCode }: { farmerCode: string }) {
   const [loaded, setLoaded] = useState<{ entries: FarmerAdvisory[]; error: string | null } | null>(null);
 
@@ -43,7 +39,7 @@ export function AdvisorySection({ farmerCode }: { farmerCode: string }) {
           <article key={entry.visitId} className="overflow-hidden rounded-xl border border-line">
             <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-surface px-4 py-2.5">
               <p className="text-[13.5px] font-semibold text-ink">Advisory visit · {formatVisitTime(entry.scheduledAt)}</p>
-              <VisitStatusPill status={pillStatus(entry.status)} />
+              <VisitStatusPill status={entry.status} />
             </header>
             <AdvisoryQaList items={entry.items} />
           </article>
