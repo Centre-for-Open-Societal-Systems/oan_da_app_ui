@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { describeFarmerError } from "@/features/farmers";
-import { AdvisoryQaList, formatVisitTime, listFarmerAdvisory, VisitStatusPill, type FarmerAdvisory } from "@/features/visits";
+import { AdvisoryQaList, listFarmerAdvisory, type FarmerAdvisoryQa } from "@/features/visits";
 import { SectionCard } from "./SectionCard";
 
 // Questions and answers captured on this farmer's Advisory visits (Plan a visit → Visit type: Advisory), read from
 // GET /farmers/{id}/advisory each time the tab opens, so they survive a reload and every user who may see the visit sees them.
 export function AdvisorySection({ farmerCode }: { farmerCode: string }) {
-  const [loaded, setLoaded] = useState<{ entries: FarmerAdvisory[]; error: string | null } | null>(null);
+  const [loaded, setLoaded] = useState<{ entries: FarmerAdvisoryQa[]; error: string | null } | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -26,7 +26,7 @@ export function AdvisorySection({ farmerCode }: { farmerCode: string }) {
 
   const { entries, error } = loaded;
   return (
-    <SectionCard title="Advisory" bodyClassName={entries.length ? "flex flex-col gap-4" : undefined}>
+    <SectionCard title="Advisory">
       {error ? (
         <EmptyState tone="error" title="Advisory could not be loaded" hint={error} />
       ) : entries.length === 0 ? (
@@ -35,15 +35,9 @@ export function AdvisorySection({ farmerCode }: { farmerCode: string }) {
           hint="Use Plan a visit and choose the Advisory visit type to record the farmer's questions and your answers."
         />
       ) : (
-        entries.map((entry) => (
-          <article key={entry.visitId} className="overflow-hidden rounded-xl border border-line">
-            <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-surface px-4 py-2.5">
-              <p className="text-[13.5px] font-semibold text-ink">Advisory visit · {formatVisitTime(entry.scheduledAt)}</p>
-              <VisitStatusPill status={entry.status} />
-            </header>
-            <AdvisoryQaList items={entry.items} />
-          </article>
-        ))
+        <div className="overflow-hidden rounded-xl border border-line">
+          <AdvisoryQaList items={entries} />
+        </div>
       )}
     </SectionCard>
   );
