@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuthStore } from "@/store/useAuthStore";
-import { broadcastToWoreda, listNotifications, markAllNotificationsRead, markNotificationRead } from "./api";
+import { broadcastToKebele, broadcastToWoreda, listNotifications, markAllNotificationsRead, markNotificationRead } from "./api";
 
 // Minimal in-memory Storage so the persisted auth store runs under Node.
 class MemoryStorage implements Storage {
@@ -61,6 +61,16 @@ describe("notifications api", () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/v1/da-services/notifications/broadcast");
     expect(JSON.parse(String(init?.body))).toMatchObject({ scope: "woreda", scope_value: "ET120205", client_op_id: "op-1" });
-    expect(result).toEqual({ broadcastId: "B-1", duplicate: false, recipients: 3, woredaCode: "ET120205" });
+    expect(result).toEqual({ broadcastId: "B-1", duplicate: false, recipients: 3, scopeValue: "ET120205" });
+  });
+
+  it("broadcasts to a Kebele by its code", async () => {
+    fetchMock.mockResolvedValueOnce(json(200, { data: { broadcast_id: "B-2", duplicate: false, recipients: 2, scope: "kebele", scope_value: "ET04-W01-K03" } }));
+
+    const result = await broadcastToKebele({ title: "Title", body: "Message", kebeleCode: "ET04-W01-K03", clientOpId: "op-2" });
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(String(init?.body))).toMatchObject({ scope: "kebele", scope_value: "ET04-W01-K03", client_op_id: "op-2" });
+    expect(result).toEqual({ broadcastId: "B-2", duplicate: false, recipients: 2, scopeValue: "ET04-W01-K03" });
   });
 });
