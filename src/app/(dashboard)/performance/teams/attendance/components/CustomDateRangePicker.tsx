@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import {
@@ -10,6 +10,46 @@ import {
   getTodayIso,
   type AttendanceTab,
 } from "./attendanceData";
+
+const emptySubscribe = () => () => {};
+
+function computeInitialPickerState(
+  activeTab: AttendanceTab,
+  startDate?: string,
+  endDate?: string
+): {
+  quick: QuickRangeKey;
+  start: string;
+  end: string;
+  viewYear: number;
+  viewMonth: number;
+} {
+  const tDate = getTodayDate();
+  const tIso = formatIsoDate(tDate);
+  const weekStart = getCurrentWeekStartIso();
+  const monthStart = formatIsoDate(new Date(tDate.getFullYear(), tDate.getMonth(), 1));
+
+  let quick: QuickRangeKey = "custom";
+  let s = startDate && startDate <= tIso ? startDate : "2026-11-09";
+  let e = endDate && endDate <= tIso ? endDate : tIso;
+
+  if (activeTab === "today") {
+    quick = "today";
+    s = startDate && startDate <= tIso ? startDate : tIso;
+    e = s;
+  } else if (activeTab === "week") {
+    quick = "thisWeek";
+    s = startDate && startDate <= tIso ? startDate : weekStart;
+    e = endDate && endDate <= tIso ? endDate : tIso;
+  } else if (activeTab === "month") {
+    quick = "thisMonth";
+    s = startDate && startDate <= tIso ? startDate : monthStart;
+    e = endDate && endDate <= tIso ? endDate : tIso;
+  }
+
+  const [y, m] = s.split("-").map(Number);
+  return { quick, start: s, end: e, viewYear: y, viewMonth: m - 1 };
+}
 
 export const CURRENT_TODAY_ISO = getTodayIso();
 
@@ -51,94 +91,53 @@ const QUICK_RANGES: { key: QuickRangeKey; label: string }[] = [
 
 const WEEKDAY_NAMES = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
-export function CustomDateRangePicker({
-  isOpen,
+export function CustomDateRangePicker(props: CustomDateRangePickerProps) {
+  const mounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
+
+  if (!props.isOpen || !mounted) return null;
+  const initial = computeInitialPickerState(
+    props.activeTab ?? "today",
+    props.startDate,
+    props.endDate
+  );
+  return <CustomDateRangePickerDialog {...props} initial={initial} />;
+}
+
+function CustomDateRangePickerDialog({
   onClose,
-  activeTab = "today",
-  startDate = "2026-11-09",
-  endDate = getTodayIso(),
   onApply,
-}: CustomDateRangePickerProps) {
+  initial,
+}: CustomDateRangePickerProps & {
+  initial: ReturnType<typeof computeInitialPickerState>;
+}) {
   const todayDate = getTodayDate();
   const todayIso = formatIsoDate(todayDate);
 
-  const [selectedQuick, setSelectedQuick] = useState<QuickRangeKey>("today");
-  const [start, setStart] = useState<string>(todayIso);
-  const [end, setEnd] = useState<string>(todayIso);
+  const [selectedQuick, setSelectedQuick] = useState<QuickRangeKey>(initial.quick);
+  const [start, setStart] = useState<string>(initial.start);
+  const [end, setEnd] = useState<string>(initial.end);
 
   // Which input field is currently active for date selection: "start" | "end"
   const [activeInput, setActiveInput] = useState<"start" | "end">("start");
   // Hover preview date for animated range expansion
   const [hoverDate, setHoverDate] = useState<string | null>(null);
 
-  // Month navigation: default view is current month
-  const [viewYear, setViewYear] = useState(todayDate.getFullYear());
-  const [viewMonth, setViewMonth] = useState(todayDate.getMonth());
-
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  // Sync state when modal opens based on activeTab (strictly <= todayIso)
-  useEffect(() => {
-    if (isOpen) {
-      const tIso = getTodayIso();
-      const weekStart = getCurrentWeekStartIso();
-      const tDate = getTodayDate();
-      const monthStart = formatIsoDate(new Date(tDate.getFullYear(), tDate.getMonth(), 1));
-
-      if (activeTab === "today") {
-        setSelectedQuick("today");
-        const s = startDate && startDate <= tIso ? startDate : tIso;
-        setStart(s);
-        setEnd(s);
-        const [y, m] = s.split("-").map(Number);
-        setViewYear(y);
-        setViewMonth(m - 1);
-      } else if (activeTab === "week") {
-        setSelectedQuick("thisWeek");
-        const s = startDate && startDate <= tIso ? startDate : weekStart;
-        const e = endDate && endDate <= tIso ? endDate : tIso;
-        setStart(s);
-        setEnd(e);
-        const [y, m] = s.split("-").map(Number);
-        setViewYear(y);
-        setViewMonth(m - 1);
-      } else if (activeTab === "month") {
-        setSelectedQuick("thisMonth");
-        const s = startDate && startDate <= tIso ? startDate : monthStart;
-        const e = endDate && endDate <= tIso ? endDate : tIso;
-        setStart(s);
-        setEnd(e);
-        const [y, m] = s.split("-").map(Number);
-        setViewYear(y);
-        setViewMonth(m - 1);
-      } else {
-        setSelectedQuick("custom");
-        const s = startDate && startDate <= tIso ? startDate : "2026-11-09";
-        const e = endDate && endDate <= tIso ? endDate : tIso;
-        setStart(s);
-        setEnd(e);
-        const [y, m] = s.split("-").map(Number);
-        setViewYear(y);
-        setViewMonth(m - 1);
-      }
-      setActiveInput("start");
-      setHoverDate(null);
-    }
-  }, [isOpen, activeTab, startDate, endDate]);
+  // Month navigation: starts on the selected start date's month
+  const [viewYear, setViewYear] = useState(initial.viewYear);
+  const [viewMonth, setViewMonth] = useState(initial.viewMonth);
 
   // Close on Escape key
   useEffect(() => {
-    if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [onClose]);
 
   // Format date helper: "Mon, 09 Nov 2026"
   const formatDateDisplay = (isoStr: string) => {
@@ -318,8 +317,6 @@ export function CustomDateRangePicker({
     const isToday = iso === todayIso;
     return { isStart, isEnd, inRange, isHoverRange, isToday, iso };
   };
-
-  if (!isOpen || !mounted) return null;
 
   return createPortal(
     <div

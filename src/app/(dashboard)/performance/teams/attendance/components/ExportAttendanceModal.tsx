@@ -15,7 +15,12 @@ interface ExportAttendanceModalProps {
   initialSelectedAgentIds?: Set<string>;
 }
 
-export function ExportAttendanceModal({
+export function ExportAttendanceModal(props: ExportAttendanceModalProps) {
+  if (!props.isOpen) return null;
+  return <ExportAttendanceModalContent {...props} />;
+}
+
+function ExportAttendanceModalContent({
   isOpen,
   onClose,
   onExport,
@@ -26,7 +31,7 @@ export function ExportAttendanceModal({
   const [dateRange, setDateRange] = useState(initialDateRange);
   const [dateDropdownOpen, setDateDropdownOpen] = useState(false);
 
-  const [selectedAgentIds, setSelectedAgentIds] = useState<Set<string>>(
+  const [selectedAgentIds, setSelectedAgentIds] = useState<Set<string>>(() =>
     initialSelectedAgentIds && initialSelectedAgentIds.size > 0
       ? new Set(initialSelectedAgentIds)
       : new Set(ATTENDANCE_AGENTS.map((a) => a.id))
@@ -40,18 +45,6 @@ export function ExportAttendanceModal({
 
   const dateDropdownRef = useRef<HTMLDivElement>(null);
   const agentDropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (initialDateRange) {
-      setDateRange(initialDateRange);
-    }
-  }, [initialDateRange]);
-
-  useEffect(() => {
-    if (initialSelectedAgentIds && initialSelectedAgentIds.size > 0) {
-      setSelectedAgentIds(new Set(initialSelectedAgentIds));
-    }
-  }, [initialSelectedAgentIds]);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -68,8 +61,6 @@ export function ExportAttendanceModal({
     }
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [dateDropdownOpen, agentDropdownOpen]);
-
-  if (!isOpen) return null;
 
   const allAgentsSelected = selectedAgentIds.size === ATTENDANCE_AGENTS.length;
   const singleAgent =

@@ -256,7 +256,7 @@ export function TeamAttendanceWorkspace({
       <SendAttendanceReminderModal
         isOpen={reminderOpen}
         onClose={() => setReminderOpen(false)}
-        onSend={(msg) => {
+        onSend={() => {
           setNotice("Check-in reminder sent to un-checked-in agents.");
         }}
       />

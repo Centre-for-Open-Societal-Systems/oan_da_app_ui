@@ -51,12 +51,8 @@ export function AttendanceControls({
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Picker tab target (guarantees "custom" is active when opening via Custom tab)
+  // Picker tab target (set explicitly in each trigger handler when opening the calendar)
   const [pickerActiveTab, setPickerActiveTab] = useState<AttendanceTab>(activeTab);
-
-  useEffect(() => {
-    setPickerActiveTab(activeTab);
-  }, [activeTab]);
 
   const todayIso = getTodayIso();
   const todayLabel = getTodayLabel();
