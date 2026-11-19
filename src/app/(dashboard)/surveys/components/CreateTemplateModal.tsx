@@ -24,6 +24,7 @@ import {
   addDaysIso,
   createSurveyTemplate,
   describeSurveyError,
+  getSurveyTemplate,
   newOpId,
   patchSurveyTemplate,
   templateErrors,
@@ -150,13 +151,13 @@ export function CreateTemplateModal({ onClose, onSaved, template }: CreateTempla
           onClose();
           return;
         }
-        const saved = await patchSurveyTemplate(template.id, body);
-        onSaved(saved, saved.id !== template.id ? "versioned" : "updated");
+        const savedId = await patchSurveyTemplate(template.id, body);
+        onSaved(await getSurveyTemplate(savedId), savedId !== template.id ? "versioned" : "updated");
       } else {
-        onSaved(await createSurveyTemplate(toTemplateBody(draft, opId)), "created");
+        onSaved(await getSurveyTemplate(await createSurveyTemplate(toTemplateBody(draft, opId))), "created");
       }
     } catch (err) {
-      setError(describeSurveyError(err, "save"));
+      setError(describeSurveyError(err));
     } finally {
       setSaving(false);
     }

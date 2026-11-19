@@ -84,9 +84,9 @@ export interface TemplateBody {
   client_op_id?: string;
 }
 
-/** POST /surveys/templates: create = publish (status Open). 201 with the new SurveyTask. */
-export async function createSurveyTemplate(body: TemplateBody): Promise<SurveyTask> {
-  return (await authRequest<{ data: SurveyTask }>(`${BASE}/templates`, { method: "POST", body })).data;
+/** POST /surveys/templates: create = publish (status Open). 201 with the new template id. */
+export async function createSurveyTemplate(body: TemplateBody): Promise<string> {
+  return (await authRequest<{ data: { id: string } }>(`${BASE}/templates`, { method: "POST", body })).data.id;
 }
 
 /** PATCH body: send only the keys to change. Type and Woreda cannot be changed. */
@@ -103,9 +103,9 @@ export interface TemplatePatch {
   assignedDaIds?: string[];
 }
 
-/** PATCH /surveys/templates/{id}. Returns the updated template, or the new version when questions changed after responses. */
-export async function patchSurveyTemplate(id: string, patch: TemplatePatch): Promise<SurveyTask> {
-  return (await authRequest<{ data: SurveyTask }>(`${BASE}/templates/${encodeURIComponent(id)}`, { method: "PATCH", body: patch })).data;
+/** PATCH /surveys/templates/{id}. Returns the id saved to: the same template, or a new version when questions changed after responses. */
+export async function patchSurveyTemplate(id: string, patch: TemplatePatch): Promise<string> {
+  return (await authRequest<{ data: { id: string } }>(`${BASE}/templates/${encodeURIComponent(id)}`, { method: "PATCH", body: patch })).data.id;
 }
 
 export const closeSurveyTemplate = (id: string) => patchSurveyTemplate(id, { status: "Closed" });
@@ -138,13 +138,12 @@ export async function getSurvey(id: string): Promise<SurveyTask> {
 export type SurveyAnswers = Record<string, string | string[]>;
 
 export interface ResponseBody {
-  /** Farmer Registry internal id or the FR-… id; the server resolves the canonical one. */
   farmer_id: string;
   consent: "granted" | "declined";
   answers: SurveyAnswers;
-  /** Only Queued or Synced; Draft is rejected with 400. */
-  sync_state?: "Queued" | "Synced";
-  /** Reuse the same id on a retry; a different payload under the same id is 409. */
+  /** The farmer's Kebele, stored on the response. */
+  kebele?: string;
+  sync_state?: "Queued" | "Synced" | "Declined";
   client_op_id?: string;
   /** Collector DA-ID; required when a Supervisor / Admin collects on behalf of a DA. */
   da_id?: string;
@@ -172,9 +171,9 @@ export interface SurveyResponseRecord {
   kebele: string | null;
 }
 
-/** POST /surveys/{id}/responses: 201 stored; 400 invalid / outside window; 403 out of scope; 404 farmer; 409 duplicate. */
-export async function submitSurveyResponse(surveyId: string, body: ResponseBody): Promise<SurveyResponseRecord> {
-  return (await authRequest<{ data: SurveyResponseRecord }>(`${BASE}/${encodeURIComponent(surveyId)}/responses`, { method: "POST", body })).data;
+/** POST /surveys/{id}/responses: save only, message-only 201; 400 invalid field; 403 out of scope; 404 survey. */
+export async function submitSurveyResponse(surveyId: string, body: ResponseBody): Promise<void> {
+  await authRequest(`${BASE}/${encodeURIComponent(surveyId)}/responses`, { method: "POST", body });
 }
 
 export interface ResponseListQuery {
@@ -256,17 +255,13 @@ export async function downloadSurveyResponses(surveyId: string): Promise<void> {
 // ---- errors --------------------------------------------------------------------------------------
 
 /** Text for a failed survey call, following the status table in docs/surveys-frontend.md. */
-export function describeSurveyError(err: unknown, action: "load" | "submit" | "save" | "export" = "load"): string {
+export function describeSurveyError(err: unknown): string {
   if (!(err instanceof ApiError)) return err instanceof Error ? err.message : "Something went wrong. Try again.";
   switch (err.status) {
     case 0: return err.message;
     case 401: return "Your session has ended. Please sign in again.";
-    case 403:
-      if (action === "submit") return "This farmer is not in your assigned Kebele for this survey.";
-      if (action === "export") return "Only a Supervisor, Executive or Admin with an active assignment can export responses.";
-      return err.message && !/^Request failed/.test(err.message) ? err.message : "You don't have access to this survey.";
-    case 404: return action === "submit" ? "Farmer not found. Search again and pick the farmer from the list." : "Survey not found.";
-    case 409: return action === "submit" ? "A response for this farmer already exists for this survey." : err.message;
+    case 403: return err.message && !/^Request failed/.test(err.message) ? err.message : "You don't have access to this survey.";
+    case 404: return "Survey not found.";
     default: return err.details ? Object.values(err.details).join(" ") : err.message;
   }
 }

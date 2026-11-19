@@ -10,7 +10,6 @@ import { Textarea } from "@/components/ui/Textarea";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BackLink } from "@/components/ui/BackLink";
-import { ApiError } from "@/lib/api";
 import { cn, todayIso } from "@/lib/utils";
 import { useAuthStore } from "@/store/useAuthStore";
 import { describeFarmerError, listFarmers, type ApiFarmer } from "@/features/farmers";
@@ -174,23 +173,20 @@ export function SurveyCapture({ id }: { id: string }) {
       }
     }
     try {
-      const saved = await submitSurveyResponse(task.id, {
+      const state: ResponseStatus = given === "declined" ? "Declined" : "Synced";
+      await submitSurveyResponse(task.id, {
         farmer_id: farmer.farmer_id,
         consent: given,
         answers: body,
-        sync_state: "Synced",
+        ...(farmer.kebele ? { kebele: farmer.kebele } : {}),
+        sync_state: state,
         client_op_id: opId.current,
         ...(!isDA && daId ? { da_id: daId } : {}),
       });
-      setStatus((saved.sync_state as ResponseStatus) ?? (given === "declined" ? "Declined" : "Synced"));
+      setStatus(state);
       refresh();
     } catch (err) {
-      // A duplicate is final for this farmer: refresh answered[] instead of retrying.
-      if (err instanceof ApiError && err.status === 409) {
-        refresh();
-        opId.current = null;
-      }
-      setSubmitError(describeSurveyError(err, "submit"));
+      setSubmitError(describeSurveyError(err));
       setStatus(null);
     }
   };
