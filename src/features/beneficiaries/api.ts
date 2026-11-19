@@ -31,8 +31,10 @@ export interface ApiFarmerBeneficiary {
   modified: string;
 }
 
+/** POST body: every farmer id gets its own Farmer Beneficiary, all with the same area and segment. */
 export interface FarmerBeneficiaryRequest {
-  farmer_id: string;
+  /** 1-500 Farmer IDs as people see them ("FR-…", the farmer's reg_id); blanks and repeats are dropped by the backend. */
+  farmer_ids: string[];
   region: string;
   zone: string;
   woreda: string;
@@ -61,11 +63,17 @@ export async function listFarmerBeneficiaries(
   return { items: res.data, total: res.meta?.total ?? res.data.length };
 }
 
-/** POST /farmer-beneficiaries: adds one farmer to one package (409 when they are in it already). */
-export async function createFarmerBeneficiary(body: FarmerBeneficiaryRequest): Promise<ApiFarmerBeneficiary> {
-  const res = await authRequest<{ data: ApiFarmerBeneficiary }>("/da-services/farmer-beneficiaries", { method: "POST", body });
-  return res.data;
+/**
+ * POST /farmer-beneficiaries: adds farmers of one area to one package in a single call. Farmers already in it come back
+ * in `skipped`; any other failure creates nothing.
+ */
+export async function createFarmerBeneficiaries(body: FarmerBeneficiaryRequest): Promise<{ created: ApiFarmerBeneficiary[]; skipped: string[] }> {
+  const res = await authRequest<{ data: { created: ApiFarmerBeneficiary[]; skipped: string[] } }>("/da-services/farmer-beneficiaries", { method: "POST", body });
+  return { created: res.data.created ?? [], skipped: res.data.skipped ?? [] };
 }
+
+/** The backend takes at most this many farmer_ids per POST. */
+const MAX_BULK = 500;
 
 // ----- Farmer area → area codes ---------------------------------------------------------------------------------
 // The farmer list gives area names ("Lekatit", "Shire Endaslasie town"); the POST needs the codes of the DA area
@@ -115,20 +123,46 @@ export interface AddResult {
 
 const reasonOf = (err: unknown) => (err instanceof Error && err.message ? err.message : "Could not add the farmer.");
 
-/** One POST per farmer, one after another so a slow backend is not flooded; each farmer's outcome is kept. */
+/**
+ * The POST shares one area across its farmer_ids, so farmers are grouped by their area codes and each group is sent in
+ * one call (500 at most), one group after another. Each farmer's outcome is kept.
+ */
 export async function addFarmersToSegment(farmers: Farmer[], segment: string): Promise<AddResult> {
   const result: AddResult = { added: [], skipped: [], failed: [] };
+  const groups = new Map<string, { area: FarmerArea; farmers: Farmer[] }>();
   for (const farmer of farmers) {
+    if (!farmer.regId) {
+      result.failed.push({ farmer, reason: "The farmer has no Farmer ID (FR-…) in the Farmer Registry." });
+      continue;
+    }
     try {
       const area = await resolveFarmerArea(farmer);
       if ("error" in area) {
         result.failed.push({ farmer, reason: area.error });
         continue;
       }
-      result.added.push(await createFarmerBeneficiary({ farmer_id: farmer.id, beneficiary_segment: segment, ...area }));
+      const key = [area.region, area.zone, area.woreda, area.kebele].join("|");
+      const group = groups.get(key) ?? { area, farmers: [] };
+      group.farmers.push(farmer);
+      groups.set(key, group);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) result.skipped.push(farmer);
-      else result.failed.push({ farmer, reason: reasonOf(err) });
+      result.failed.push({ farmer, reason: reasonOf(err) });
+    }
+  }
+
+  for (const { area, farmers: inArea } of groups.values()) {
+    for (let i = 0; i < inArea.length; i += MAX_BULK) {
+      const batch = inArea.slice(i, i + MAX_BULK);
+      try {
+        const res = await createFarmerBeneficiaries({ farmer_ids: batch.map((f) => f.regId!), beneficiary_segment: segment, ...area });
+        const skipped = new Set(res.skipped);
+        result.added.push(...res.created);
+        result.skipped.push(...batch.filter((f) => skipped.has(f.regId!)));
+      } catch (err) {
+        // Nothing of this batch was created.
+        const reason = err instanceof ApiError && err.status === 409 ? "Already in this package." : reasonOf(err);
+        result.failed.push(...batch.map((farmer) => ({ farmer, reason })));
+      }
     }
   }
   return result;

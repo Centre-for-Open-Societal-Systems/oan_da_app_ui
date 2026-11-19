@@ -27,7 +27,7 @@ const AREAS = {
 };
 
 /** Answers /master/areas from AREAS and the beneficiary POST with `post`. */
-function route(post: (body: Record<string, string>) => Response) {
+function route(post: (body: Record<string, unknown>) => Response) {
   fetchMock.mockImplementation(async (input, init) => {
     const url = new URL(String(input), "http://x");
     if (url.pathname.endsWith("/master/areas")) return json({ data: AREAS[url.searchParams.get("level") as keyof typeof AREAS] ?? [] });
@@ -36,7 +36,7 @@ function route(post: (body: Record<string, string>) => Response) {
   });
 }
 
-const farmer = () => ({ id: "uuid-1", name: "Aster", kebele: "Lekatit", woreda: "Shire Endaslasie town" }) as Farmer;
+const farmer = () => ({ id: "uuid-1", regId: "FR-101", name: "Aster", kebele: "Lekatit", woreda: "Shire Endaslasie town" }) as Farmer;
 
 beforeEach(() => {
   globalThis.sessionStorage = new MemoryStorage();
@@ -73,21 +73,23 @@ describe("resolveFarmerArea", () => {
 });
 
 describe("addFarmersToSegment", () => {
-  it("posts each farmer with area codes and sorts out added / already in / failed", async () => {
-    const posted: Record<string, string>[] = [];
+  it("posts the farmers of one area together as farmer_ids and sorts out added / already in / failed", async () => {
+    const posted: Record<string, unknown>[] = [];
     route((body) => {
       posted.push(body);
-      if (body.farmer_id === "uuid-2") return json({ message: "Farmer uuid-2 is already in segment BS-00001." }, 409);
-      return json({ data: { name: "FB-9", ...body } }, 201);
+      return json({ data: { created: [{ name: "FB-9", farmer_id: "FR-101" }], skipped: ["FR-102"] } }, 201);
     });
 
-    const r = await addFarmersToSegment([farmer(), { ...farmer(), id: "uuid-2", name: "Bekele" }, { ...farmer(), id: "uuid-3", name: "Chala", kebele: "Nowhere" }], "BS-00001");
+    const r = await addFarmersToSegment(
+      [farmer(), { ...farmer(), id: "uuid-2", regId: "FR-102", name: "Bekele" }, { ...farmer(), id: "uuid-3", regId: "FR-103", name: "Chala", kebele: "Nowhere" }, { ...farmer(), id: "uuid-4", regId: undefined, name: "Dawit" }],
+      "BS-00001",
+    );
 
-    expect(posted[0]).toEqual({ farmer_id: "uuid-1", beneficiary_segment: "BS-00001", region: "ET04", zone: "ET04-Z01", woreda: "ET04-W01", kebele: "ET04-W01-K01" });
-    expect(posted).toHaveLength(2);
+    expect(r.failed.map((f) => f.farmer.name)).toEqual(["Chala", "Dawit"]);
+    expect(posted).toEqual([{ farmer_ids: ["FR-101", "FR-102"], beneficiary_segment: "BS-00001", region: "ET04", zone: "ET04-Z01", woreda: "ET04-W01", kebele: "ET04-W01-K01" }]);
     expect(r.added.map((a) => a.name)).toEqual(["FB-9"]);
     expect(r.skipped.map((f) => f.name)).toEqual(["Bekele"]);
-    expect(r.failed.map((f) => f.farmer.name)).toEqual(["Chala"]);
+
     expect(describeAddResult(r, "Package 1")).toMatchObject({ tone: "warning", text: expect.stringContaining("1 farmer added to “Package 1”") });
   });
 
