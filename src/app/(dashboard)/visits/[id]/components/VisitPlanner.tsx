@@ -50,15 +50,15 @@ export function VisitPlanner({ visitId }: { visitId: string }) {
     <div className="flex w-full flex-col gap-4">
       <BackLink href="/visits" />
 
-      <Card className="flex flex-col gap-4 px-4 py-5 shadow-card md:flex-row md:items-center md:justify-between">
-        <h1 className="text-[20px] font-semibold tracking-tight text-ink sm:text-[22px]">Visit Planner</h1>
-        <div className="flex items-center gap-3">
+      <Card className="flex flex-row items-center justify-between gap-3 px-4 py-3.5 sm:px-5 sm:py-5 shadow-card">
+        <h1 className="text-[18px] sm:text-[22px] font-semibold tracking-tight text-ink whitespace-nowrap">Visit Planner</h1>
+        <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
           {opened && canLogOutcome(opened) && canAct(opened) && (
-            <Button type="button" variant="outline" onClick={() => setModal({ type: "outcome", visit: opened })}>
+            <Button type="button" variant="outline" onClick={() => setModal({ type: "outcome", visit: opened })} className="h-8.5 sm:h-9 px-2.5 sm:px-3.5 text-[12.5px] sm:text-[13.5px]">
               Log visit outcome &rarr;
             </Button>
           )}
-          <PlanVisitButton />
+          <PlanVisitButton className="h-8.5 sm:h-9 px-3 sm:px-3.5 text-[12.5px] sm:text-[13.5px]" />
         </div>
       </Card>
 

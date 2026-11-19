@@ -49,7 +49,7 @@ function iconFor(tone: PillTone): ReactNode {
 export function GrievanceStats({ cards, active, onSelect }: GrievanceStatsProps) {
   if (cards.length === 0) return null;
   return (
-    <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 sm:gap-4">
       {cards.map((card) => {
         const isAll = card.status === "All";
         const tone = isAll ? "blue" : statusTone(card.status);
@@ -59,9 +59,9 @@ export function GrievanceStats({ cards, active, onSelect }: GrievanceStatsProps)
           <button key={card.status} type="button" onClick={() => onSelect(card.status)} aria-pressed={isActive} className="text-left">
             <Card
               className={cn(
-                "group flex h-full items-center justify-between gap-2 border-l-4 px-3 py-3.5 shadow-card transition-shadow hover:shadow-md sm:px-4 sm:py-4",
+                "group flex h-full items-center justify-between gap-2 border-l-4 px-3 py-3.5 shadow-card transition-all hover:shadow-md sm:px-4 sm:py-4 cursor-pointer",
                 style.accent,
-                isActive && "bg-surface ring-1 ring-brand-green",
+                isActive ? "bg-surface ring-2 ring-brand-green/70 shadow-sm" : "hover:-translate-y-0.5",
               )}
             >
               <div className="min-w-0">

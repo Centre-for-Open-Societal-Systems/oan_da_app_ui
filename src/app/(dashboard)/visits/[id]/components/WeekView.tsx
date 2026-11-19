@@ -18,52 +18,68 @@ interface WeekViewProps {
 export function WeekView({ visitsOn, weekStart, selectedDay, selectedVisit, onSelectDay, onClearSelection }: WeekViewProps) {
   const weekDays = Array.from({ length: 7 }, (_, i) => weekStart + i);
   return (
-    <div className="overflow-x-auto p-4 sm:p-6">
-      <div className="grid min-w-[900px] grid-cols-7 gap-2.5">
-        {weekDays.map((day) => {
-          const today = isToday(day);
-          const selected = selectedDay === day;
-          const visits = visitsOn(day);
-          return (
-            <div
-              key={day}
-              className={cn(
-                "flex min-h-[310px] flex-col gap-2.5 rounded-lg p-2.5",
-                today ? "border border-line bg-surface" : "",
-                selected && "border border-brand-green/50 bg-brand-wash",
-              )}
-            >
-              <button
-                type="button"
-                onClick={() => onSelectDay(day)}
-                aria-pressed={selected}
-                aria-label={`Select ${longDate(day)}`}
-                className="flex flex-col items-center gap-1 rounded-md py-1 transition-colors hover:bg-white/70"
+    <div className="flex flex-col p-3 sm:p-5 md:p-6">
+      {/* 7-Day Grid with generous column width and horizontal scroll container */}
+      <div className="overflow-x-auto green-scrollbar pb-2.5">
+        <div className="grid min-w-[1020px] 2xl:min-w-0 grid-cols-7 gap-2.5">
+          {weekDays.map((day) => {
+            const today = isToday(day);
+            const selected = selectedDay === day;
+            const visits = visitsOn(day);
+            return (
+              <div
+                key={day}
+                className={cn(
+                  "flex min-h-[300px] sm:min-h-[320px] min-w-0 flex-col gap-2 rounded-lg p-1.5 sm:p-2.5 transition-all duration-150",
+                  selected
+                    ? "border-1 border-brand-green bg-emerald-50/80 shadow-xs"
+                    : today
+                      ? "border border-line bg-surface"
+                      : "border border-transparent bg-slate-50/40 sm:bg-transparent hover:bg-slate-50/80",
+                )}
               >
-                <span className={cn("text-[12px] font-semibold tracking-wide", today || selected ? "text-brand-green" : "text-slate-600")}>
-                  {weekdayLabel(day)}
-                </span>
-                <span
-                  className={cn(
-                    "flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-[13.5px] font-semibold",
-                    today ? "bg-brand-green text-white" : selected ? "bg-green-100 text-brand-green" : "text-ink",
-                  )}
+                <button
+                  type="button"
+                  onClick={() => onSelectDay(day)}
+                  aria-pressed={selected}
+                  aria-label={`Select ${longDate(day)}`}
+                  className="flex flex-col items-center gap-0.5 sm:gap-1 rounded-md py-1 transition-colors hover:bg-white/70"
                 >
-                  {dateOf(day).getUTCDate()}
-                </span>
-              </button>
+                  <span className={cn("text-[11px] sm:text-[12px] font-semibold tracking-wide", today || selected ? "text-brand-green" : "text-slate-600")}>
+                    {weekdayLabel(day)}
+                  </span>
+                  <span
+                    className={cn(
+                      "flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-[12.5px] sm:text-[13.5px] font-semibold transition-colors",
+                      today || selected ? "bg-brand-green text-white shadow-xs" : "text-ink",
+                    )}
+                  >
+                    {dateOf(day).getUTCDate()}
+                  </span>
+                </button>
 
-              {visits.length === 0 ? (
-                <NoVisits />
-              ) : (
-                visits.map((v) => <VisitCard key={v.id} visit={v} active={selectedVisit === v.id} onClick={() => onSelectDay(day, v.id)} />)
-              )}
-            </div>
-          );
-        })}
+                <div className="flex flex-col gap-2 min-w-0">
+                  {visits.length === 0 ? (
+                    <NoVisits />
+                  ) : (
+                    visits.map((v) => <VisitCard key={v.id} visit={v} active={selectedVisit === v.id} onClick={() => onSelectDay(day, v.id)} />)
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      {selectedDay != null && <SelectedDayPanel visits={visitsOn(selectedDay)} day={selectedDay} selectedVisit={selectedVisit} onClear={onClearSelection} />}
+      {/* Selected Day Panel: positioned at full card width */}
+      {selectedDay != null && (
+        <SelectedDayPanel
+          visits={visitsOn(selectedDay)}
+          day={selectedDay}
+          selectedVisit={selectedVisit}
+          onClear={onClearSelection}
+        />
+      )}
     </div>
   );
 }

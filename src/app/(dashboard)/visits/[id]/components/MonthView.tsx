@@ -20,10 +20,10 @@ export function MonthView({ visitsOn, cursor, selectedDay, onPickDay }: MonthVie
   const leading = ((firstOfMonth % 7) + 7) % 7;
 
   return (
-    <div className="overflow-x-auto p-4 sm:p-6">
-      <div className="grid min-w-[560px] grid-cols-7 gap-1.5">
+    <div className="overflow-x-auto green-scrollbar p-3 sm:p-5 md:p-6">
+      <div className="grid min-w-[500px] md:min-w-0 grid-cols-7 gap-1 sm:gap-1.5">
         {DAY_LABELS.map((d) => (
-          <span key={d} className="py-1 text-center text-[12px] font-semibold tracking-wide text-slate-600">{d}</span>
+          <span key={d} className="py-1 text-center text-[11px] sm:text-[12px] font-semibold tracking-wide text-slate-600">{d}</span>
         ))}
         {Array.from({ length: leading }, (_, i) => <span key={`blank-${i}`} />)}
         {Array.from({ length: daysInMonth }, (_, i) => {
@@ -37,17 +37,21 @@ export function MonthView({ visitsOn, cursor, selectedDay, onPickDay }: MonthVie
               onClick={() => onPickDay(day)}
               aria-label={`${longDate(day)}, ${visits.length} visits`}
               className={cn(
-                "flex h-16 flex-col items-start gap-1 rounded-md border px-2 py-1.5 text-left transition-colors hover:border-brand-green/50",
-                today ? "border-line bg-surface" : "border-slate-100",
-                selectedDay === day && "border-brand-green/50 bg-brand-wash",
+                "flex h-14 sm:h-16 flex-col items-start gap-1 rounded-md border p-1.5 sm:px-2 sm:py-1.5 text-left transition-colors hover:border-brand-green/50",
+                selectedDay === day
+                  ? "border-2 border-brand-green bg-emerald-50/80 shadow-xs"
+                  : today
+                    ? "border-line bg-surface"
+                    : "border-slate-100 hover:bg-slate-50/60",
               )}
             >
-              <span className={cn("flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-[13px] font-semibold", today ? "bg-brand-green text-white" : "text-ink")}>
+              <span className={cn("flex h-5 w-5 sm:h-6 sm:min-w-6 items-center justify-center rounded-full text-[12px] sm:text-[13px] font-semibold", today || selectedDay === day ? "bg-brand-green text-white" : "text-ink")}>
                 {i + 1}
               </span>
               {visits.length > 0 && (
-                <span className="flex items-center gap-1">
-                  {visits.map((v) => <span key={v.id} className={cn("h-1.5 w-1.5 rounded-full", VISIT_STYLES[v.status].dot)} />)}
+                <span className="flex flex-wrap items-center gap-1">
+                  {visits.slice(0, 4).map((v) => <span key={v.id} className={cn("h-1.5 w-1.5 rounded-full shrink-0", VISIT_STYLES[v.status].dot)} />)}
+                  {visits.length > 4 && <span className="text-[10px] text-muted">+{visits.length - 4}</span>}
                 </span>
               )}
             </button>

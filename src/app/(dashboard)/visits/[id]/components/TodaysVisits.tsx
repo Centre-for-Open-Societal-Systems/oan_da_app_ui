@@ -30,12 +30,14 @@ export function TodaysVisits({ daId, reload, canAct, onStart, onLogOutcome }: To
 
   return (
     <Card className="overflow-hidden p-0 shadow-card">
-      <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
-        <div>
+      <div className="flex flex-col gap-2 border-b border-line px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-3.5">
+        <div className="min-w-0">
           <h3 className="text-[15px] font-semibold text-ink">Today&apos;s visits</h3>
-          <p className="mt-0.5 text-[13.5px] text-ink-soft">Visits you&apos;ve arranged with farmers for {todayLabel}</p>
+          <p className="mt-0.5 text-[12.5px] sm:text-[13.5px] text-ink-soft">Visits you&apos;ve arranged with farmers for {todayLabel}</p>
         </div>
-        <VisitLocationsButton visits={visits} todayLabel={todayLabel} />
+        <div className="shrink-0 self-start sm:self-auto">
+          <VisitLocationsButton visits={visits} todayLabel={todayLabel} />
+        </div>
       </div>
 
       <div className="flex flex-col gap-4 p-4">
