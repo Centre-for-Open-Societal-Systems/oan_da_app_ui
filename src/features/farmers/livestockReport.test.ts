@@ -93,6 +93,37 @@ describe("validateLivestockForm", () => {
     expect(errors[livestockFieldId(ANIMALS, 0, "quantity")]).toMatch(/whole number/);
   });
 
+  it("asks for the date of birth of an animal, which the registry refuses to save without", () => {
+    const errors = validateLivestockForm(FORM, { ...valid(), [ANIMALS]: [animal] }, GEO);
+    expect(errors[livestockFieldId(ANIMALS, 0, "date_of_birth")]).toBe("Date of birth is required.");
+    expect(validateLivestockForm(FORM, { ...valid(), [ANIMALS]: [{ ...animal, date_of_birth: "2023-01-01" }] }, GEO)).toEqual({});
+  });
+
+  it("refuses a breed of another species, as the registry does", () => {
+    const goat = { ...animal, species: "GOATS", date_of_birth: "2023-01-01" };
+    const errors = validateLivestockForm(FORM, { ...valid(), [ANIMALS]: [{ ...goat, breed: "BREED_CATTLE_HORRO" }] }, GEO);
+    expect(errors[livestockFieldId(ANIMALS, 0, "breed")]).toBe("Horro is not a Goat breed. Choose a breed of this species.");
+    expect(validateLivestockForm(FORM, { ...valid(), [ANIMALS]: [{ ...goat, breed: "BREED_GOAT_AFAR" }] }, GEO)).toEqual({});
+    expect(validateLivestockForm(FORM, { ...valid(), [ANIMALS]: [{ ...goat, breed: "BREED_LOCAL" }] }, GEO)).toEqual({});
+    expect(validateLivestockForm(FORM, { ...valid(), [ANIMALS]: [{ ...goat, species: "EQUINES", breed: "BREED_HORSE_OROMO" }] }, GEO)).toEqual({});
+  });
+
+  it("reads the breed code of a live choice stored by id", () => {
+    const form = applyLivestockIntake(FORM, {
+      sections: [
+        {
+          section_id: ANIMALS,
+          fields: [
+            { field_name: "species", choices: [{ value_id: "sp-1", value_code: "SHEEP", value_display: "Sheep" }] },
+            { field_name: "breed", choices: [{ value_id: "br-9", value_code: "BREED_CATTLE_BORAN", value_display: "Boran" }] },
+          ],
+        },
+      ],
+    });
+    const errors = validateLivestockForm(form, { ...valid(), [ANIMALS]: [{ species: "sp-1", breed: "br-9" }] }, GEO);
+    expect(errors[livestockFieldId(ANIMALS, 0, "breed")]).toBe("Boran is not a Sheep breed. Choose a breed of this species.");
+  });
+
   it("does not hold a field to its rules while its event type hides it", () => {
     const row = { ear_tag_id: "ET2149721223", event_type: "INJURY", veterinarian_name: "Dr M", disease_type: "x".repeat(200) };
     expect(validateLivestockForm(FORM, { ...valid(), [HEALTH]: [row] }, GEO)).toEqual({});
@@ -174,6 +205,23 @@ describe("submitLivestockReport", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(body(0).sections.map((s: { section_id: string }) => s.section_id)).toEqual([HEALTH]);
+  });
+  it("keeps the draft a failed save already wrote to, and continues it on the retry", async () => {
+    vi.stubGlobal("fetch", fetchMock);
+    const partly = new Response(
+      JSON.stringify({ status: "error", code: "VALIDATION_ERROR", message: "Livestock Registry rejected save livestock section: breed", data: { farmer_id: "FR-1", submission_id: "S1", subject_record_id: "R1", saved_sections: ["livestock_farmer_lookup"] } }),
+      { status: 400, headers: { "content-type": "application/json" } },
+    );
+    fetchMock.mockResolvedValueOnce(partly);
+    const onProgress = vi.fn();
+    await expect(submitLivestockReport("FR-1", sections, null, onProgress)).rejects.toThrow(/breed/);
+    expect(onProgress).toHaveBeenCalledWith({ submissionId: "S1", subjectRecordId: "R1", reference: undefined, saved: ["livestock_farmer_lookup"] });
+
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValueOnce(ok({ submission_id: "S1" })).mockResolvedValueOnce(ok({ submission_id: "S1" }));
+    await submitLivestockReport("FR-1", sections, onProgress.mock.calls[0][0], onProgress);
+    expect(body(0)).toMatchObject({ submission_id: "S1", subject_record_id: "R1" });
+    expect(body(0).sections.map((s: { section_id: string }) => s.section_id)).toEqual([ANIMALS, HEALTH]);
   });
 });
 
