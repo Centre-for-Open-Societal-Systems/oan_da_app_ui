@@ -75,7 +75,7 @@ export function AnswersTile({ surveyId, questions: given, name, onClose, default
     try {
       await downloadSurveyResponses(surveyId);
     } catch (err) {
-      setExportError(describeSurveyError(err, "export"));
+      setExportError(describeSurveyError(err));
     } finally {
       setExporting(false);
     }

@@ -112,7 +112,7 @@ function SurveyResultsView({ initialSurvey }: { initialSurvey?: string }) {
     try {
       await downloadSurveyResponses(surveyId);
     } catch (err) {
-      setExportError(describeSurveyError(err, "export"));
+      setExportError(describeSurveyError(err));
     } finally {
       setExporting(false);
     }

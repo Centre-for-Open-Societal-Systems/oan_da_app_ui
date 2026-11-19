@@ -87,9 +87,10 @@ describe("templatePatch", () => {
 });
 
 describe("describeSurveyError", () => {
-  it("maps capture statuses to the documented messages", () => {
-    expect(describeSurveyError(new ApiError("x", 409), "submit")).toBe("A response for this farmer already exists for this survey.");
-    expect(describeSurveyError(new ApiError("x", 403), "submit")).toBe("This farmer is not in your assigned Kebele for this survey.");
-    expect(describeSurveyError(new ApiError("This survey window is closed.", 400), "submit")).toBe("This survey window is closed.");
+  it("shows the server's reason, with a fallback for a bare 403", () => {
+    expect(describeSurveyError(new ApiError("Not permitted to create DA Survey Response", 403))).toBe("Not permitted to create DA Survey Response");
+    expect(describeSurveyError(new ApiError("Request failed (403)", 403))).toBe("You don't have access to this survey.");
+    expect(describeSurveyError(new ApiError("x", 404))).toBe("Survey not found.");
+    expect(describeSurveyError(new ApiError("consent must be granted or declined.", 400))).toBe("consent must be granted or declined.");
   });
 });
