@@ -22,6 +22,8 @@ export interface MeResponse {
     da_id: string | null;
     /** The DA's registry record; only for a Development Agent. */
     agent?: Record<string, unknown>;
+    /** The Kebeles a Development Agent is posted to; only for a Development Agent. */
+    kebeles?: { code: string; name: string }[];
   };
 }
 
@@ -48,6 +50,7 @@ export function toMeSession({ data }: MeResponse): MeSession | null {
       menu: data.menu,
       daId: data.da_id,
       agent: data.agent ?? null,
+      ...(data.kebeles ? { kebeles: data.kebeles } : {}),
     },
   };
 }

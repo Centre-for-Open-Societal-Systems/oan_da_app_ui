@@ -61,28 +61,20 @@ export interface BroadcastResult {
   duplicate: boolean;
   /** How many DAs received it. */
   recipients: number;
-  /** The code of the Woreda it went to; show the name on screen. */
-  woredaCode: string;
+  /** The code of the Woreda or Kebele it went to; show the name on screen. */
+  scopeValue: string;
 }
 
-/**
- * POST /da-services/notifications/broadcast — send an in-app broadcast to every DA in a Woreda.
- *
- * Roles: Communications Officer / Admin / DA, and the Woreda must be inside the caller's scope (a DA: their own Woreda only).
- *
- * scope_value is the Woreda CODE from Master Data (e.g. "ET120205"), never its name: RBAC woreda_scope holds area
- * codes, and recipients are matched on them exactly. A Woreda with no active DA is a 400. client_op_id makes the
- * call idempotent — the same id returns the first result with duplicate=true instead of sending again.
- */
-export async function broadcastToWoreda(input: {
+interface BroadcastInput {
   title: string;
   body?: string;
   href?: string;
-  woredaCode: string;
   /** The signal source chosen on the form; recipients see it as the notification's tag. */
   source?: string;
   clientOpId?: string;
-}): Promise<BroadcastResult> {
+}
+
+async function sendBroadcast(input: BroadcastInput, scope: "woreda" | "kebele", scopeValue: string): Promise<BroadcastResult> {
   interface Resp {
     data: { broadcast_id: string; duplicate: boolean; recipients: number; scope: string; scope_value: string };
   }
@@ -93,10 +85,32 @@ export async function broadcastToWoreda(input: {
       body: input.body ?? "",
       href: input.href ?? "/notifications",
       source: input.source,
-      scope: "woreda",
-      scope_value: input.woredaCode,
+      scope,
+      scope_value: scopeValue,
       client_op_id: input.clientOpId ?? crypto.randomUUID(),
     },
   });
-  return { broadcastId: res.data.broadcast_id, duplicate: res.data.duplicate, recipients: res.data.recipients, woredaCode: res.data.scope_value };
+  return { broadcastId: res.data.broadcast_id, duplicate: res.data.duplicate, recipients: res.data.recipients, scopeValue: res.data.scope_value };
+}
+
+/**
+ * POST /da-services/notifications/broadcast — send an in-app broadcast to every DA in a Woreda.
+ *
+ * Roles: Communications Officer / Admin, and the Woreda must be inside the caller's scope. A DA broadcasts to a Kebele instead
+ * (broadcastToKebele).
+ *
+ * scope_value is the Woreda CODE from Master Data (e.g. "ET120205"), never its name: RBAC woreda_scope holds area
+ * codes, and recipients are matched on them exactly. A Woreda with no active DA is a 400. client_op_id makes the
+ * call idempotent — the same id returns the first result with duplicate=true instead of sending again.
+ */
+export function broadcastToWoreda(input: BroadcastInput & { woredaCode: string }): Promise<BroadcastResult> {
+  return sendBroadcast(input, "woreda", input.woredaCode);
+}
+
+/**
+ * POST /da-services/notifications/broadcast with scope "kebele": a DA's broadcast to the DAs posted to one of their own
+ * Kebeles (an Effective Kebele assignment, listed on /me as `kebeles`). Any other Kebele, or a wider scope, is a 403.
+ */
+export function broadcastToKebele(input: BroadcastInput & { kebeleCode: string }): Promise<BroadcastResult> {
+  return sendBroadcast(input, "kebele", input.kebeleCode);
 }
