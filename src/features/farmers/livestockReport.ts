@@ -1,3 +1,4 @@
+import { ApiError } from "@/lib/api";
 import {
   finalizeFarmerLivestock,
   saveFarmerLivestock,
@@ -22,6 +23,8 @@ export interface LivestockChoice {
   /** What the registry stores. */
   value: string;
   label: string;
+  /** The catalog code (e.g. BREED_CATTLE_HORRO) when the stored value is an id that differs from it. */
+  code?: string;
 }
 
 export interface LivestockFieldDef {
@@ -84,6 +87,7 @@ interface Catalog {
 const catalogChoice = ({ attribute, store }: Catalog, id: string, label: string, code?: string): LivestockChoice => ({
   value: store === "id" ? id : (code ?? (id.startsWith(`${attribute}_`) ? id.slice(attribute.length + 1) : id)),
   label,
+  ...(store === "id" && code && code !== id ? { code } : {}),
 });
 
 const catalog = (attribute: string, store: Catalog["store"], rows: [id: string, label: string][]) => {
@@ -316,7 +320,8 @@ export const LIVESTOCK_REPORT_FORM: LivestockTabDef[] = [
           text("secondary_identifier", "Secondary identifier"),
           { key: "quantity", label: "Number of animals (head count)", type: "integer" },
           { key: "weight", label: "Weight (kg)", type: "number" },
-          date("date_of_birth", "Date of birth"),
+          // The registry refuses an animal without one ("Please provide the date of birth"); the live form does not flag it.
+          date("date_of_birth", "Date of birth", { requiredInRow: true }),
           text("age", "Age", { readOnly: true }),
           select("gender", "Sex", SEX, { required: true }),
           select("health_status", "Health status", HEALTH_STATUS, { required: true }),
@@ -486,6 +491,41 @@ const isEmptyRow = (row: LivestockRow) => Object.values(row).every((v) => !v?.tr
 
 const fieldIsWritable = (field: LivestockFieldDef) => !field.readOnly && !field.fromUrl;
 
+/** The species a breed code belongs to (BREED_CATTLE_HORRO → CATTLE); none for the shared Improved / Local / Hybrid. */
+const BREED_SPECIES: Record<string, string[]> = {
+  CATTLE: ["CATTLE"],
+  GOATS: ["GOAT"],
+  SHEEP: ["SHEEP"],
+  POULTRY: ["POULTRY"],
+  CAMELS: ["CAMEL"],
+  EQUINES: ["DONKEY", "HORSE", "MULE"],
+  DONKEY: ["DONKEY"],
+  HORSE: ["HORSE"],
+  MULE: ["MULE"],
+  PIG: ["PIG"],
+  BEEHIVE: ["BEEHIVE"],
+};
+const BREED_GROUPS = [...new Set(Object.values(BREED_SPECIES).flat())];
+
+const choiceCode = (field: LivestockFieldDef | undefined, value: string) => {
+  const choice = field?.choices?.find((c) => c.value === value);
+  return choice?.code ?? choice?.value ?? value;
+};
+
+/** The registry refuses a breed of another species ("Breed 'Horro' belongs to species 'Cattle'"); say so before saving. */
+function breedMismatch(section: LivestockSectionDef, row: LivestockRow): string | undefined {
+  const speciesField = section.fields.find((f) => f.key === "species");
+  const breedField = section.fields.find((f) => f.key === "breed");
+  const species = row.species?.trim();
+  const breed = row.breed?.trim();
+  if (!speciesField || !breedField || speciesField.readOnly || !species || !breed) return undefined;
+  const group = BREED_GROUPS.find((g) => choiceCode(breedField, breed).startsWith(`BREED_${g}_`));
+  const allowed = BREED_SPECIES[choiceCode(speciesField, species)];
+  if (!group || !allowed || allowed.includes(group)) return undefined;
+  const label = (field: LivestockFieldDef, value: string) => field.choices?.find((c) => c.value === value)?.label ?? value;
+  return `${label(breedField, breed)} is not a ${label(speciesField, species)} breed. Choose a breed of this species.`;
+}
+
 /** The form's checks, per row. Only what the field map states, plus what makes a list row mean anything. */
 export function validateLivestockForm(form: LivestockTabDef[], values: LivestockValues, geoIds: LivestockGeoIds = {}): LivestockErrors {
   const errors: LivestockErrors = {};
@@ -512,6 +552,9 @@ export function validateLivestockForm(form: LivestockTabDef[], values: Livestock
           else if (field.type === "integer" && !Number.isInteger(n)) errors[id] = `${field.label} must be a whole number.`;
         }
       }
+      const breedId = livestockFieldId(section.id, index, "breed");
+      const mismatch = errors[breedId] ? undefined : breedMismatch(section, row);
+      if (mismatch) errors[breedId] = mismatch;
     });
   }
   return errors;
@@ -576,6 +619,22 @@ export interface LivestockSubmitProgress {
 const MAIN_SECTIONS = new Set([LOOKUP, PERSONNEL, LIVESTOCK_LOCATION_SECTION, LIVESTOCK_ANIMAL_SECTION]);
 
 /**
+ * The draft a failed save already wrote to: the backend's error carries `data.submission_id` and `saved_sections` when
+ * some sections of the call went through. Keeping it lets the retry continue that draft instead of opening another one.
+ */
+function progressAfterFailure(err: unknown, before: LivestockSubmitProgress | null): LivestockSubmitProgress | null {
+  if (!(err instanceof ApiError)) return null;
+  const data = (err.body as { data?: { submission_id?: string; subject_record_id?: string; saved_sections?: string[] } } | undefined)?.data;
+  if (!data?.submission_id || !data.saved_sections?.length) return null;
+  return {
+    submissionId: data.submission_id,
+    subjectRecordId: data.subject_record_id ?? before?.subjectRecordId,
+    reference: before?.reference,
+    saved: [...new Set([...(before?.saved ?? []), ...data.saved_sections])],
+  };
+}
+
+/**
  * The order the Livestock collection documents: a new draft with the farmer sections and the animals, then the event
  * sections on that draft (they name those animals), then finalize. `onProgress` reports each step that went through.
  */
@@ -588,7 +647,14 @@ export async function submitLivestockReport(
   let current = progress;
   if (!current) {
     const main = sections.filter((s) => MAIN_SECTIONS.has(s.section_id));
-    const saved = await saveFarmerLivestock(farmerCode, main);
+    let saved: Awaited<ReturnType<typeof saveFarmerLivestock>>;
+    try {
+      saved = await saveFarmerLivestock(farmerCode, main);
+    } catch (err) {
+      const partial = progressAfterFailure(err, null);
+      if (partial) onProgress(partial);
+      throw err;
+    }
     if (!saved.submission_id) throw new Error("The registry did not return a submission. Nothing was sent for approval.");
     current = { submissionId: saved.submission_id, subjectRecordId: saved.subject_record_id, reference: saved.application_reference, saved: main.map((s) => s.section_id) };
     onProgress(current);
@@ -596,7 +662,13 @@ export async function submitLivestockReport(
   const alreadySaved = current.saved;
   const rest = sections.filter((s) => !alreadySaved.includes(s.section_id));
   if (rest.length) {
-    await saveFarmerLivestock(farmerCode, rest, { submissionId: current.submissionId, subjectRecordId: current.subjectRecordId });
+    try {
+      await saveFarmerLivestock(farmerCode, rest, { submissionId: current.submissionId, subjectRecordId: current.subjectRecordId });
+    } catch (err) {
+      const partial = progressAfterFailure(err, current);
+      if (partial) onProgress(partial);
+      throw err;
+    }
     current = { ...current, saved: [...alreadySaved, ...rest.map((s) => s.section_id)] };
     onProgress(current);
   }

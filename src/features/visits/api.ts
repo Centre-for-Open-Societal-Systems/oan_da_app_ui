@@ -172,28 +172,26 @@ export async function fetchVisit(visitId: string): Promise<ApiVisitDetail> {
   return res.data;
 }
 
-/** One Advisory visit of a farmer with its questions, for the farmer's Advisory tab. */
-export interface FarmerAdvisory {
-  visitId: string;
-  /** "2026-10-16T10:30:00", server local time. */
-  scheduledAt: string;
-  /** Planned / Confirmed / Completed / Missed, or a raw physical status. */
-  status: string;
-  items: AdvisoryQa[];
+/** One question on a farmer's Advisory tab, with when it was saved and last changed. */
+export interface FarmerAdvisoryQa extends AdvisoryQa {
+  /** "2026-11-17 15:29:29.432267", server local time. */
+  createdAt: string;
+  /** Last change, e.g. when the answer was added; same format. */
+  modifiedAt: string;
 }
 
-/**
- * A farmer's Advisory visits that carry questions, newest first. GET /visits?farmer_id= has `advisory_qa` on each
- * row; a backend that does not send it yet is asked for each Advisory visit (GET /visits/{id}) instead.
- */
-export async function listFarmerAdvisory(farmerId: string): Promise<FarmerAdvisory[]> {
-  const { items } = await listVisits({ farmer_id: farmerId, limit: 200 });
-  const advisory = items.filter((v) => v.visit_type === ADVISORY_VISIT_TYPE);
-  const questions = await Promise.all(advisory.map(async (v) => v.advisory_qa ?? (await fetchVisit(v.name)).advisory_qa ?? []));
-  return advisory
-    .map((v, i) => ({ visitId: v.name, scheduledAt: v.scheduled_at, status: v.ui_status, items: questions[i] }))
-    .filter((entry) => entry.items.length > 0)
-    .reverse();
+/** One question row of GET /farmers/{id}/advisory. */
+interface ApiAdvisoryRow {
+  question: string;
+  answer: string | null;
+  creation: string;
+  modified: string;
+}
+
+/** A farmer's Advisory questions, newest first, as GET /farmers/{id}/advisory sends them. */
+export async function listFarmerAdvisory(farmerId: string): Promise<FarmerAdvisoryQa[]> {
+  const res = await authRequest<{ data: ApiAdvisoryRow[] }>(`/da-services/farmers/${encodeURIComponent(farmerId)}/advisory?limit=500`);
+  return res.data.map((row) => ({ question: row.question, answer: row.answer ?? "", createdAt: row.creation, modifiedAt: row.modified }));
 }
 
 /** What happens next after a visit; a follow-up visit or task is created by the backend. */

@@ -43,6 +43,8 @@ export interface AuthProfile {
   daId: string | null;
   /** The DA's registry record; null for other roles. */
   agent: Record<string, unknown> | null;
+  /** The Kebeles a DA is posted to (Effective assignments); a DA broadcasts to these. Absent for other roles. */
+  kebeles?: { code: string; name: string }[];
 }
 
 interface AuthState {

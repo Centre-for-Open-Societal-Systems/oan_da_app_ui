@@ -12,7 +12,7 @@ import { Checkbox } from "@/components/ui/Checkbox";
 import { SmsPreview } from "@/features/communication";
 import { RECIPIENT_GROUPS, SIGNALS, type RecipientGroup, type SignalSource } from "@/features/communication";
 import { loadScopeAreas, useGeoCascade, type GeoField, type GeoLevel } from "@/features/assignments";
-import { broadcastToWoreda } from "@/features/notifications";
+import { broadcastToKebele, broadcastToWoreda } from "@/features/notifications";
 import { useAuthStore } from "@/store/useAuthStore";
 import { FileDropInput } from "@/components/ui/FileDropInput";
 import { ReceivedBroadcasts } from "./ReceivedBroadcasts";
@@ -40,13 +40,15 @@ function GeoSelect({ field, label, level, hint, onSelect, onRetry }: { field: Ge
 export function BroadcastWorkspace() {
   const role = useAuthStore((s) => s.role);
   const canDispatch = role === "CommsOfficer" || role === "Admin" || role === "DA" || role === "Supervisor";
-  // A Supervisor or a DA broadcasts to their own Woreda only: the Woreda on their /me scope, else the DA's posting.
-  const ownWoredaOnly = role === "Supervisor" || role === "DA";
-  const ownWoreda = useAuthStore((s) => {
-    if (s.role !== "Supervisor" && s.role !== "DA") return null;
-    const posted = s.role === "DA" ? s.profile?.agent?.woreda : null;
-    return s.profile?.scope?.woredas?.[0] ?? (typeof posted === "string" && posted ? posted : null);
-  });
+  // A DA broadcasts to their own Kebele only: the Kebeles they are posted to, from /me.
+  const ownKebeleOnly = role === "DA";
+  const ownKebeles = useAuthStore((s) => (s.role === "DA" ? s.profile?.kebeles : undefined));
+  const [kebeleCode, setKebeleCode] = useState<string | null>(null);
+  const kebeleOptions = ownKebeles ?? [];
+  const kebele = ownKebeleOnly ? kebeleOptions.find((k) => k.code === kebeleCode) ?? kebeleOptions[0] ?? null : null;
+  // A Supervisor broadcasts to their own Woreda only: the Woreda on their /me scope.
+  const ownWoredaOnly = role === "Supervisor";
+  const ownWoreda = useAuthStore((s) => (s.role === "Supervisor" ? s.profile?.scope?.woredas?.[0] ?? null : null));
   const [ownWoredaName, setOwnWoredaName] = useState<string | null>(null);
   const params = useSearchParams();
   const signal = SIGNALS.find((s) => s.id === params.get("signal"));
@@ -54,7 +56,7 @@ export function BroadcastWorkspace() {
   const [title, setTitle] = useState(signal ? signal.title : "");
   const [source, setSource] = useState<SignalSource>(signal?.source ?? "Informational");
   const [message, setMessage] = useState(signal ? signal.detail : "");
-  // Audience is always a whole Woreda.
+  // Audience is a whole Woreda, or for a DA one of their Kebeles.
   const { geo, select, retry } = useGeoCascade();
   useEffect(() => {
     if (!ownWoreda) return;
@@ -76,9 +78,10 @@ export function BroadcastWorkspace() {
   const [evidence, setEvidence] = useState<File[]>([]);
 
   const toDAs = group === "Development Agents";
-  // A Supervisor's or DA's Woreda is fixed: their own code is what goes out. Everyone else picks Region, Zone, Woreda.
+  // A Supervisor's Woreda is fixed: their own code is what goes out. Everyone else (but a DA) picks Region, Zone, Woreda.
   const woreda = ownWoredaOnly ? (ownWoreda ? { code: ownWoreda, name: ownWoredaName ?? ownWoreda } : null) : geo.woreda.selected;
-  const woredaLabel = woreda ? `${woreda.name} Woreda` : "the selected Woreda";
+  const area = ownKebeleOnly ? (kebele ? `${kebele.name} Kebele` : null) : woreda ? `${woreda.name} Woreda` : null;
+  const areaLabel = area ?? (ownKebeleOnly ? "your Kebele" : "the selected Woreda");
 
   const dispatch = async () => {
     setError(null);
@@ -88,25 +91,27 @@ export function BroadcastWorkspace() {
       setError("In-app delivery reaches Development Agents only. Choose “All Development Agents”, or wait for SMS / Telegram.");
       return;
     }
-    if (!woreda) return;
+    const target = ownKebeleOnly ? kebele : woreda;
+    if (!target || !area) return;
     setSending(true);
     try {
-      const res = await broadcastToWoreda({ title: title.trim(), body: message.trim(), href: "/notifications", woredaCode: woreda.code, source });
+      const input = { title: title.trim(), body: message.trim(), href: "/notifications", source };
+      const res = ownKebeleOnly ? await broadcastToKebele({ ...input, kebeleCode: target.code }) : await broadcastToWoreda({ ...input, woredaCode: target.code });
       setNotice(
         res.duplicate
-          ? `Already sent to ${woreda.name} Woreda — no duplicate created.`
-          : `Broadcast delivered to ${res.recipients} Development Agent${res.recipients === 1 ? "" : "s"} in ${woreda.name} Woreda — it is now in their notification bell.`,
+          ? `Already sent to ${area} — no duplicate created.`
+          : `Broadcast delivered to ${res.recipients} Development Agent${res.recipients === 1 ? "" : "s"} in ${area} — it is now in their notification bell.`,
       );
       setTitle(""); setMessage(""); setEvidence([]);
     } catch (err) {
-      // ApiError.message already carries the backend's reason (e.g. "Woreda X is not in your scope", or no DA is assigned there).
+      // ApiError.message already carries the backend's reason (e.g. "Woreda X is not in your scope", or no DA is posted there).
       setError(err instanceof Error ? err.message : "Could not send the broadcast. Try again.");
     } finally {
       setSending(false);
     }
   };
 
-  const canSend = canDispatch && Boolean(woreda) && !sending && inApp && title.trim().length >= 3 && message.trim().length >= 5;
+  const canSend = canDispatch && Boolean(area) && !sending && inApp && title.trim().length >= 3 && message.trim().length >= 5;
 
   return (
     <>
@@ -123,7 +128,17 @@ export function BroadcastWorkspace() {
               <Select id="bc-source" value={source} onChange={(e) => setSource(e.target.value as SignalSource)}>{SOURCES.map((s) => <option key={s}>{s}</option>)}</Select>
             </FormField>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {ownWoredaOnly ? (
+              {ownKebeleOnly ? (
+                <FormField label="Kebele" htmlFor="bc-kebele" required hint={kebeleOptions.length ? "You broadcast to your own Kebele." : "No Kebele is assigned to you yet."}>
+                  {kebeleOptions.length > 1 ? (
+                    <Select id="bc-kebele" value={kebele?.code ?? ""} onChange={(e) => setKebeleCode(e.target.value)}>
+                      {kebeleOptions.map((k) => <option key={k.code} value={k.code}>{k.name}</option>)}
+                    </Select>
+                  ) : (
+                    <Input id="bc-kebele" value={kebele?.name ?? ""} readOnly disabled />
+                  )}
+                </FormField>
+              ) : ownWoredaOnly ? (
                 <FormField label="Woreda" htmlFor="bc-woreda" required hint={ownWoreda ? "You broadcast to your own Woreda." : "No Woreda on your account yet."}>
                   <Input id="bc-woreda" value={woreda?.name ?? ""} readOnly disabled />
                 </FormField>
@@ -134,7 +149,7 @@ export function BroadcastWorkspace() {
                   <GeoSelect field="woreda" label="Woreda" level={geo.woreda} hint="Broadcasts reach a whole Woreda." onSelect={(code) => select("woreda", code)} onRetry={() => retry("woreda")} />
                 </>
               )}
-              <FormField label="Recipients" htmlFor="bc-group" required hint={`${toDAs ? "Development Agents" : "Farmers"} in ${woredaLabel}${toDAs ? "" : ". In-app delivery reaches Development Agents only."}`}>
+              <FormField label="Recipients" htmlFor="bc-group" required hint={`${toDAs ? "Development Agents" : "Farmers"} in ${areaLabel}${toDAs ? "" : ". In-app delivery reaches Development Agents only."}`}>
                 <Select id="bc-group" value={group} onChange={(e) => setGroup(e.target.value as RecipientGroup)}>{RECIPIENT_GROUPS.map((g) => <option key={g} value={g}>{g === "Farmers" ? "All farmers" : "All Development Agents"}</option>)}</Select>
               </FormField>
             </div>
@@ -168,7 +183,7 @@ export function BroadcastWorkspace() {
               </button>
             </div>
           </div>
-          <SmsPreview text={message} sender={source === "Knowledge" ? "OpenAgriNet" : woreda ? `${woreda.name} Woreda` : "Woreda"} />
+          <SmsPreview text={message} sender={source === "Knowledge" ? "OpenAgriNet" : area ?? (ownKebeleOnly ? "Kebele" : "Woreda")} />
         </div>
       </Card>
 

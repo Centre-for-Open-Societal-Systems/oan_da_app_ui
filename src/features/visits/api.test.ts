@@ -197,33 +197,28 @@ describe("visit detail and outcome", () => {
 });
 
 describe("listFarmerAdvisory", () => {
-  const qa = [{ question: "When to sow teff?", answer: "" }];
-  const list = (rows: unknown[]) => new Response(JSON.stringify({ data: rows, meta: { total: rows.length } }));
+  const rows = (data: unknown[]) => new Response(JSON.stringify({ data, meta: { total: data.length } }));
 
-  it("reads the questions from the list, newest visit first, and skips other visits", async () => {
+  it("returns the question rows with their dates, in the order the API sends them", async () => {
     fetchMock.mockResolvedValueOnce(
-      list([
-        { ...apiVisit, name: "V-1", scheduled_at: "2026-10-10T09:00:00", advisory_qa: qa },
-        { ...apiVisit, name: "V-2", visit_type: "Routine", advisory_qa: [] },
-        { ...apiVisit, name: "V-3", advisory_qa: [] },
-        { ...apiVisit, name: "V-4", scheduled_at: "2026-10-20T09:00:00", ui_status: "Completed", advisory_qa: qa },
+      rows([
+        { question: "Which seed rate?", answer: "25 kg/ha", creation: "2026-10-20 09:00:00.1", modified: "2026-10-21 11:30:00.2" },
+        { question: "Which fertiliser?", answer: null, creation: "2026-10-10 09:00:00.3", modified: "2026-10-10 09:00:00.3" },
       ]),
     );
 
     await expect(listFarmerAdvisory("FRM-000103")).resolves.toEqual([
-      { visitId: "V-4", scheduledAt: "2026-10-20T09:00:00", status: "Completed", items: qa },
-      { visitId: "V-1", scheduledAt: "2026-10-10T09:00:00", status: "Planned", items: qa },
+      { question: "Which seed rate?", answer: "25 kg/ha", createdAt: "2026-10-20 09:00:00.1", modifiedAt: "2026-10-21 11:30:00.2" },
+      { question: "Which fertiliser?", answer: "", createdAt: "2026-10-10 09:00:00.3", modifiedAt: "2026-10-10 09:00:00.3" },
     ]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(String(fetchMock.mock.calls[0][0])).toContain("farmer_id=FRM-000103");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/farmers/FRM-000103/advisory?limit=500");
   });
 
-  it("falls back to the visit detail when the list has no questions field", async () => {
-    fetchMock.mockResolvedValueOnce(list([{ ...apiVisit, name: "V-1" }]));
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ data: { ...apiVisit, name: "V-1", timeline: [], attachments: [], advisory_qa: qa } })));
-
-    await expect(listFarmerAdvisory("FRM-000103")).resolves.toMatchObject([{ visitId: "V-1", items: qa }]);
-    expect(fetchMock.mock.calls[1][0]).toBe("/api/v1/da-services/visits/V-1");
+  it("gives nothing for a farmer with no questions", async () => {
+    fetchMock.mockResolvedValueOnce(rows([]));
+    await expect(listFarmerAdvisory("FRM-000104")).resolves.toEqual([]);
+    expect(formatVisitTime("2026-11-17 15:29:29.432267")).toBe("17 Nov, 15:29");
   });
 });
 
