@@ -65,22 +65,22 @@ export function TimePicker({
   const [popStyle, setPopStyle] = useState<CSSProperties>({});
   const [animatingTag, setAnimatingTag] = useState<string | null>(null);
 
-  const { hour12, minute, period } = from24Hour(value);
-  const [selectedH, setSelectedH] = useState(hour12);
-  const [selectedM, setSelectedM] = useState(minute);
-  const [selectedPeriod, setSelectedPeriod] = useState<"AM" | "PM">(period);
+  const parsedCurrent = from24Hour(value);
+  const [prevValue, setPrevValue] = useState(value);
+  const [selectedH, setSelectedH] = useState(parsedCurrent.hour12);
+  const [selectedM, setSelectedM] = useState(parsedCurrent.minute);
+  const [selectedPeriod, setSelectedPeriod] = useState<"AM" | "PM">(parsedCurrent.period);
+
+  if (value !== prevValue) {
+    setPrevValue(value);
+    setSelectedH(parsedCurrent.hour12);
+    setSelectedM(parsedCurrent.minute);
+    setSelectedPeriod(parsedCurrent.period);
+  }
 
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const popupId = useId();
-
-  // Sync internal state with external value when value changes
-  useEffect(() => {
-    const parsed = from24Hour(value);
-    setSelectedH(parsed.hour12);
-    setSelectedM(parsed.minute);
-    setSelectedPeriod(parsed.period);
-  }, [value]);
 
   // Click outside, escape key, scroll close
   useEffect(() => {
@@ -199,7 +199,9 @@ export function TimePicker({
     commitTime(h12, m, p);
   };
 
-  const displayString = value ? formatDisplay(hour12, minute, period) : placeholder;
+  const displayString = value
+    ? formatDisplay(parsedCurrent.hour12, parsedCurrent.minute, parsedCurrent.period)
+    : placeholder;
 
   return (
     <>
