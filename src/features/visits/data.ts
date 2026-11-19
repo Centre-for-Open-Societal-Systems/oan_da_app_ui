@@ -2,7 +2,6 @@ import type { FilterFieldConfig } from "@/components/ui/AdvancedFiltersDrawer";
 import type { FilterOption } from "@/components/ui/FilterDropdown";
 import type {
   EvidenceDocument,
-  PriorityFarmer,
   SubmittedOutcome,
   VisitRecord,
   VisitTimelineEntry,
@@ -159,15 +158,6 @@ export const RESCHEDULE_REASONS = [
   "Agent schedule conflict",
   "Inputs not yet delivered",
   "Other",
-];
-
-// ----- Visit planner -----
-
-export const PRIORITY_LIST: PriorityFarmer[] = [
-  { farmerId: "chaltu-dinkesa", name: "Chaltu Dinkesa", issue: "Armyworm infestation", level: "high", visitType: "Crop Survey" },
-  { farmerId: "abebe-kebede", name: "Abebe Kebede", issue: "Soil salinity test", level: "medium", visitType: "Crop Survey" },
-  { farmerId: "tadesse-alemu", name: "Tadesse Alemu", issue: "Irrigation audit", level: "low", visitType: "Services" },
-  { farmerId: "lelise-gudeta", name: "Lelise Gudeta", issue: "Fertilizer delivery delay", level: "medium", visitType: "Follow-up" },
 ];
 
 // ----- Visit outcome -----

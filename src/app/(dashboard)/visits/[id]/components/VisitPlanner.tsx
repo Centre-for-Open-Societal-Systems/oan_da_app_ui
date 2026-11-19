@@ -9,7 +9,6 @@ import { Spinner } from "@/components/ui/Spinner";
 import { PlanVisitButton } from "@/features/farmers";
 import { canActOnVisit, canLogOutcome, fetchVisit, LogOutcomeModal, StartVisitModal, toVisitRecord, type ApiVisitDetail, type VisitRecord } from "@/features/visits";
 import { useAuthStore } from "@/store/useAuthStore";
-import { PriorityList } from "./PriorityList";
 import { TodaysVisits } from "./TodaysVisits";
 import { WeekCalendar } from "./WeekCalendar";
 
@@ -70,10 +69,7 @@ export function VisitPlanner({ visitId }: { visitId: string }) {
       ) : (
         <>
           <WeekCalendar daId={daId} reload={reload} />
-          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-            <PriorityList />
-            <TodaysVisits daId={daId} reload={reload} canAct={canAct} onStart={(visit) => setModal({ type: "start", visit })} onLogOutcome={(visit) => setModal({ type: "outcome", visit })} />
-          </div>
+          <TodaysVisits daId={daId} reload={reload} canAct={canAct} onStart={(visit) => setModal({ type: "start", visit })} onLogOutcome={(visit) => setModal({ type: "outcome", visit })} />
         </>
       )}
 

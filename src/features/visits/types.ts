@@ -39,18 +39,6 @@ export interface PlannerVisit {
   status: PlannerStatus;
 }
 
-export type PriorityLevel = "high" | "medium" | "low";
-
-export interface PriorityFarmer {
-  /** Registry id, so Schedule can preselect the farmer. */
-  farmerId: string;
-  name: string;
-  issue: string;
-  level: PriorityLevel;
-  /** Visit type the issue calls for; preselected in the Schedule form. */
-  visitType: string;
-}
-
 export type ArrivalState = "done" | "confirmed" | "tentative";
 
 export interface TodaysVisit {
