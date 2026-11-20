@@ -50,7 +50,7 @@ describe("joinNames", () => {
 });
 
 describe("planFarmers", () => {
-  const item = (f: Farmer) => ({ farmer_id: f.id, date: "2026-11-20", time: "10:00", visit_type: "Crop Survey", purpose: "", duration_min: 45, priority: "Medium" as const, notify_farmer_sms: true, client_op_id: `op-${f.id}` });
+  const item = (f: Farmer) => ({ farmer_id: f.id, farmer_name: f.name, date: "2026-11-20", time: "10:00", visit_type: "Crop Survey", purpose: "", duration_min: 45, priority: "Medium" as const, notify_farmer_sms: true, client_op_id: `op-${f.id}` });
   const reply = (body: unknown, status = 201) => new Response(JSON.stringify(body), { status });
 
   it("sends the single-visit body for one farmer", async () => {
