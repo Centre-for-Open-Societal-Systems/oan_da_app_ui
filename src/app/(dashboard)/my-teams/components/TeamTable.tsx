@@ -49,6 +49,17 @@ export function TeamTable({ team, myDaId, loading = false }: { team: TeamMember[
 
   const columns: Column<TeamMember>[] = [
     {
+      key: "sno",
+      header: "S.No.",
+      align: "center",
+      className: "w-16 min-w-[64px] whitespace-nowrap",
+      cell: (a) => (
+        <span className="text-[13px] font-medium text-muted">
+          {rows.indexOf(a) + 1}
+        </span>
+      ),
+    },
+    {
       key: "name",
       header: "Name",
       className: "whitespace-nowrap",
@@ -122,7 +133,7 @@ export function TeamTable({ team, myDaId, loading = false }: { team: TeamMember[
         columns={columns}
         rows={rows}
         rowKey={(a) => a.daId}
-        minWidth="760px"
+        minWidth="820px"
         state={loading ? "loading" : "ready"}
         emptyTitle={team.length === 0 ? "No team members yet" : "No team members match the selected filters"}
         emptyHint={team.length === 0 ? "You will see your Kebele colleagues here once the DA Registry lists them in your Woreda." : "Clear a filter or try a different search."}

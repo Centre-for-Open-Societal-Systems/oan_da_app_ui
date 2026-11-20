@@ -1,12 +1,13 @@
 "use client";
 
-import { useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { RowAction } from "@/components/ui/RowAction";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { DatePicker } from "@/components/ui/DatePicker";
 import { cn, todayIso } from "@/lib/utils";
 import { CERTIFICATE_TYPES, fileMeta, formatFileSize, type Certificate } from "@/features/farmers";
 import { Banner } from "@/components/ui/Banner";
@@ -33,6 +34,17 @@ export function UploadCertificateModal({ isOpen, onClose, onSubmit }: UploadCert
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [issueDate, setIssueDate] = useState(todayIso());
+  const [expiryDate, setExpiryDate] = useState("2028-02-18");
+
+  useEffect(() => {
+    if (isOpen) {
+      setFile(null);
+      setFileError(null);
+      setIssueDate(todayIso());
+      setExpiryDate("2028-02-18");
+    }
+  }, [isOpen]);
 
   const pickFile = (candidate: File | undefined) => {
     if (!candidate) return;
@@ -62,6 +74,8 @@ export function UploadCertificateModal({ isOpen, onClose, onSubmit }: UploadCert
   const reset = () => {
     setFile(null);
     setFileError(null);
+    setIssueDate(todayIso());
+    setExpiryDate("2028-02-18");
   };
 
   const handleClose = () => {
@@ -78,8 +92,6 @@ export function UploadCertificateModal({ isOpen, onClose, onSubmit }: UploadCert
     const data = new FormData(e.currentTarget);
     const name = String(data.get("name") ?? "").trim();
     const organisation = String(data.get("organisation") ?? "").trim();
-    const issueDate = String(data.get("issueDate") ?? "");
-    const expiryDate = String(data.get("expiryDate") ?? "");
     if (!name || !organisation || !issueDate) return;
 
     const issued = `issued ${formatDate(issueDate)}`;
@@ -183,10 +195,27 @@ export function UploadCertificateModal({ isOpen, onClose, onSubmit }: UploadCert
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <FormField label="Issue date" htmlFor="cert-issued" required>
-            <Input id="cert-issued" name="issueDate" type="date" className="h-10" defaultValue={todayIso()} required />
+            <DatePicker
+              id="cert-issued"
+              name="issueDate"
+              value={issueDate}
+              onChange={setIssueDate}
+              placeholder="Select issue date"
+              maxDate={todayIso()}
+              className="h-10 w-full"
+              required
+            />
           </FormField>
           <FormField label="Expiry date" htmlFor="cert-expires">
-            <Input id="cert-expires" name="expiryDate" type="date" className="h-10" defaultValue="2028-02-18" />
+            <DatePicker
+              id="cert-expires"
+              name="expiryDate"
+              value={expiryDate}
+              onChange={setExpiryDate}
+              placeholder="Select expiry date"
+              minDate={issueDate || undefined}
+              className="h-10 w-full"
+            />
           </FormField>
           <FormField label="Credential / reference ID" htmlFor="cert-ref">
             <Input id="cert-ref" name="reference" className="h-10" defaultValue="ATI-IPM-2026-0417" />

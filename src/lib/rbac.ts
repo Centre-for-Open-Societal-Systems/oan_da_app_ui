@@ -161,7 +161,6 @@ export const PAGE_TITLES: { prefix: string; title: string }[] = [
   { prefix: "/assignments", title: "Agent Assignment" },
   { prefix: "/model-farmers", title: "Model Farmers" },
   { prefix: "/grievances", title: "Grievances" },
-  { prefix: "/knowledge/", title: "Article" },
   { prefix: "/knowledge", title: "Knowledge Base" },
   { prefix: "/broadcast", title: "Broadcast" },
   { prefix: "/alerts", title: "Alerts" },

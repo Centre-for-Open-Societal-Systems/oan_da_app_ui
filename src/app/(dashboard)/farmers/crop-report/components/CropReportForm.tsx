@@ -451,17 +451,19 @@ export function CropReportForm() {
 
           {/* When the user searches through the search box along with the input box, the data (card appears below) is displayed */}
           {farmer && (
-            <Card className="flex items-center justify-between gap-4 p-5 shadow-card">
-              <div className="flex items-center gap-4 min-w-0">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#dcfce7] text-[#16a34a] font-bold text-[16px]">
+            <Card className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 sm:p-5 shadow-card rounded-2xl border-line">
+              <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-green to-emerald-700 text-white font-bold text-[16px] shadow-xs">
                   {farmer.name
                     .split(" ")
+                    .filter(Boolean)
                     .map((n) => n[0])
-                    .join("")}
+                    .slice(0, 2)
+                    .join("") || "FA"}
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-[17px] font-bold text-ink sm:text-[18px]">{farmer.name}</h3>
-                  <p className="mt-0.5 truncate text-[13.5px] text-muted">
+                  <h3 className="text-[17px] font-bold text-ink sm:text-[18px] truncate">{farmer.name}</h3>
+                  <p className="mt-0.5 truncate text-[13px] sm:text-[13.5px] text-muted">
                     {registryCode(farmer)} · {farmer.kebele}, {farmer.woreda} · {farmer.crop} · {farmer.landHa} ha
                   </p>
                 </div>
@@ -469,7 +471,7 @@ export function CropReportForm() {
               <Button
                 type="button"
                 variant="brand"
-                className="flex shrink-0 items-center gap-1.5 px-6 py-2.5 font-semibold text-[14px]"
+                className="flex shrink-0 items-center justify-center gap-1.5 px-6 py-2.5 font-semibold text-[14px] w-full sm:w-auto"
                 onClick={() => setIsEditing(true)}
               >
                 Edit →
@@ -484,29 +486,28 @@ export function CropReportForm() {
       {isEditing && farmer && (
         <>
           {/* Top Summary Card with Change Button */}
-          <SectionCard
-            title="Find farmer"
-            description="Auto-assigned from KPIs by the aggregation engine (backend) — rule-based, recomputed each period. Proposed 4-tier scheme."
-          >
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-4 min-w-0">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#dcfce7] text-[#16a34a] font-bold text-[16px]">
+          <SectionCard title="Farmer" className="rounded-2xl border-line shadow-card">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-green to-emerald-700 text-white font-bold text-[16px] shadow-xs">
                   {farmer.name
                     .split(" ")
+                    .filter(Boolean)
                     .map((n) => n[0])
-                    .join("")}
+                    .slice(0, 2)
+                    .join("") || "FA"}
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-[17px] font-bold text-ink sm:text-[18px]">{farmer.name}</h3>
-                  <p className="mt-0.5 truncate text-[13.5px] text-muted">
-                    {registryCode(farmer)} · {farmer.kebele}, {farmer.woreda} · {farmer.crop} · {farmer.landHa} ha
+                  <h3 className="text-[17px] font-bold text-ink sm:text-[18px] truncate">{farmer.name}</h3>
+                  <p className="mt-0.5 truncate text-[13px] sm:text-[13.5px] text-muted">
+                    {registryCode(farmer)}
                   </p>
                 </div>
               </div>
               <Button
                 type="button"
                 variant="outline"
-                className="px-5 py-2 text-[14px] font-medium text-ink hover:bg-slate-50 border-line shrink-0"
+                className="shrink-0 border-line px-5 py-2 text-[14px] font-medium text-ink hover:bg-slate-50 w-full sm:w-auto"
                 onClick={handleBackToStart}
               >
                 Change
@@ -575,7 +576,7 @@ export function CropReportForm() {
                   className="border-0 shadow-none rounded-none"
                   tabs={CROP_SOWN_TABS.map((t) => ({
                     key: t.key,
-                    label: t.label,
+                    label: t.label === "Harvesting" ? "Harvest" : t.label,
                     // Fields still to enter on this stage.
                     count: t.sections.reduce((n, s) => n + s.fields.filter((f) => !values[valueKey(s.id, f.key)]).length, 0),
                   }))}
@@ -590,6 +591,8 @@ export function CropReportForm() {
                     key={section.id}
                     title={section.title}
                     className="rounded-xl border border-line shadow-xs"
+                    collapsible={true}
+                    defaultOpen={true}
                   >
                     <CropSownSectionFields
                       section={section}
@@ -610,8 +613,8 @@ export function CropReportForm() {
             </div>
 
             {/* Bottom Footer Card */}
-            <div className="flex flex-col gap-3 rounded-xl border border-line bg-white p-4 shadow-card sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-3 rounded-2xl border border-line bg-white p-4 shadow-card sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center justify-between sm:justify-start gap-3 w-full sm:w-auto">
                 <Button
                   type="button"
                   variant="outline"
@@ -621,8 +624,8 @@ export function CropReportForm() {
                 >
                   Save Draft
                 </Button>
-                <span className="flex items-center gap-1.5 text-[13.5px] font-normal text-muted">
-                  <svg className="h-4 w-4 text-slate-500" viewBox="0 0 20 20" fill="currentColor">
+                <span className="flex items-center gap-1.5 text-[13px] font-medium text-muted">
+                  <svg className="h-4 w-4 text-emerald-600" viewBox="0 0 20 20" fill="currentColor">
                     <path
                       fillRule="evenodd"
                       d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
@@ -632,13 +635,13 @@ export function CropReportForm() {
                   Auto-saved
                 </span>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => goTo(tabIndex - 1)}
                   disabled={tabIndex === 0}
-                  className="flex items-center gap-1.5 px-5 py-2.5 font-semibold text-ink"
+                  className="flex items-center justify-center gap-1.5 px-4 sm:px-5 py-2.5 font-semibold text-ink flex-1 sm:flex-initial"
                 >
                   ← Previous Step
                 </Button>
@@ -647,7 +650,7 @@ export function CropReportForm() {
                     type="button"
                     variant="brand"
                     onClick={handleOpenConfirm}
-                    className="flex items-center gap-1.5 px-6 py-2.5 font-semibold"
+                    className="flex items-center justify-center gap-1.5 px-5 sm:px-6 py-2.5 font-semibold flex-1 sm:flex-initial"
                   >
                     Submit Crop sown →
                   </Button>
@@ -657,7 +660,7 @@ export function CropReportForm() {
                     variant="brand"
                     onClick={saveAndNext}
                     disabled={submitted || savingStep}
-                    className="flex items-center gap-1.5 px-6 py-2.5 font-semibold"
+                    className="flex items-center justify-center gap-1.5 px-5 sm:px-6 py-2.5 font-semibold flex-1 sm:flex-initial"
                   >
                     {savingStep ? "Saving…" : "Save & Next →"}
                   </Button>
