@@ -31,9 +31,19 @@ const WEEKDAY_NAMES = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const POPUP_WIDTH = 296;
 
 function parseIso(iso: string) {
-  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
-  const [y, m, d] = iso.split("-").map(Number);
-  return { year: y, month: m - 1, day: d };
+  if (!iso) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const [y, m, d] = iso.split("-").map(Number);
+    return { year: y, month: m - 1, day: d };
+  }
+  if (/^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(iso)) {
+    const parts = iso.split(/[/-]/).map(Number);
+    const d = parts[0];
+    const m = parts[1];
+    const y = parts[2];
+    return { year: y, month: m - 1, day: d };
+  }
+  return null;
 }
 
 function toIso(year: number, month: number, day: number) {
@@ -42,8 +52,9 @@ function toIso(year: number, month: number, day: number) {
 
 function formatDisplayDate(iso: string): string {
   const parsed = parseIso(iso);
-  if (!parsed) return "";
+  if (!parsed) return iso || "";
   const d = new Date(parsed.year, parsed.month, parsed.day);
+  if (isNaN(d.getTime())) return iso;
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
@@ -292,13 +303,13 @@ export function DatePicker({
         aria-expanded={isOpen}
         aria-controls={isOpen ? popupId : undefined}
         className={cn(
-          "inline-flex h-9 sm:h-10 shrink-0 items-center justify-between gap-2 rounded-lg border bg-white px-3 sm:px-3.5 text-xs sm:text-[13px] font-medium transition-all duration-200 focus:outline-none",
+          "inline-flex h-11 w-full shrink-0 items-center justify-between gap-2 rounded-lg border bg-white px-3 sm:px-3.5 text-xs sm:text-[13.5px] font-medium transition-all duration-200 focus:outline-none",
           value
             ? "border-brand-green/70 text-ink shadow-xs"
             : "border-gray-200 text-slate-700 hover:border-brand-green hover:ring-1 hover:ring-brand-green/20",
           isOpen && "border-brand-green ring-2 ring-brand-green/20",
           justSelected && "border-brand-green ring-3 ring-brand-green/30 bg-emerald-50/50 shadow-xs",
-          disabled && "cursor-not-allowed opacity-50 bg-slate-50",
+          disabled && "cursor-not-allowed bg-surface text-ink-soft border-gray-200 opacity-90 hover:border-gray-200 hover:ring-0",
           className
         )}
       >

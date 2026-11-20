@@ -37,24 +37,6 @@ function formatDate(iso: string) {
   return `${day} ${MONTHS[Number(month) - 1]} ${year}`;
 }
 
-const COLUMNS: Column<Dependent>[] = [
-  {
-    key: "name",
-    header: "Family Member Name",
-    cell: (dep) => (
-      <div className="flex items-center gap-2.5">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-[11px] font-semibold text-indigo-600">
-          {getInitials(dep.name)}
-        </span>
-        <span className="font-medium text-ink">{dep.name}</span>
-      </div>
-    ),
-  },
-  { key: "relationship", header: "Relationship", cell: (dep) => dep.relationship },
-  { key: "dob", header: "Date of birth", cell: (dep) => formatDate(dep.dateOfBirth) },
-  { key: "status", header: "Status", cell: (dep) => <Pill tone={STATUS_TONES[dep.status]}>{dep.status}</Pill> },
-];
-
 export function DependentsSection() {
   const [dependents, setDependents] = useState<Dependent[]>(SAMPLE_DEPENDENTS);
   const [isAdding, setIsAdding] = useState(false);
@@ -64,31 +46,61 @@ export function DependentsSection() {
     setDependents((prev) => [...prev, { id: `${Date.now()}`, ...dep, status: "Pending approval" }]);
   };
 
+  const columns: Column<Dependent>[] = [
+    {
+      key: "sno",
+      header: "S.No.",
+      className: "w-16 min-w-[64px] text-center",
+      cell: (dep) => (
+        <span className="text-center font-mono text-[13px] text-muted">
+          {dependents.indexOf(dep) + 1}
+        </span>
+      ),
+    },
+    {
+      key: "name",
+      header: "Family Member Name",
+      cell: (dep) => (
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-[11px] font-semibold text-indigo-600">
+            {getInitials(dep.name)}
+          </span>
+          <span className="font-semibold text-ink">{dep.name}</span>
+        </div>
+      ),
+    },
+    { key: "relationship", header: "Relationship", cell: (dep) => <span className="text-ink-soft">{dep.relationship}</span> },
+    { key: "dob", header: "Date of birth", cell: (dep) => <span className="text-ink-soft">{formatDate(dep.dateOfBirth)}</span> },
+    { key: "status", header: "Status", cell: (dep) => <Pill tone={STATUS_TONES[dep.status]}>{dep.status}</Pill> },
+  ];
+
   return (
     <Card className="overflow-hidden p-0 shadow-card">
-      <div className="flex flex-col gap-3 border-b border-line px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 border-b border-line bg-surface/40 px-5 py-3.5 sm:px-6 sm:py-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-[15px] font-semibold text-ink">Family members / dependents</h2>
-          <p className="mt-1 text-[12.5px] text-ink-soft">Add or update dependents; new entries need approval</p>
+          <div className="flex items-center gap-2">
+            <h2 className="text-[15px] font-semibold text-ink">Family members / dependents</h2>
+            <span className="rounded-full border border-line bg-white px-2 py-0.5 text-[11px] font-semibold text-ink-soft shadow-2xs">
+              {dependents.length}
+            </span>
+          </div>
+          <p className="mt-0.5 text-[12.5px] text-ink-soft">Add or update dependents; new entries need approval</p>
         </div>
         <Button type="button" variant="brandOutline" size="md" onClick={() => setIsAdding(true)} className="w-fit shrink-0">
           + Add dependent
         </Button>
       </div>
 
-      <div className="p-5">
-        <div className="overflow-hidden rounded-lg border border-line [&_thead_tr]:border-t-0">
       <DataTable
-        columns={COLUMNS}
+        columns={columns}
         rows={dependents}
         rowKey={(dep) => dep.id}
-        minWidth="640px"
+        minWidth="680px"
+        paginate={false}
         itemLabel="dependents"
         emptyTitle="No dependents yet"
         emptyHint="Add a family member to start their approval."
       />
-        </div>
-      </div>
       <AddDependentModal isOpen={isAdding} onClose={() => setIsAdding(false)} onSubmit={handleAdd} />
     </Card>
   );

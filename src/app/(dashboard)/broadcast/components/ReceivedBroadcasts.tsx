@@ -48,16 +48,27 @@ export function ReceivedBroadcasts() {
   const open = (n: AppNotification) => {
     if (!n.read) {
       setLoaded((prev) => (prev ? { ...prev, rows: prev.rows.map((r) => (r.id === n.id ? { ...r, read: true } : r)) } : prev));
-      markNotificationRead(n.id).catch(() => {});
+      markNotificationRead(n.id).catch(() => { });
     }
     if (n.href) router.push(n.href);
   };
 
   const columns: Column<AppNotification>[] = [
     {
+      key: "sno",
+      header: "S.No.",
+      align: "center",
+      className: "w-16 min-w-[64px] whitespace-nowrap",
+      cell: (n) => (
+        <span className="text-[13px] font-medium text-muted">
+          {rows.indexOf(n) + 1}
+        </span>
+      ),
+    },
+    {
       key: "title",
       header: "Broadcast",
-      className: "w-[30%] min-w-[200px]",
+      className: "w-[28%] min-w-[200px]",
       cell: (n) => (
         <div className="flex items-center gap-2.5">
           {!n.read ? (
@@ -77,7 +88,7 @@ export function ReceivedBroadcasts() {
     {
       key: "body",
       header: "Message",
-      className: "w-[42%] min-w-[260px]",
+      className: "w-[40%] min-w-[240px]",
       cell: (n) => (
         <span className="line-clamp-2 block text-[13px] leading-relaxed text-ink-soft">
           {n.body ?? "—"}
@@ -139,7 +150,7 @@ export function ReceivedBroadcasts() {
             !n.read ? "bg-emerald-50/25 hover:bg-emerald-50/45" : "hover:bg-slate-50/80"
           )
         }
-        minWidth="720px"
+        minWidth="760px"
         emptyTitle="No broadcasts yet"
         emptyHint="Broadcasts sent to you will appear here."
       />

@@ -1,6 +1,8 @@
 "use client";
 
+import { DatePicker } from "@/components/ui/DatePicker";
 import { Input } from "@/components/ui/Input";
+import { RadioGroup } from "@/components/ui/RadioGroup";
 import { Select } from "@/components/ui/Select";
 import { cn } from "@/lib/utils";
 import type { LivestockAnimalOption, LivestockFieldDef } from "@/features/farmers";
@@ -17,20 +19,18 @@ interface LivestockFieldInputProps {
 }
 
 const READ_ONLY = "cursor-not-allowed border-gray-200 bg-surface text-ink-soft hover:border-gray-200 hover:ring-0 focus:border-gray-200 focus:ring-0";
-const BOOLEAN_CHOICES = [
-  { value: "true", label: "Yes" },
-  { value: "false", label: "No" },
-];
 
 // One Livestock field, rendered by its type. The form holds strings; what is sent is decided in buildLivestockSections.
 export function LivestockFieldInput({ id, field, value, onChange, error, animals }: LivestockFieldInputProps) {
   return (
-    <div className={error ? "field-invalid flex min-w-0 flex-col gap-2" : "flex min-w-0 flex-col gap-2"}>
-      <label htmlFor={id} className="text-[14px] font-medium text-ink">
-        {field.label} {(field.required || field.requiredInRow) && !field.readOnly && <span className="text-danger">*</span>}
+    <div className={error ? "field-invalid flex min-w-0 flex-col gap-1.5" : "flex min-w-0 flex-col gap-1.5"}>
+      <label htmlFor={id} className="min-h-[32px] sm:min-h-[36px] flex flex-wrap items-end pb-1 gap-1.5 text-[13px] sm:text-[13.5px] font-medium text-ink leading-tight">
+        <span className="min-w-0">
+          {field.label} {(field.required || field.requiredInRow) && !field.readOnly && <span className="text-danger">*</span>}
+        </span>
       </label>
       <Control id={id} field={field} value={value} onChange={onChange} animals={animals} />
-      {error && <p className="text-[12.5px] text-danger">{error}</p>}
+      {error && <p className="text-[12px] text-danger mt-0.5">{error}</p>}
     </div>
   );
 }
@@ -56,11 +56,28 @@ function Control({ id, field, value, onChange, animals }: LivestockFieldInputPro
     case "select":
       return <Choices id={id} label={field.label} value={value} onChange={onChange} choices={field.choices ?? []} />;
     case "boolean":
-      return <Choices id={id} label={field.label} value={value} onChange={onChange} choices={BOOLEAN_CHOICES} />;
+      return (
+        <RadioGroup
+          id={id}
+          label={field.label}
+          value={value === "true" ? "Yes" : value === "false" ? "No" : ""}
+          onChange={(v) => onChange(v === "Yes" ? "true" : "false")}
+          options={["Yes", "No"]}
+        />
+      );
     case "animal":
       return <Choices id={id} label="animal" value={value} onChange={onChange} choices={animals ?? []} />;
     case "date":
-      return <Input id={id} type="date" value={value} onChange={(e) => onChange(e.target.value)} className={cn("cursor-pointer")} />;
+      return (
+        <DatePicker
+          id={id}
+          value={value}
+          onChange={onChange}
+          disabled={field.readOnly}
+          placeholder={`Select ${field.label.toLowerCase()}`}
+          className={cn(field.readOnly && READ_ONLY)}
+        />
+      );
     case "number":
     case "integer":
       return <Input id={id} type="number" inputMode={field.type === "integer" ? "numeric" : "decimal"} step={field.type === "integer" ? 1 : "any"} value={value} onChange={(e) => onChange(e.target.value)} placeholder="0" />;

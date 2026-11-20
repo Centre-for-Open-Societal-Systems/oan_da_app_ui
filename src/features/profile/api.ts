@@ -156,9 +156,14 @@ export const PROFILE_FIELD_LABELS: Record<string, string> = {
   photo: "Profile photo",
   education_tier: "Education level",
   specialisation: "Specialisation",
+  home_address: "Home address",
 };
 
-export const profileFieldLabel = (field: string): string => PROFILE_FIELD_LABELS[field] ?? field;
+export const profileFieldLabel = (field: string): string =>
+  PROFILE_FIELD_LABELS[field] ??
+  field
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 
 const asText = (v: unknown): string => (v === null || v === undefined || v === "" ? "—" : typeof v === "string" ? v : JSON.stringify(v));
 

@@ -124,14 +124,14 @@ function SurveyResultsView({ initialSurvey }: { initialSurvey?: string }) {
   return (
     <>
       <Card className="overflow-hidden p-0 shadow-card">
-        <div className="flex flex-col gap-3 border-b border-line px-5 py-4 md:flex-row md:items-center md:justify-between">
-          <h2 className="text-[18px] font-semibold text-ink">Survey Results</h2>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Select aria-label="Survey" className="h-10 sm:w-80" value={surveyId} onChange={(e) => setSurveyId(e.target.value)} disabled={!surveys}>
+        <div className="flex flex-col gap-3 border-b border-line px-4 py-3.5 sm:px-5 sm:py-4 md:flex-row md:items-center md:justify-between">
+          <h2 className="text-[16px] sm:text-[18px] font-semibold text-ink">Survey Results</h2>
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center w-full md:w-auto">
+            <Select aria-label="Survey" className="h-9 sm:h-10 w-full sm:w-80" value={surveyId} onChange={(e) => setSurveyId(e.target.value)} disabled={!surveys}>
               {!surveys && <option value="">Loading surveys…</option>}
               {surveys?.map((s) => <option key={s.id} value={s.id}>{s.name} · {s.templateVersion} ({s.status})</option>)}
             </Select>
-            <Button variant="outline" className="h-10 gap-2 px-4 font-semibold" disabled={!surveyId || exporting} onClick={exportXlsx}>
+            <Button variant="outline" className="h-9 sm:h-10 w-full sm:w-auto gap-2 px-4 font-semibold" disabled={!surveyId || exporting} onClick={exportXlsx}>
               <Icon d="M12 3v12M7 10l5 5 5-5M5 21h14" /> {exporting ? "Exporting…" : "Export Excel"}
             </Button>
           </div>

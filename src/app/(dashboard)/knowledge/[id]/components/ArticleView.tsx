@@ -15,6 +15,7 @@ import { Banner } from "@/components/ui/Banner";
 import { SendToFarmersButton } from "./SendToFarmersButton";
 import { CreateKnowledgeModal } from "../../components/CreateKnowledgeModal";
 import { ArchiveKnowledgeModal } from "../../components/ArchiveKnowledgeModal";
+import { CategoryTag } from "../../components/KnowledgeHub";
 
 // Basic rich-text styles for the API's HTML body.
 const PROSE = "text-[14.5px] leading-relaxed text-ink [&_p]:mb-4 [&_p:last-child]:mb-0 [&_ul]:mb-4 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:mb-4 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:mb-1 [&_h1]:mb-2 [&_h1]:text-[18px] [&_h1]:font-semibold [&_h2]:mb-2 [&_h2]:text-[17px] [&_h2]:font-semibold [&_h3]:mb-2 [&_h3]:font-semibold [&_a]:text-brand-green [&_a]:underline [&_blockquote]:border-l-4 [&_blockquote]:border-line [&_blockquote]:pl-3 [&_blockquote]:text-ink-soft";
@@ -82,10 +83,10 @@ export function ArticleView({ id }: { id: string }) {
       {notice && <Banner tone="success" onDismiss={() => setNotice(null)}>{notice}</Banner>}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
-        <Card className="shadow-card">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+        <Card className="p-0 shadow-card">
+          <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-line px-4 py-3 sm:px-5 sm:py-3.5">
             <div className="flex flex-wrap items-center gap-2">
-              <Pill tone="green">{article.category}</Pill>
+              <CategoryTag category={article.category} />
               {canWriteKnowledge(role) && article.status !== "Published" && <Pill tone={KB_STATUS_TONE[article.status]}>{article.status}</Pill>}
               <span className="text-[12.5px] text-muted">{article.source ? `${article.source} · ` : ""}published {kbDate(article.published_on)}</span>
             </div>
@@ -100,26 +101,32 @@ export function ArticleView({ id }: { id: string }) {
               </div>
             )}
           </div>
-          <h1 className="mt-3 text-[24px] font-semibold leading-tight tracking-tight text-ink">{version?.title || article.title}</h1>
-          {(version?.summary || article.summary) && <p className="mt-2 text-[15px] text-ink-soft">{version?.summary || article.summary}</p>}
-          {body ? <div className={cn("mt-5", PROSE)} dangerouslySetInnerHTML={{ __html: body }} /> : <p className="mt-5 text-[14px] text-muted">No body text in this language.</p>}
+          <div className="p-4 sm:p-5">
+            <h1 className="text-[20px] font-semibold leading-tight tracking-tight text-ink sm:text-[24px]">{version?.title || article.title}</h1>
+            {(version?.summary || article.summary) && <p className="mt-2 text-[14px] leading-relaxed text-ink-soft sm:text-[15px]">{version?.summary || article.summary}</p>}
+            {body ? <div className={cn("mt-5", PROSE)} dangerouslySetInnerHTML={{ __html: body }} /> : <p className="mt-5 text-[14px] text-muted">No body text in this language.</p>}
+          </div>
         </Card>
 
         <div className="flex flex-col gap-4">
-          <Card className="shadow-card">
-            <h2 className="text-[15px] font-semibold text-ink">SMS-ready snippet</h2>
-            <p className="mt-2 rounded-lg border border-line bg-surface p-3 text-[13px] leading-relaxed text-ink">{snippet || "—"}</p>
-            <p className="mt-1.5 text-[12px] text-muted">{snippet.length} characters · {Math.max(1, Math.ceil(snippet.length / 160))} segment{snippet.length > 160 ? "s" : ""}</p>
-            {snippet && article.status === "Published" && <SendToFarmersButton article={sendable} />}
-            <p className="mt-2 text-center text-[12px] text-muted">Dispatched via the Broadcast engine and logged.</p>
+          <Card className="p-0 shadow-card">
+            <h2 className="border-b border-line px-4 py-3 sm:px-5 sm:py-3.5 text-[15px] font-semibold text-ink">SMS-ready snippet</h2>
+            <div className="p-4 sm:p-5">
+              <p className="rounded-lg border border-line bg-surface p-3 text-[13px] leading-relaxed text-ink">{snippet || "—"}</p>
+              <p className="mt-1.5 text-[12px] text-muted">{snippet.length} characters · {Math.max(1, Math.ceil(snippet.length / 160))} segment{snippet.length > 160 ? "s" : ""}</p>
+              {snippet && article.status === "Published" && <SendToFarmersButton article={sendable} />}
+              <p className="mt-2 text-center text-[12px] text-muted">Dispatched via the Broadcast engine and logged.</p>
+            </div>
           </Card>
-          <Card className="shadow-card">
-            <h2 className="text-[15px] font-semibold text-ink">Dissemination</h2>
-            <dl className="mt-2 grid grid-cols-2 gap-2 text-[13px]">
-              <dt className="text-muted">Total sends</dt><dd className="text-right font-medium text-ink">{article.send_count ?? 0}</dd>
-              <dt className="text-muted">Languages</dt><dd className="text-right font-medium text-ink">{hasAmharic ? "English · Amharic" : "English"}</dd>
-              <dt className="text-muted">Audience</dt><dd className="text-right font-medium text-ink">{article.audience_scopes?.length ? article.audience_scopes.map((s) => s.woreda || s.zone || s.region).filter(Boolean).join(", ") : "All regions"}</dd>
-            </dl>
+          <Card className="p-0 shadow-card">
+            <h2 className="border-b border-line px-4 py-3 sm:px-5 sm:py-3.5 text-[15px] font-semibold text-ink">Dissemination</h2>
+            <div className="p-4 sm:p-5">
+              <dl className="grid grid-cols-2 gap-2 text-[13px]">
+                <dt className="text-muted">Total sends</dt><dd className="text-right font-medium text-ink">{article.send_count ?? 0}</dd>
+                <dt className="text-muted">Languages</dt><dd className="text-right font-medium text-ink">{hasAmharic ? "English · Amharic" : "English"}</dd>
+                <dt className="text-muted">Audience</dt><dd className="text-right font-medium text-ink">{article.audience_scopes?.length ? article.audience_scopes.map((s) => s.woreda || s.zone || s.region).filter(Boolean).join(", ") : "All regions"}</dd>
+              </dl>
+            </div>
           </Card>
         </div>
       </div>

@@ -21,10 +21,21 @@ export function SegmentTabs<K extends string>({ tabs, active, onChange, classNam
         {tabs.map((tab) => {
           const isActive = tab.key === active;
           return (
-            <button key={tab.key} type="button" role="tab" aria-selected={isActive} onClick={() => onChange(tab.key)} className={tabClass(isActive)}>
+            <button key={tab.key} type="button" role="tab" aria-selected={isActive} onClick={() => onChange(tab.key)} className={cn(tabClass(isActive), "cursor-pointer select-none transition-all duration-200")}>
               {tab.label}
               {tab.count !== undefined && (
-                <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", isActive ? "bg-brand-green text-white" : "bg-line-soft text-slate-600")}>{tab.count}</span>
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[11px] font-bold tracking-tight transition-all",
+                    isActive
+                      ? "bg-brand-green text-white shadow-2xs"
+                      : tab.count === 0
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200/80"
+                        : "bg-slate-100 border border-slate-200/80 text-slate-600"
+                  )}
+                >
+                  {tab.count}
+                </span>
               )}
             </button>
           );

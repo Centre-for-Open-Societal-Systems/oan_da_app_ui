@@ -11,8 +11,8 @@ export interface Certificate {
 }
 
 export const CERTIFICATE_BADGE: Record<CertificateStatus, { label: string; className: string }> = {
-  verified: { label: "Verified", className: "bg-brand-tint text-brand-green" },
-  pending: { label: "Pending verification", className: "bg-amber-100 text-amber-700" },
+  verified: { label: "Verified", className: "border border-emerald-300 bg-emerald-50 text-emerald-700" },
+  pending: { label: "Pending verification", className: "border border-amber-300 bg-amber-50 text-amber-800" },
 };
 
 // Shared by the registration wizard (Step 4) and the agent's own profile until the qualifications API lands.

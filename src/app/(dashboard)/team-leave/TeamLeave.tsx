@@ -16,7 +16,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { ACCENTS, type Accent } from "../lifecycle/components/LeaveHistory";
 import { KeyDates } from "../lifecycle/components/KeyDates";
 import { ICONS, Icon } from "../lifecycle/components/shared";
-import { HelpDot, PageIntro } from "../leave-admin/shared";
+import { PageIntro } from "../leave-admin/shared";
 import { returnDate } from "../lifecycle/components/leave";
 import { TEAM_SIZE, mockTeam, type TeamLeaveRow, type WaitingRequest } from "./data";
 import { ApproveDialog, CoverDialog, SuggestDatesDialog } from "./TeamLeaveDialogs";

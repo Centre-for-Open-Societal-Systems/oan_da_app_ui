@@ -61,10 +61,7 @@ export function ProfileView() {
   }, [isDa, attempt]);
 
   const reload = () => setAttempt((n) => n + 1);
-  const startEditing = () => {
-    setEditing(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
+  const startEditing = () => setEditing(true);
 
   // One request per section, idempotent on client_op_id: a retry after a network error does not create a second one.
   const submitDaChanges = async (changes: ProfileChanges, labels: string[]) => {
@@ -107,28 +104,8 @@ export function ProfileView() {
 
   if (isDa && loaded === null) return <PageLoader label="Loading your profile from the DA Registry…" />;
 
-  if (editing) {
-    return (
-      <>
-        <BackLink onClick={() => setEditing(false)} />
-        {isDa && my ? (
-          <DaDemographicsSection editing profile={my.profile} editableFields={my.editable_fields} onCancel={() => setEditing(false)} onSubmit={submitDaChanges} />
-        ) : (
-          <DemographicsSection
-            editing
-            onCancel={() => setEditing(false)}
-            onSubmit={(changed) => {
-              setPending(changed);
-              setEditing(false);
-            }}
-          />
-        )}
-      </>
-    );
-  }
-
   return (
-    <>
+    <div className="flex w-full flex-col gap-5 sm:gap-6">
       <BackLink href="/dashboard" />
 
       <AgentHeader info={headerInfo} pending={!!pending || openRequests.some((r) => r.status === "Pending")} />
@@ -167,15 +144,32 @@ export function ProfileView() {
 
       {isDa ? (
         <>
-          {my && <DaDemographicsSection editing={false} profile={my.profile} editableFields={my.editable_fields} onEdit={startEditing} onCancel={() => setEditing(false)} onSubmit={submitDaChanges} />}
+          {my && (
+            <DaDemographicsSection
+              editing={editing}
+              profile={my.profile}
+              editableFields={my.editable_fields}
+              onEdit={startEditing}
+              onCancel={() => setEditing(false)}
+              onSubmit={submitDaChanges}
+            />
+          )}
           <ChangeRequestsSection refreshKey={attempt} cancelling={cancelling} onCancel={cancelRequest} />
         </>
       ) : (
-        <DemographicsSection editing={false} onEdit={startEditing} onCancel={() => setEditing(false)} onSubmit={() => {}} />
+        <DemographicsSection
+          editing={editing}
+          onEdit={startEditing}
+          onCancel={() => setEditing(false)}
+          onSubmit={(changed) => {
+            setPending(changed);
+            setEditing(false);
+          }}
+        />
       )}
       <DependentsSection />
       <QualificationsSection educationTier={my?.profile.education_tier ?? undefined} specialisation={my?.profile.specialisation ?? undefined} />
       {/* Leave & absence is a Part 2 feature (sample data, no API yet): hidden until it is built. */}
-    </>
+    </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { BackLink } from "@/components/ui/BackLink";
 import { Banner } from "@/components/ui/Banner";
@@ -11,6 +11,7 @@ import { SegmentTabs } from "@/components/ui/SegmentTabs";
 import { Select } from "@/components/ui/Select";
 import { ApiError } from "@/lib/api";
 import { readDraft, removeDraft, writeDraft } from "@/lib/drafts";
+import { cn } from "@/lib/utils";
 import {
   animalOptions,
   applyLivestockIntake,
@@ -68,6 +69,88 @@ const todayIso = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
+
+function LivestockItemCard({
+  rowLabel,
+  index,
+  onRemove,
+  children,
+}: {
+  rowLabel: string;
+  index: number;
+  onRemove: () => void;
+  children: ReactNode;
+}) {
+  const [isOpen, setIsOpen] = useState(true);
+
+  return (
+    <div className="rounded-2xl border border-line bg-white shadow-2xs overflow-hidden transition-all duration-200 hover:shadow-xs hover:border-slate-300">
+      <div
+        onClick={() => setIsOpen((prev) => !prev)}
+        className={cn(
+          "flex items-center justify-between px-4 py-2.5 sm:px-5 cursor-pointer select-none transition-colors",
+          isOpen ? "border-b border-line bg-slate-50/80 hover:bg-slate-100/70" : "bg-white hover:bg-slate-50"
+        )}
+      >
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-6 min-w-6 px-1.5 items-center justify-center rounded-md bg-emerald-50 text-[11px] font-bold text-brand-green border border-emerald-200/80 shadow-2xs">
+            #{index + 1}
+          </span>
+          <h4 className="text-[14px] font-bold text-ink capitalize tracking-tight">
+            {rowLabel} {index + 1}
+          </h4>
+        </div>
+        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            onClick={onRemove}
+            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[12px] font-semibold text-rose-600 bg-rose-50 border border-rose-200/60 hover:bg-rose-100 hover:text-rose-700 transition-all cursor-pointer active:scale-95 shadow-2xs"
+            title={`Remove ${rowLabel} ${index + 1}`}
+          >
+            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+            </svg>
+            <span>Remove</span>
+          </button>
+          <button
+            type="button"
+            aria-label={isOpen ? `Collapse ${rowLabel} ${index + 1}` : `Expand ${rowLabel} ${index + 1}`}
+            aria-expanded={isOpen}
+            onClick={() => setIsOpen((prev) => !prev)}
+            className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-2xs transition-all hover:border-brand-green/60 hover:text-brand-green cursor-pointer active:scale-90"
+          >
+            <svg
+              className={cn(
+                "h-4 w-4 transition-transform duration-250 ease-in-out",
+                isOpen ? "rotate-180 text-brand-green" : "rotate-0 text-slate-400"
+              )}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows,opacity] duration-250 ease-in-out",
+          isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+        )}
+      >
+        <div className="overflow-hidden">
+          <div className="p-4 sm:p-5 bg-white">
+            {children}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // Submit Livestock Report: find the farmer by Farmer ID (GET /farmers/{id}/livestock), start from their newest holding, fill
 // the tabs, then submit: the farmer sections and animals open a draft, the event sections join it, and finalize sends it for
@@ -312,14 +395,24 @@ export function LivestockReportForm() {
           </SectionCard>
 
           {farmer && (
-            <Card className="flex items-center justify-between gap-4 p-5 shadow-card">
-              <div className="min-w-0">
-                <h3 className="text-[17px] font-bold text-ink sm:text-[18px]">{farmer.name}</h3>
-                <p className="mt-0.5 truncate text-[13.5px] text-muted">
-                  {farmer.code} · {farmer.overview.holdings.length} holding{farmer.overview.holdings.length === 1 ? "" : "s"} · {farmer.overview.submissions.length} earlier submission{farmer.overview.submissions.length === 1 ? "" : "s"}
-                </p>
+            <Card className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 sm:p-5 shadow-card rounded-2xl border-line">
+              <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-green to-emerald-700 text-white font-bold text-[16px] shadow-xs">
+                  {farmer.name
+                    .split(" ")
+                    .filter(Boolean)
+                    .map((n) => n[0])
+                    .slice(0, 2)
+                    .join("") || "FA"}
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-[17px] font-bold text-ink sm:text-[18px] truncate">{farmer.name}</h3>
+                  <p className="mt-0.5 truncate text-[13px] sm:text-[13.5px] text-muted">
+                    {farmer.code} · {farmer.overview.holdings.length} holding{farmer.overview.holdings.length === 1 ? "" : "s"} · {farmer.overview.submissions.length} earlier submission{farmer.overview.submissions.length === 1 ? "" : "s"}
+                  </p>
+                </div>
               </div>
-              <Button type="button" variant="brand" className="shrink-0 px-6 py-2.5 text-[14px] font-semibold" onClick={() => setIsEditing(true)}>
+              <Button type="button" variant="brand" className="shrink-0 px-6 py-2.5 text-[14px] font-semibold w-full sm:w-auto justify-center" onClick={() => setIsEditing(true)}>
                 Continue →
               </Button>
             </Card>
@@ -329,13 +422,23 @@ export function LivestockReportForm() {
 
       {isEditing && farmer && (
         <>
-          <SectionCard title="Farmer">
-            <div className="flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <h3 className="text-[17px] font-bold text-ink sm:text-[18px]">{farmer.name}</h3>
-                <p className="mt-0.5 truncate text-[13.5px] text-muted">{farmer.code}</p>
+          <SectionCard title="Farmer" className="rounded-2xl border-line shadow-card">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-green to-emerald-700 text-white font-bold text-[16px] shadow-xs">
+                  {farmer.name
+                    .split(" ")
+                    .filter(Boolean)
+                    .map((n) => n[0])
+                    .slice(0, 2)
+                    .join("") || "FA"}
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-[17px] font-bold text-ink sm:text-[18px] truncate">{farmer.name}</h3>
+                  <p className="mt-0.5 truncate text-[13px] sm:text-[13.5px] text-muted">{farmer.code}</p>
+                </div>
               </div>
-              <Button type="button" variant="outline" className="shrink-0 border-line px-5 py-2 text-[14px] font-medium text-ink hover:bg-slate-50" onClick={backToStart}>
+              <Button type="button" variant="outline" className="shrink-0 border-line px-5 py-2 text-[14px] font-medium text-ink hover:bg-slate-50 w-full sm:w-auto" onClick={backToStart}>
                 Change
               </Button>
             </div>
@@ -356,7 +459,23 @@ export function LivestockReportForm() {
           <form onSubmit={openConfirm} className="flex flex-col gap-4">
             <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-card">
               <div className="border-b border-line">
-                <SegmentTabs label="Livestock Survey stages" className="rounded-none border-0 shadow-none" tabs={form.map((t) => ({ key: t.key, label: t.label }))} active={tab} onChange={setTab} />
+                <SegmentTabs
+                  label="Livestock Survey stages"
+                  className="rounded-none border-0 shadow-none"
+                  tabs={form.map((t) => {
+                    const count = t.sections.reduce((total, s) => {
+                      const rows = values[s.id] ?? [];
+                      return total + (s.isList ? rows.length : rows.length > 0 ? 1 : 0);
+                    }, 0);
+                    return {
+                      key: t.key,
+                      label: t.label,
+                      count,
+                    };
+                  })}
+                  active={tab}
+                  onChange={setTab}
+                />
               </div>
 
               <div key={current.key} className="flex animate-fade-in flex-col gap-5 p-5">
@@ -364,17 +483,24 @@ export function LivestockReportForm() {
                   const rows = values[section.id] ?? [];
                   const locked = !!progress?.saved.includes(section.id);
                   return (
-                    <SectionCard key={section.id} title={section.title} description={locked ? "Already saved on the draft: it cannot change now. Use Change to start over." : undefined} className="rounded-xl border border-line shadow-xs">
+                    <SectionCard
+                      key={section.id}
+                      title={section.title}
+                      description={locked ? "Already saved on the draft: it cannot change now. Use Change to start over." : undefined}
+                      className="rounded-xl border border-line shadow-xs"
+                      collapsible={true}
+                      defaultOpen={true}
+                    >
                       <fieldset disabled={locked} className="flex flex-col gap-5 disabled:opacity-80">
-                        {section.id === LIVESTOCK_LOCATION_SECTION && (
-                          <div>
+                        {section.id === LIVESTOCK_LOCATION_SECTION ? (
+                          <div className="flex flex-col gap-3">
                             <div id={livestockFieldId(section.id, 0, "geo_lowest_level_value_id")} className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
                               {GEO_LEVELS.map(({ key }) => {
                                 const picked = locationRow[key] ?? "";
                                 const options = geo.options[key] ?? [];
                                 return (
-                                  <div key={key} className="flex min-w-0 flex-col gap-2">
-                                    <label htmlFor={`geo-${key}`} className="text-[14px] font-medium capitalize text-ink">
+                                  <div key={key} className="flex min-w-0 flex-col gap-1.5">
+                                    <label htmlFor={`geo-${key}`} className="min-h-[32px] sm:min-h-[36px] flex flex-wrap items-end pb-1 gap-1.5 text-[13px] sm:text-[13.5px] font-medium text-ink leading-tight capitalize">
                                       {key} <span className="text-danger">*</span>
                                     </label>
                                     <Select id={`geo-${key}`} value={picked} onChange={(e) => pickGeo(key, e.target.value)}>
@@ -388,35 +514,60 @@ export function LivestockReportForm() {
                                   </div>
                                 );
                               })}
+                              {renderFields(section, rows[0] ?? {}, 0)}
                             </div>
-                            {geoError && <p className="mt-2 text-[12.5px] text-danger">{geoError}</p>}
+                            {geoError && <p className="text-[12px] text-danger">{geoError}</p>}
                           </div>
-                        )}
-
-                        {section.isList ? (
-                          <>
-                            {rows.length === 0 && <p className="text-[13.5px] text-muted">None added.</p>}
-                            {rows.map((row, index) => (
-                              <div key={index} className="rounded-xl border border-line-soft p-4">
-                                <div className="mb-4 flex items-center justify-between gap-3">
-                                  <p className="text-[14px] font-semibold capitalize text-ink">
-                                    {section.rowLabel} {index + 1}
-                                  </p>
-                                  <button type="button" onClick={() => removeRow(section.id, index)} className="text-[13px] font-medium text-danger hover:underline">
-                                    Remove
-                                  </button>
+                        ) : section.isList ? (
+                          <div className="flex flex-col gap-4 sm:gap-5">
+                            {rows.length === 0 && (
+                              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 py-8 px-4 text-center">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white border border-slate-200/70 text-slate-400 mb-2.5 shadow-2xs">
+                                  <svg className="h-5 w-5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M12 5v14M5 12h14" />
+                                  </svg>
                                 </div>
-                                <div className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">{renderFields(section, row, index)}</div>
+                                <p className="text-[14px] font-semibold text-slate-700">No {section.rowLabel}s added</p>
+                                <p className="text-[12.5px] text-muted mt-0.5 max-w-sm">Click the button below to add your first {section.rowLabel} entry for this survey.</p>
                               </div>
+                            )}
+                            {rows.map((row, index) => (
+                              <LivestockItemCard
+                                key={index}
+                                rowLabel={section.rowLabel ?? "entry"}
+                                index={index}
+                                onRemove={() => removeRow(section.id, index)}
+                              >
+                                <div className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
+                                  {renderFields(section, row, index)}
+                                </div>
+                              </LivestockItemCard>
                             ))}
-                            <div>
-                              <Button type="button" variant="outline" onClick={() => addRow(section)} className="px-5 py-2 font-semibold text-ink">
-                                + Add {section.rowLabel}
+                            <div className="pt-1">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => addRow(section)}
+                                className="inline-flex items-center gap-2 border-emerald-300 bg-emerald-50/40 text-emerald-800 hover:bg-emerald-50 hover:border-brand-green px-5 py-2.5 font-semibold text-[13.5px] rounded-xl shadow-2xs transition-all active:scale-98 cursor-pointer"
+                              >
+                                <svg className="h-4 w-4 text-brand-green" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                                  <path d="M12 5v14M5 12h14" />
+                                </svg>
+                                <span>Add {section.rowLabel}</span>
                               </Button>
                             </div>
-                          </>
+                          </div>
                         ) : (
-                          <div className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">{renderFields(section, rows[0] ?? {}, 0)}</div>
+                          <div className={cn(
+                            "grid grid-cols-1 gap-x-6 gap-y-5",
+                            section.id === "livestock_survey_personnel_section_02"
+                              ? "sm:grid-cols-2 lg:grid-cols-4"
+                              : section.id === "livestock_farmer_lookup"
+                                ? "sm:grid-cols-2 lg:grid-cols-2"
+                                : "sm:grid-cols-2 lg:grid-cols-3"
+                          )}>
+                            {renderFields(section, rows[0] ?? {}, 0)}
+                          </div>
                         )}
                       </fieldset>
                     </SectionCard>
@@ -425,23 +576,36 @@ export function LivestockReportForm() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 rounded-xl border border-line bg-white p-4 shadow-card sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-3 rounded-2xl border border-line bg-white p-4 shadow-card sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center justify-between sm:justify-start gap-3 w-full sm:w-auto">
                 <Button type="button" variant="outline" onClick={() => saveDraft()} className="px-5 py-2.5 font-semibold text-ink">
                   Save Draft
                 </Button>
-                {savedAt && <span className="text-[13.5px] text-muted">Saved in this browser at {savedAt}</span>}
+                {savedAt ? (
+                  <span className="text-[13px] text-muted">Saved in this browser at {savedAt}</span>
+                ) : (
+                  <span className="flex items-center gap-1.5 text-[13px] font-medium text-muted">
+                    <svg className="h-4 w-4 text-emerald-600" viewBox="0 0 20 20" fill="currentColor">
+                      <path
+                        fillRule="evenodd"
+                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    Draft ready
+                  </span>
+                )}
               </div>
-              <div className="flex items-center gap-3">
-                <Button type="button" variant="outline" onClick={() => goTo(tabIndex - 1)} disabled={tabIndex === 0} className="px-5 py-2.5 font-semibold text-ink">
+              <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                <Button type="button" variant="outline" onClick={() => goTo(tabIndex - 1)} disabled={tabIndex === 0} className="flex items-center justify-center gap-1.5 px-4 sm:px-5 py-2.5 font-semibold text-ink flex-1 sm:flex-initial">
                   ← Previous Step
                 </Button>
                 {isLast ? (
-                  <Button type="submit" variant="brand" className="px-6 py-2.5 font-semibold">
+                  <Button type="submit" variant="brand" className="flex items-center justify-center px-5 sm:px-6 py-2.5 font-semibold flex-1 sm:flex-initial">
                     Submit Livestock Survey →
                   </Button>
                 ) : (
-                  <Button type="button" variant="brand" onClick={saveAndNext} className="px-6 py-2.5 font-semibold">
+                  <Button type="button" variant="brand" onClick={saveAndNext} className="flex items-center justify-center px-5 sm:px-6 py-2.5 font-semibold flex-1 sm:flex-initial">
                     Save &amp; Next →
                   </Button>
                 )}

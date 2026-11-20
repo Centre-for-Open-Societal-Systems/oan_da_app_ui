@@ -264,7 +264,7 @@ export function ReviewsWorkspace({
   const [agent, setAgent] = useState("");
   const [cycle, setCycle] = useState("Quarterly");
   const [period, setPeriod] = useState("Q4 2026 (Oct–Dec)");
-  const [due, setDue] = useState("2026-12-31");
+  const [due] = useState("2026-12-31");
   const [newRating, setNewRating] = useState("");
   const [newComments, setNewComments] = useState("");
   const selected = rows.find((row) => row.id === selectedId) ?? rows[0];
