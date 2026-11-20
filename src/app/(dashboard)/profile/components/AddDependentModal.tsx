@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
@@ -24,19 +24,21 @@ interface AddDependentModalProps {
 const FORM_ID = "add-dependent-form";
 
 export function AddDependentModal({ isOpen, onClose, onSubmit }: AddDependentModalProps) {
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   const [name, setName] = useState("");
   const [relationship, setRelationship] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
     if (isOpen) {
       setName("");
       setRelationship("");
       setDateOfBirth("");
       setError(null);
     }
-  }, [isOpen]);
+  }
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
+import { useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { RowAction } from "@/components/ui/RowAction";
@@ -31,20 +31,22 @@ function formatDate(iso: string) {
 
 export function UploadCertificateModal({ isOpen, onClose, onSubmit }: UploadCertificateModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [issueDate, setIssueDate] = useState(todayIso());
   const [expiryDate, setExpiryDate] = useState("2028-02-18");
 
-  useEffect(() => {
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
     if (isOpen) {
       setFile(null);
       setFileError(null);
       setIssueDate(todayIso());
       setExpiryDate("2028-02-18");
     }
-  }, [isOpen]);
+  }
 
   const pickFile = (candidate: File | undefined) => {
     if (!candidate) return;

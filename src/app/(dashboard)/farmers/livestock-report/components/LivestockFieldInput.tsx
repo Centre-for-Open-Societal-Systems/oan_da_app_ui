@@ -19,10 +19,6 @@ interface LivestockFieldInputProps {
 }
 
 const READ_ONLY = "cursor-not-allowed border-gray-200 bg-surface text-ink-soft hover:border-gray-200 hover:ring-0 focus:border-gray-200 focus:ring-0";
-const BOOLEAN_CHOICES = [
-  { value: "true", label: "Yes" },
-  { value: "false", label: "No" },
-];
 
 // One Livestock field, rendered by its type. The form holds strings; what is sent is decided in buildLivestockSections.
 export function LivestockFieldInput({ id, field, value, onChange, error, animals }: LivestockFieldInputProps) {
