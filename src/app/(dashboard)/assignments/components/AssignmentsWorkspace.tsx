@@ -125,7 +125,7 @@ export function AssignmentsWorkspace() {
     let current = true;
     listAreas({ level: "Woreda" })
       .then((areas) => current && setWoredaAreas(areas))
-      .catch(() => {});
+      .catch(() => { });
     return () => {
       current = false;
     };
@@ -300,12 +300,25 @@ export function AssignmentsWorkspace() {
     }
   };
 
+  const snoColumn: Column<AgentAssignment> = {
+    key: "sno",
+    header: "S.No.",
+    align: "center",
+    className: "w-16 min-w-[64px] whitespace-nowrap",
+    cell: (r) => (
+      <span className="text-[13px] font-medium text-muted">
+        {visible.indexOf(r) + 1}
+      </span>
+    ),
+  };
+
   const assignedByColumn: Column<AgentAssignment> = { key: "assignedBy", header: "Assigned by", cell: (r) => r.assignedBy ?? <span className="text-subtle">—</span> };
 
   const daIdColumn: Column<AgentAssignment> = { key: "daId", header: "DA-ID", cell: (r) => <span className="font-mono text-[13px] text-ink-soft">{r.daId}</span> };
 
   // A DA sees DA-ID then who assigned them, with no Agent column (the agent is always themselves).
   const columns: Column<AgentAssignment>[] = [
+    snoColumn,
     ...(isDA
       ? [daIdColumn, assignedByColumn]
       : [{ key: "agent", header: "Agent", cell: (r: AgentAssignment) => <Link href={`/agents/${r.daId}`} className="font-medium text-ink hover:text-brand-green">{r.agent}</Link> }, daIdColumn]),
@@ -365,12 +378,12 @@ export function AssignmentsWorkspace() {
           <StatCard label="Assigned by" value={mine?.assignedBy ?? "—"} hint="Woreda supervisor" accent="border-l-violet-600" tile="bg-violet-50 text-violet-600" icon={icon("M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM17 11l2 2 4-4")} />
         </div>
       ) : (
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Agents" value={String(summary?.agents ?? rows.length)} accent="border-l-brand-green" tile="bg-brand-tint text-brand-green" icon={icon("M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8z")} />
-        <StatCard label="Kebeles covered" value={String(kebelesCovered)} accent="border-l-blue-600" tile="bg-blue-50 text-blue-600" icon={icon("M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0zM12 13a3 3 0 100-6 3 3 0 000 6z")} />
-        <StatCard label="Unassigned" value={String(unassigned)} accent="border-l-amber-600" tile="bg-warning-wash text-amber-600" icon={icon("M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM22 11l-4 4M18 11l4 4")} />
-        <StatCard label="Average load" value={avgLoad.toLocaleString()} hint="farmers per assigned agent" accent="border-l-violet-600" tile="bg-violet-50 text-violet-600" icon={icon("M18 20V10M12 20V4M6 20v-6")} />
-      </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Agents" value={String(summary?.agents ?? rows.length)} accent="border-l-brand-green" tile="bg-brand-tint text-brand-green" icon={icon("M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8z")} />
+          <StatCard label="Kebeles covered" value={String(kebelesCovered)} accent="border-l-blue-600" tile="bg-blue-50 text-blue-600" icon={icon("M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0zM12 13a3 3 0 100-6 3 3 0 000 6z")} />
+          <StatCard label="Unassigned" value={String(unassigned)} accent="border-l-amber-600" tile="bg-warning-wash text-amber-600" icon={icon("M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM22 11l-4 4M18 11l4 4")} />
+          <StatCard label="Average load" value={avgLoad.toLocaleString()} hint="farmers per assigned agent" accent="border-l-violet-600" tile="bg-violet-50 text-violet-600" icon={icon("M18 20V10M12 20V4M6 20v-6")} />
+        </div>
       )}
 
       {outcome && <Banner tone={outcome.tone} title={outcome.title} onDismiss={() => setOutcome(null)}>{outcome.body}</Banner>}
@@ -427,61 +440,72 @@ export function AssignmentsWorkspace() {
 
       {/* Read-only Kebele coverage summary — managed separately (§3.5); not part of what a DA receives from their supervisor. */}
       {!isDA && (
-      <Card className="overflow-hidden p-0 shadow-card">
-        <div className="flex flex-col gap-2.5 sm:gap-3 p-3.5 sm:p-4 lg:flex-row lg:items-center lg:justify-between border-b border-line-soft">
-          <div>
-            <h2 className="flex items-center gap-2 text-[14px] sm:text-[15px] font-semibold text-ink">
-              Kebele coverage summary <Pill tone="slate">Read-only</Pill>
-            </h2>
-            <p className="mt-0.5 text-[12px] sm:text-[12.5px] text-ink-soft">
-              Service coverage across kebeles{coverageWoredaName ? ` in ${coverageWoredaName}` : ""}. This reporting view is managed separately and is not edited from the assignment screen.
-            </p>
+        <Card className="overflow-hidden p-0 shadow-card">
+          <div className="flex flex-col gap-2.5 sm:gap-3 p-3.5 sm:p-4 lg:flex-row lg:items-center lg:justify-between border-b border-line-soft">
+            <div>
+              <h2 className="flex items-center gap-2 text-[14px] sm:text-[15px] font-semibold text-ink">
+                Kebele coverage summary <Pill tone="slate">Read-only</Pill>
+              </h2>
+              <p className="mt-0.5 text-[12px] sm:text-[12.5px] text-ink-soft">
+                Service coverage across kebeles{coverageWoredaName ? ` in ${coverageWoredaName}` : ""}. This reporting view is managed separately and is not edited from the assignment screen.
+              </p>
+            </div>
+            <div className="flex w-full items-center gap-2 sm:gap-2.5 lg:w-auto lg:justify-end">
+              <SearchInput
+                value={coverageQuery}
+                onChange={setCoverageQuery}
+                placeholder={COVERAGE_SEARCH_PLACEHOLDER}
+                className="flex-1 min-w-0 sm:w-auto lg:w-[260px] xl:w-[280px] lg:flex-initial [&_input]:w-full"
+              />
+              <AdvancedFiltersButton
+                activeCount={countActive(coverageFilters)}
+                onClick={() => setIsCoverageFiltersOpen(true)}
+                className="shrink-0 h-9 sm:h-10"
+              />
+            </div>
           </div>
-          <div className="flex w-full items-center gap-2 sm:gap-2.5 lg:w-auto lg:justify-end">
-            <SearchInput
-              value={coverageQuery}
-              onChange={setCoverageQuery}
-              placeholder={COVERAGE_SEARCH_PLACEHOLDER}
-              className="flex-1 min-w-0 sm:w-auto lg:w-[260px] xl:w-[280px] lg:flex-initial [&_input]:w-full"
-            />
-            <AdvancedFiltersButton
-              activeCount={countActive(coverageFilters)}
-              onClick={() => setIsCoverageFiltersOpen(true)}
-              className="shrink-0 h-9 sm:h-10"
-            />
-          </div>
-        </div>
-        <DataTable itemLabel="kebeles"
-          minWidth="720px"
-          rowKey={(k) => k.kebele}
-          rows={coverageRows}
-          state={!coverage ? "loading" : coverage.error ? "error" : "ready"}
-          onRetry={() => setReload((n) => n + 1)}
-          emptyTitle={coverageAll.length === 0 ? "No kebeles in the area master for this Woreda" : "No kebeles match the selected filters"}
-          emptyHint={coverageAll.length === 0 ? undefined : "Clear a filter or try a different search."}
-          columns={[
-            { key: "kebele", header: "Kebele", cell: (k) => <span className="font-medium text-ink">{k.kebele}</span> },
-            { key: "woreda", header: <FilterDropdown label="Woreda" allLabel="All woredas" options={coverageWoredaOptions} selected={coverageFilters.woreda} onApply={setCoverageFilter("woreda")} />, cell: (k) => k.woreda },
-            { key: "agents", header: "Agents", align: "right", cell: (k) => k.agents },
-            { key: "farmers", header: "Linked farmers", align: "right", cell: (k) => k.farmers.toLocaleString() },
-            { key: "hh", header: "Households", align: "right", cell: (k) => (k.households == null ? <span className="text-subtle">—</span> : k.households.toLocaleString()) },
-            { key: "cov", header: <FilterDropdown label="Coverage" allLabel="All coverage states" options={coverageOptions} selected={coverageFilters.coverage} onApply={setCoverageFilter("coverage")} />, cell: (k) => <Pill tone={k.coverage === "Full" ? "green" : k.coverage === "Uncovered" ? "red" : "amber"}>{k.coverage}</Pill> },
-          ]}
-        />
+          <DataTable itemLabel="kebeles"
+            minWidth="720px"
+            rowKey={(k) => k.kebele}
+            rows={coverageRows}
+            state={!coverage ? "loading" : coverage.error ? "error" : "ready"}
+            onRetry={() => setReload((n) => n + 1)}
+            emptyTitle={coverageAll.length === 0 ? "No kebeles in the area master for this Woreda" : "No kebeles match the selected filters"}
+            emptyHint={coverageAll.length === 0 ? undefined : "Clear a filter or try a different search."}
+            columns={[
+              {
+                key: "sno",
+                header: "S.No.",
+                align: "center",
+                className: "w-16 min-w-[64px] whitespace-nowrap",
+                cell: (k) => (
+                  <span className="text-[13px] font-medium text-muted">
+                    {coverageRows.indexOf(k) + 1}
+                  </span>
+                ),
+              },
+              { key: "kebele", header: "Kebele", cell: (k) => <span className="font-medium text-ink">{k.kebele}</span> },
+              { key: "woreda", header: <FilterDropdown label="Woreda" allLabel="All woredas" options={coverageWoredaOptions} selected={coverageFilters.woreda} onApply={setCoverageFilter("woreda")} />, cell: (k) => k.woreda },
+              { key: "agents", header: "Agents", align: "right", cell: (k) => k.agents },
+              { key: "farmers", header: "Linked farmers", align: "right", cell: (k) => k.farmers.toLocaleString() },
+              { key: "hh", header: "Households", align: "right", cell: (k) => (k.households == null ? <span className="text-subtle">—</span> : k.households.toLocaleString()) },
+              { key: "cov", header: <FilterDropdown label="Coverage" allLabel="All coverage states" options={coverageOptions} selected={coverageFilters.coverage} onApply={setCoverageFilter("coverage")} />, cell: (k) => <Pill tone={k.coverage === "Full" ? "green" : k.coverage === "Uncovered" ? "red" : "amber"}>{k.coverage}</Pill> },
+            ]}
+          />
 
-        <AdvancedFiltersDrawer
-          isOpen={isCoverageFiltersOpen}
-          onClose={() => setIsCoverageFiltersOpen(false)}
-          fields={coverageFilterFields}
-          filters={coverageFilters}
-          onApply={(next) =>
-            setCoverageFilters({
-              woreda: next.woreda ?? new Set(),
-              coverage: next.coverage ?? new Set(),
-            })
-          }
-        />
-      </Card>
+          <AdvancedFiltersDrawer
+            isOpen={isCoverageFiltersOpen}
+            onClose={() => setIsCoverageFiltersOpen(false)}
+            fields={coverageFilterFields}
+            filters={coverageFilters}
+            onApply={(next) =>
+              setCoverageFilters({
+                woreda: next.woreda ?? new Set(),
+                coverage: next.coverage ?? new Set(),
+              })
+            }
+          />
+        </Card>
       )}
 
       {draft && (

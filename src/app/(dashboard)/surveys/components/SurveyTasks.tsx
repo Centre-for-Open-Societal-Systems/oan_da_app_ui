@@ -91,6 +91,17 @@ export function SurveyTasks() {
   const today = todayIso();
   const columns: Column<SurveyTask>[] = [
     {
+      key: "sno",
+      header: "S.No.",
+      align: "center",
+      className: "w-16 min-w-[64px] whitespace-nowrap",
+      cell: (s) => (
+        <span className="text-[13px] font-medium text-muted">
+          {rows.indexOf(s) + 1}
+        </span>
+      ),
+    },
+    {
       key: "name",
       header: <FilterDropdown label="Survey" allLabel="All survey types" options={typeOptions} selected={filters.type} onApply={setFilter("type")} />,
       cell: (s) => <span><span className="font-medium text-ink">{s.name}</span><span className="block text-[12px] text-muted">{s.type} · template {s.templateVersion}</span></span>,
@@ -111,21 +122,30 @@ export function SurveyTasks() {
       key: "actions", header: "Actions", align: "center",
       cell: (s) =>
         s.status === "Closed" ? <span className="whitespace-nowrap text-[12.5px] text-subtle">Window closed</span>
-        : s.window_open > today ? <span className="whitespace-nowrap text-[12.5px] text-subtle">Opens {s.window.open}</span>
-        : <RowAction href={`/surveys/${s.id}`} tone="solid">Collect response</RowAction>,
+          : s.window_open > today ? <span className="whitespace-nowrap text-[12.5px] text-subtle">Opens {s.window.open}</span>
+            : <RowAction href={`/surveys/${s.id}`} tone="solid">Collect response</RowAction>,
     },
   ];
 
   return (
     <Card className="overflow-hidden p-0 shadow-card">
-      <div className="flex flex-col gap-3 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-2.5 sm:gap-3 p-3.5 sm:p-4 lg:flex-row lg:items-center lg:justify-between border-b border-line-soft">
         <div>
-          <h2 className="text-[15px] font-semibold text-ink">Assigned surveys</h2>
-          <p className="mt-0.5 text-[12.5px] text-ink-soft">Pick a farmer from your Kebele, take consent, then capture the answers. One response per farmer per survey.</p>
+          <h2 className="text-[15px] sm:text-[16px] font-semibold text-ink">Assigned surveys</h2>
+          <p className="mt-0.5 text-[12px] sm:text-[12.5px] text-ink-soft">Pick a farmer from your Kebele, take consent, then capture the answers. One response per farmer per survey.</p>
         </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end">
-          <SearchInput value={query} onChange={setQuery} placeholder={SEARCH_PLACEHOLDER} />
-          <AdvancedFiltersButton activeCount={activeFilterCount} onClick={() => setIsFiltersOpen(true)} />
+        <div className="flex w-full items-center gap-2 sm:gap-2.5 sm:w-auto lg:w-auto lg:justify-end">
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder={SEARCH_PLACEHOLDER}
+            className="flex-1 min-w-0 sm:w-auto lg:w-[260px] xl:w-[280px] lg:flex-initial [&_input]:w-full"
+          />
+          <AdvancedFiltersButton
+            activeCount={activeFilterCount}
+            onClick={() => setIsFiltersOpen(true)}
+            className="shrink-0 h-9 sm:h-10"
+          />
         </div>
       </div>
       {state === "error" && error && <p className="px-4 pb-2 text-[12.5px] font-medium text-danger">{error}</p>}

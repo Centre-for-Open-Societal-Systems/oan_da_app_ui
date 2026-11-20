@@ -88,17 +88,19 @@ export function AnswersTile({ surveyId, questions: given, name, onClose, default
           <h2 className="text-[17px] font-semibold text-ink">Answers{name ? ` · ${name}` : ""} <span className="font-normal text-ink-soft">({filtered ? `${visible.length} of ${total}` : total})</span></h2>
           <p className="text-[12.5px] text-ink-soft">One row per response · open View answers to see what the farmer answered{total > rows.length ? ` · showing the first ${rows.length}` : ""}</p>
         </div>
-        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
-          <Select aria-label="Woreda" className="h-10 sm:w-44" value={woreda} onChange={(e) => { setWoreda(e.target.value); setKebele(""); }}>
-            <option value="">All Woredas</option>
-            {woredas.map((w) => <option key={w}>{w}</option>)}
-          </Select>
-          <Select aria-label="Kebele" className="h-10 sm:w-44" value={kebele} onChange={(e) => setKebele(e.target.value)}>
-            <option value="">All Kebeles</option>
-            {kebeles.map((k) => <option key={k}>{k}</option>)}
-          </Select>
-          <Button variant="outline" className="h-10 whitespace-nowrap px-4 font-semibold" disabled={exporting} onClick={exportXlsx}>{exporting ? "Exporting…" : "Export Excel"}</Button>
-          {onClose && <button type="button" onClick={onClose} className="shrink-0 px-1 text-[13px] font-semibold text-ink-soft hover:text-ink">Hide</button>}
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center w-full lg:w-auto">
+          <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center">
+            <Select aria-label="Woreda" className="h-9 sm:h-10 w-full sm:w-44" value={woreda} onChange={(e) => { setWoreda(e.target.value); setKebele(""); }}>
+              <option value="">All Woredas</option>
+              {woredas.map((w) => <option key={w}>{w}</option>)}
+            </Select>
+            <Select aria-label="Kebele" className="h-9 sm:h-10 w-full sm:w-44" value={kebele} onChange={(e) => setKebele(e.target.value)}>
+              <option value="">All Kebeles</option>
+              {kebeles.map((k) => <option key={k}>{k}</option>)}
+            </Select>
+          </div>
+          <Button variant="outline" className="h-9 sm:h-10 w-full sm:w-auto whitespace-nowrap px-4 font-semibold" disabled={exporting} onClick={exportXlsx}>{exporting ? "Exporting…" : "Export Excel"}</Button>
+          {onClose && <button type="button" onClick={onClose} className="shrink-0 self-center px-1 text-[13px] font-semibold text-ink-soft hover:text-ink">Hide</button>}
         </div>
       </div>
       {exportError && <p className="border-b border-line-soft px-4 py-2.5 text-[13px] font-medium text-danger">{exportError}</p>}

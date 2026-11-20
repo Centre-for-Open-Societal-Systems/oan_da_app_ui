@@ -73,7 +73,13 @@ export function TemplatesView({ reloadKey = 0, notice, onDismissNotice }: { relo
   const responses = rows.reduce((n, t) => n + t.collected, 0);
 
   const columns: Column<SurveyTask>[] = [
-    { key: "sno", header: "S. No.", cell: (t) => rows.indexOf(t) + 1 },
+    {
+      key: "sno",
+      header: "S.No.",
+      align: "center",
+      className: "w-16 min-w-[64px] whitespace-nowrap",
+      cell: (t) => <span className="text-[13px] font-medium text-muted">{rows.indexOf(t) + 1}</span>,
+    },
     {
       key: "name", header: "Template", className: "min-w-[260px]", cell: (t) => (
         <span className="block">
@@ -116,21 +122,28 @@ export function TemplatesView({ reloadKey = 0, notice, onDismissNotice }: { relo
       {state === "error" && error && <Banner tone="error">{error}</Banner>}
 
       <Card className="overflow-hidden p-0 shadow-card">
-        <div className="flex flex-col gap-3 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-2.5 sm:gap-3 p-3.5 sm:p-4 lg:flex-row lg:items-center lg:justify-between border-b border-line-soft">
           <div>
-            <h2 className="text-[17px] font-semibold text-ink">Survey Templates</h2>
-            <p className="text-[12.5px] text-ink-soft">Published templates · version · collection window</p>
+            <h2 className="text-[15px] sm:text-[17px] font-semibold text-ink">Survey Templates</h2>
+            <p className="mt-0.5 text-[12px] sm:text-[12.5px] text-ink-soft">Published templates · version · collection window</p>
           </div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Select aria-label="Status" className="h-10 sm:w-40" value={status} onChange={(e) => setStatus(e.target.value as SurveyStatus | "")}>
-              <option value="">All status</option>
-              {STATUSES.map((s) => <option key={s}>{s}</option>)}
-            </Select>
-            <Select aria-label="Survey type" className="h-10 sm:w-48" value={type} onChange={(e) => setType(e.target.value as SurveyType | "")}>
-              <option value="">All types</option>
-              {SURVEY_TYPES.map((s) => <option key={s}>{s}</option>)}
-            </Select>
-            <SearchInput value={query} onChange={setQuery} placeholder="Search template name…" />
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center w-full lg:w-auto">
+            <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center">
+              <Select aria-label="Status" className="h-9 sm:h-10 w-full sm:w-36" value={status} onChange={(e) => setStatus(e.target.value as SurveyStatus | "")}>
+                <option value="">All status</option>
+                {STATUSES.map((s) => <option key={s}>{s}</option>)}
+              </Select>
+              <Select aria-label="Survey type" className="h-9 sm:h-10 w-full sm:w-44" value={type} onChange={(e) => setType(e.target.value as SurveyType | "")}>
+                <option value="">All types</option>
+                {SURVEY_TYPES.map((s) => <option key={s}>{s}</option>)}
+              </Select>
+            </div>
+            <SearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder="Search template name…"
+              className="w-full sm:w-60 lg:w-[240px] [&_input]:w-full"
+            />
           </div>
         </div>
         <DataTable itemLabel="templates" columns={columns} rows={rows} rowKey={(t) => t.id} minWidth="1180px" state={state} onRetry={load}

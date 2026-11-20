@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Pill } from "@/components/ui/Pill";
 import { Banner } from "@/components/ui/Banner";
@@ -16,7 +17,6 @@ import { describeFarmerError, listFarmers, type ApiFarmer } from "@/features/far
 import { listAgents, type ApiAgent } from "@/features/agents";
 import {
   RESPONSE_TONE,
-  SURVEY_STATUS_TONE,
   describeSurveyError,
   getSurvey,
   newOpId,
@@ -212,40 +212,130 @@ export function SurveyCapture({ id }: { id: string }) {
     <div className="flex w-full flex-col gap-4">
       <BackLink href="/surveys" label="Back to Surveys" />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[340px_1fr]">
         {/* Task context */}
-        <Card className="self-start shadow-card">
-          <h1 className="text-[18px] font-semibold leading-tight text-ink">{task.name}</h1>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            <Pill tone="blue">Template {task.templateVersion}</Pill>
-            <Pill tone="slate">{task.type}</Pill>
-            <Pill tone="green">~{task.estMinutes} min</Pill>
-            <Pill tone={SURVEY_STATUS_TONE[task.status]} dot>{task.status}</Pill>
+        <Card className="self-start shadow-card p-4 sm:p-5 lg:sticky lg:top-4">
+          {/* Header with status dot, title, and Open status pill */}
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span
+                  className={cn(
+                    "h-2.5 w-2.5 rounded-full shrink-0",
+                    task.status === "Open" ? "bg-emerald-500" : task.status === "Closing soon" ? "bg-amber-500" : "bg-slate-400",
+                  )}
+                />
+                <h1 className="text-[18px] sm:text-[19px] font-bold leading-tight text-ink truncate">{task.name}</h1>
+              </div>
+              <span
+                className={cn(
+                  "rounded-full px-3 py-0.5 text-[12px] font-medium shrink-0",
+                  task.status === "Open"
+                    ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : task.status === "Closing soon"
+                      ? "border border-amber-200 bg-amber-50 text-amber-700"
+                      : "border border-slate-200 bg-slate-50 text-slate-600",
+                )}
+              >
+                {task.status}
+              </span>
+            </div>
+            <p className="mt-1 text-[13px] text-ink-soft leading-relaxed">
+              Review survey info and select a farmer to begin collection
+            </p>
           </div>
-          <dl className="mt-4 space-y-2 text-[13px]">
-            <div><dt className="text-[11.5px] font-semibold uppercase tracking-wider text-muted">Window</dt><dd className="text-ink">{task.window.open} → {task.window.close}</dd></div>
-            <div><dt className="text-[11.5px] font-semibold uppercase tracking-wider text-muted">Languages</dt><dd className="text-ink">{task.languages.join(" · ")}</dd></div>
-            <div><dt className="text-[11.5px] font-semibold uppercase tracking-wider text-muted">Progress</dt><dd className="text-ink">{farmers ? `${task.collected} of ${capturable.length} farmers` : `${task.collected} collected`}{task.queued > 0 ? ` · ${task.queued} queued` : ""}</dd></div>
-          </dl>
+
+          <div className="my-3.5 border-t border-line-soft" />
+
+          {/* Tags row */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-blue-200 bg-blue-50/70 px-3 py-1 text-[12px] font-medium text-blue-700">
+              Template {task.templateVersion}
+            </span>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[12px] font-medium text-slate-700">
+              {task.type}
+            </span>
+            {task.estMinutes && (
+              <span className="rounded-full border border-emerald-200 bg-emerald-50/70 px-3 py-1 text-[12px] font-medium text-emerald-700">
+                ~{task.estMinutes} min
+              </span>
+            )}
+          </div>
+
+          {/* Info Box with 3 rows & icons (Window, Languages, Progress) */}
+          <div className="mt-4 rounded-xl border border-slate-200/80 bg-white p-3.5 sm:p-4 space-y-3">
+            {/* Window */}
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 shrink-0 text-blue-500">
+                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                  <line x1="16" y1="2" x2="16" y2="6" />
+                  <line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">Window</p>
+                <p className="text-[13.5px] font-semibold text-ink">{task.window.open} → {task.window.close}</p>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100" />
+
+            {/* Languages */}
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 shrink-0 text-emerald-600">
+                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="2" y1="12" x2="22" y2="12" />
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                </svg>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">Languages</p>
+                <p className="text-[13.5px] font-semibold text-ink">{task.languages.join(" · ")}</p>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100" />
+
+            {/* Progress */}
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 shrink-0 text-amber-500">
+                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <line x1="6" y1="20" x2="6" y2="14" />
+                  <line x1="12" y1="20" x2="12" y2="4" />
+                  <line x1="18" y1="20" x2="18" y2="10" />
+                </svg>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">Progress</p>
+                <p className="text-[13.5px] font-semibold text-ink">
+                  {farmers ? `${task.collected} of ${capturable.length} farmers` : `${task.collected} collected`}
+                  {task.queued > 0 ? ` · ${task.queued} queued on device` : ""}
+                </p>
+              </div>
+            </div>
+          </div>
 
           {readOnly && (
             <Banner tone="info" className="mt-4">{closed ? "This survey window is closed. No new responses can be submitted." : `This survey opens on ${task.window.open}.`}</Banner>
           )}
 
           {!isDA && (
-            <div className="mt-5">
-              <label htmlFor="collector" className="text-[14px] font-medium text-ink">Collecting for DA</label>
-              <Select id="collector" value={daId} disabled={submitting} onChange={(e) => setDaId(e.target.value)} className="mt-1.5">
+            <div className="mt-4">
+              <label htmlFor="collector" className="text-[13.5px] sm:text-[14px] font-semibold text-ink">Collecting for DA</label>
+              <Select id="collector" value={daId} disabled={submitting} onChange={(e) => setDaId(e.target.value)} className="mt-1.5 w-full">
                 <option value="">{agents ? (agents.length ? "Select DA…" : "No DA found") : "Loading DAs…"}</option>
                 {agents?.map((a) => <option key={a.da_id} value={a.da_id}>{a.full_name} — {a.da_id}</option>)}
               </Select>
             </div>
           )}
 
-          <div className="mt-5">
-            <label htmlFor="farmer" className="text-[14px] font-medium text-ink">Farmer</label>
-            <Select id="farmer" value={farmerId} disabled={submitting || readOnly} onChange={(e) => { setFarmerId(e.target.value); setStatus(null); resetCapture(); }} className="mt-1.5">
-              <option value="">{farmers ? (capturable.length === 0 ? "No farmer in your Kebele" : "Select farmer…") : "Loading farmers…"}</option>
+          <div className="mt-4">
+            <label htmlFor="farmer" className="text-[14px] font-semibold text-ink">Farmer</label>
+            <Select id="farmer" value={farmerId} disabled={submitting || readOnly} onChange={(e) => { setFarmerId(e.target.value); setStatus(null); resetCapture(); }} className="mt-1.5 w-full">
+              <option value="">{farmers ? (capturable.length === 0 ? "No farmer in your Kebele" : "Select farmer....") : "Loading farmers…"}</option>
               {capturable.map((f) => (
                 <option key={f.farmer_id} value={f.farmer_id}>
                   {f.farmer_name}{f.reg_id ? ` (${f.reg_id})` : ""} — {f.kebele}{isAnsweredFarmer(f) ? " · answered" : ""}
@@ -257,111 +347,208 @@ export function SurveyCapture({ id }: { id: string }) {
           </div>
 
           {farmer && (
-            <dl className="mt-3 space-y-1.5 rounded-lg border border-line bg-surface px-3 py-2.5 text-[13px]">
-              <div className="flex justify-between gap-3"><dt className="text-ink-soft">Farmer ID</dt><dd className="font-medium text-ink">{farmer.reg_id ?? farmer.farmer_id}</dd></div>
-              <div className="flex justify-between gap-3"><dt className="text-ink-soft">Kebele</dt><dd className="font-medium text-ink">{farmer.kebele}</dd></div>
+            <dl className="mt-3 space-y-1.5 rounded-lg border border-line bg-surface p-3 text-[13px]">
+              <div className="flex justify-between items-center gap-3"><dt className="text-ink-soft">Farmer ID</dt><dd className="font-mono text-[12px] font-medium text-ink">{farmer.reg_id ?? farmer.farmer_id}</dd></div>
+              <div className="flex justify-between items-center gap-3"><dt className="text-ink-soft">Kebele</dt><dd className="font-medium text-ink">{farmer.kebele}</dd></div>
             </dl>
           )}
 
           {task.languages.length > 1 && (
             <div className="mt-4">
-              <label htmlFor="lang" className="text-[14px] font-medium text-ink">Question language</label>
-              <Select id="lang" value={language} onChange={(e) => setLanguage(e.target.value)} className="mt-1.5">
+              <label htmlFor="lang" className="text-[13.5px] sm:text-[14px] font-semibold text-ink">Question language</label>
+              <Select id="lang" value={language} onChange={(e) => setLanguage(e.target.value)} className="mt-1.5 w-full">
                 {task.languages.map((l) => <option key={l}>{l}</option>)}
               </Select>
             </div>
           )}
 
           {status && !submitting && (
-            <div className="mt-4 flex items-center gap-2 text-[13px]"><span className="text-muted">Response status</span><Pill tone={RESPONSE_TONE[status]} dot>{status}</Pill></div>
+            <div className="mt-4 flex items-center justify-between rounded-lg border border-line bg-surface px-3 py-2 text-[13px]">
+              <span className="font-medium text-muted">Response status</span>
+              <Pill tone={RESPONSE_TONE[status]} dot>{status}</Pill>
+            </div>
           )}
         </Card>
 
         {/* Capture: every question of the survey on one form */}
-        <Card className="overflow-hidden p-0 shadow-card">
+        <Card className="overflow-hidden p-0 shadow-card flex flex-col h-full min-h-[520px]">
           {done ? (
-            <div className="p-5">
-              <Banner tone={status === "Synced" ? "success" : "warning"} title={status === "Synced" ? "Response submitted" : "Response queued"}>
-                {`Response for ${farmer?.farmer_name ?? "the farmer"} is stored and counted toward ${task.name}. A second response for this farmer is blocked.`}
-              </Banner>
-              <Button type="button" variant="brandOutline" onClick={() => { setFarmerId(""); setStatus(null); resetCapture(); }} className="mt-4">Next farmer</Button>
+            <div className="flex flex-1 flex-col items-center justify-center p-6 sm:p-10 text-center min-h-[480px]">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-mint text-brand-green mb-4 shadow-sm">
+                <svg className="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+              </div>
+              <h2 className="text-[20px] sm:text-[22px] font-bold text-ink">
+                {status === "Synced" ? "Response submitted successfully" : "Response queued for sync"}
+              </h2>
+              <p className="mt-1.5 max-w-md text-[13.5px] sm:text-[14px] text-ink-soft leading-relaxed">
+                Response for <strong className="font-semibold text-ink">{farmer?.farmer_name ?? "the farmer"}</strong> is stored and counted toward <strong className="font-semibold text-ink">{task.name}</strong>. A second response for this farmer is blocked.
+              </p>
+
+              {/* Summary metadata card */}
+              <div className="mt-6 w-full max-w-md rounded-xl border border-line bg-surface p-4 text-left text-[13px] shadow-xs space-y-2.5">
+                <div className="flex justify-between items-center text-ink-soft">
+                  <span>Farmer</span>
+                  <span className="font-medium text-ink">{farmer?.farmer_name}</span>
+                </div>
+                <div className="flex justify-between items-center text-ink-soft">
+                  <span>Farmer ID</span>
+                  <span className="font-mono text-ink text-[12px]">{farmer?.reg_id ?? farmer?.farmer_id}</span>
+                </div>
+                <div className="flex justify-between items-center text-ink-soft">
+                  <span>Kebele</span>
+                  <span className="font-medium text-ink">{farmer?.kebele}</span>
+                </div>
+                <div className="flex justify-between items-center text-ink-soft pt-1.5 border-t border-line-soft">
+                  <span>Status</span>
+                  <Pill tone={RESPONSE_TONE[status]} dot>{status}</Pill>
+                </div>
+              </div>
+
+              <div className="mt-6 flex flex-col sm:flex-row items-center gap-3 w-full max-w-md justify-center">
+                <Button
+                  type="button"
+                  variant="brand"
+                  onClick={() => { setFarmerId(""); setStatus(null); resetCapture(); }}
+                  className="w-full sm:w-auto h-10 px-6 font-semibold"
+                >
+                  Next farmer
+                </Button>
+                <Link
+                  href="/surveys"
+                  className="inline-flex items-center justify-center h-10 px-5 text-[13.5px] font-medium text-ink-soft hover:text-ink transition-colors"
+                >
+                  Back to Surveys
+                </Link>
+              </div>
             </div>
           ) : status === "Declined" ? (
-            <div className="p-5">
-              <Banner tone="info" title="Consent declined — response ended">Only the declined consent is recorded. The farmer is not counted as a respondent and can be asked again later.</Banner>
-              <Button type="button" variant="outline" onClick={() => { setStatus(null); resetCapture(); }} className="mt-4">Back</Button>
+            <div className="flex flex-1 flex-col items-center justify-center p-6 sm:p-10 text-center min-h-[480px]">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-600 mb-4 shadow-sm">
+                <svg className="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                </svg>
+              </div>
+              <h2 className="text-[19px] sm:text-[20px] font-bold text-ink">Consent declined — response ended</h2>
+              <p className="mt-1.5 max-w-md text-[13px] sm:text-[13.5px] text-ink-soft leading-relaxed">
+                Only the declined consent is recorded. The farmer is not counted as a respondent and can be asked again later.
+              </p>
+              <Button type="button" variant="outline" onClick={() => { setStatus(null); resetCapture(); }} className="mt-6 h-10 px-6">
+                Back to questions
+              </Button>
             </div>
           ) : !canCapture ? (
-            <div className="flex min-h-[320px] flex-col items-center justify-center gap-2 p-8 text-center">
+            <div className="flex flex-1 min-h-[480px] flex-col items-center justify-center gap-2 p-8 text-center">
               <p className="text-[15px] font-semibold text-ink">
                 {readOnly ? "Capture is not available" : duplicate ? "This farmer has already answered" : farmer && needsCollector ? "Select the DA you are collecting for" : "Select a farmer to begin"}
               </p>
               <p className="max-w-md text-[13.5px] text-ink-soft">{questionTotal} question{questionTotal === 1 ? "" : "s"} · consent is taken first.</p>
             </div>
           ) : (
-            <form className="flex flex-col" onSubmit={(e) => { e.preventDefault(); onSubmit(); }} noValidate>
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3.5">
-                <div>
-                  <h2 className="text-[16px] font-semibold text-ink">Response for {farmer!.farmer_name}</h2>
-                  <p className="text-[12.5px] text-ink-soft">Use Previous / Next or the question numbers. Questions marked <span className="text-danger">*</span> must be answered.</p>
+            <form className="flex flex-1 flex-col h-full justify-between" onSubmit={(e) => { e.preventDefault(); onSubmit(); }} noValidate>
+              <div className="flex flex-col">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-line px-4 py-3.5 sm:px-5">
+                  <div>
+                    <h2 className="text-[15px] sm:text-[16px] font-semibold text-ink">Response for {farmer!.farmer_name}</h2>
+                    <p className="text-[12px] sm:text-[12.5px] text-ink-soft">Use Previous / Next or the question numbers. Questions marked <span className="text-danger">*</span> must be answered.</p>
+                  </div>
+                  <div className="flex flex-col items-start sm:items-end gap-1.5 shrink-0">
+                    <span className="text-[12.5px] sm:text-[13px] font-medium text-ink-soft">{answeredCount} of {questionTotal} answered</span>
+                    <div className="h-2 w-32 sm:w-36 rounded-full bg-slate-200 overflow-hidden">
+                      <div className="h-full rounded-full bg-brand-green transition-all duration-300" style={{ width: `${progress}%` }} />
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-[13px] font-medium text-ink-soft">{answeredCount} of {questionTotal} answered</span>
-                  <div className="h-1.5 w-32 rounded-full bg-slate-200"><div className="h-1.5 rounded-full bg-brand-green transition-all" style={{ width: `${progress}%` }} /></div>
-                </div>
+
+                {submitError && <div className="px-4 pt-3.5 sm:px-5 sm:pt-4"><Banner tone="error" title="Couldn't submit the response" onDismiss={() => setSubmitError(null)}>{submitError}</Banner></div>}
+                {showErrors && missing.length > 0 && (
+                  <div className="px-4 pt-3.5 sm:px-5 sm:pt-4"><Banner tone="error" title="Some questions still need an answer">{missing.length} required question{missing.length === 1 ? " is" : "s are"} not answered yet. Their numbers are marked in red.</Banner></div>
+                )}
+
+                <nav aria-label="Questions" className="flex items-center gap-2 overflow-x-auto no-scrollbar border-b border-line-soft px-4 py-3 sm:px-5">
+                  {shown.map((p, n) => {
+                    const answered = isAnswered(p);
+                    const flagged = showErrors && p.required && !answered;
+                    const isCurrent = n === index;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setStep(n)}
+                        aria-current={isCurrent ? "step" : undefined}
+                        aria-label={`${p.type === "consent" ? "Consent" : `Question ${questionNo(p)}`}${answered ? ", answered" : flagged ? ", needs an answer" : ""}`}
+                        className={cn(
+                          "flex h-8 sm:h-8.5 min-w-8 shrink-0 items-center justify-center rounded-full border px-3 text-[12.5px] sm:text-[13px] font-semibold transition-all",
+                          isCurrent
+                            ? "border-brand-green bg-brand-green text-white shadow-xs"
+                            : flagged
+                              ? "border-danger bg-red-50 text-danger"
+                              : answered
+                                ? "border-brand-border bg-brand-mint text-brand-green font-medium"
+                                : "border-line bg-white text-ink-soft hover:border-brand-green/60 hover:text-ink",
+                        )}
+                      >
+                        {p.type === "consent" ? (
+                          <span>Consent{answered && !isCurrent ? " ✓" : ""}</span>
+                        ) : (
+                          <span>{questionNo(p)}{answered && !isCurrent ? " ✓" : ""}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </nav>
+
+                {current && (
+                  <div className="flex flex-col gap-4 px-4 py-5 sm:px-6 sm:py-6">
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="text-[12.5px] sm:text-[13px] font-medium text-ink-soft">
+                        {current.type === "consent" ? "Consent" : `Question ${questionNo(current)} of ${questionTotal}`}
+                      </span>
+                      <Pill tone="slate">{current.type}</Pill>
+                    </div>
+                    <p className="text-[16px] sm:text-[17px] font-semibold leading-snug text-ink">
+                      {current.type !== "consent" && <span className="mr-1.5 text-brand-green">Question {questionNo(current)}:</span>}
+                      {promptIn(current, language)}
+                      {current.required && <span className="ml-1 text-danger">*</span>}
+                    </p>
+                    {current.helper && <p className="-mt-2 text-[12.5px] sm:text-[13px] text-muted leading-relaxed">{current.helper}</p>}
+                    <QuestionInput param={current} value={valueOf(current)} onChange={(v) => set(current.id, v)} />
+                    {showErrors && current.required && !isAnswered(current) && (
+                      <p className="text-[12.5px] font-medium text-danger">This question needs an answer.</p>
+                    )}
+                  </div>
+                )}
+
+                {declined && <p className="px-4 sm:px-6 pb-4 text-[13px] text-ink-soft">The farmer declined, so the other questions are not asked. Ending records only the declined consent.</p>}
               </div>
 
-              {submitError && <div className="px-5 pt-4"><Banner tone="error" title="Couldn't submit the response" onDismiss={() => setSubmitError(null)}>{submitError}</Banner></div>}
-              {showErrors && missing.length > 0 && (
-                <div className="px-5 pt-4"><Banner tone="error" title="Some questions still need an answer">{missing.length} required question{missing.length === 1 ? " is" : "s are"} not answered yet. Their numbers are marked in red.</Banner></div>
-              )}
-
-              <nav aria-label="Questions" className="flex flex-wrap gap-2 border-b border-line-soft px-5 py-3">
-                {shown.map((p, n) => {
-                  const answered = isAnswered(p);
-                  const flagged = showErrors && p.required && !answered;
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => setStep(n)}
-                      aria-current={n === index ? "step" : undefined}
-                      aria-label={`${p.type === "consent" ? "Consent" : `Question ${questionNo(p)}`}${answered ? ", answered" : flagged ? ", needs an answer" : ""}`}
-                      className={cn(
-                        "flex h-8 min-w-8 items-center justify-center rounded-full border px-3 text-[13px] font-semibold transition-colors",
-                        n === index ? "border-brand-green bg-brand-green text-white" : flagged ? "border-danger bg-white text-danger" : answered ? "border-brand-border bg-brand-mint text-brand-green" : "border-line bg-white text-ink-soft hover:border-brand-green",
-                      )}
-                    >
-                      {p.type === "consent" ? "Consent" : questionNo(p)}
-                    </button>
-                  );
-                })}
-              </nav>
-
-              {current && (
-                <div className="flex min-h-[220px] flex-col gap-4 px-5 py-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="text-[13px] font-medium text-ink-soft">{current.type === "consent" ? "Consent" : `Question ${questionNo(current)} of ${questionTotal}`}</span>
-                    <Pill tone="slate">{current.type}</Pill>
-                  </div>
-                  <p className="text-[17px] font-semibold leading-snug text-ink">{current.type !== "consent" && <span className="mr-1.5 text-brand-green">Question {questionNo(current)}:</span>}{promptIn(current, language)}{current.required && <span className="ml-1 text-danger">*</span>}</p>
-                  {current.helper && <p className="-mt-2 text-[13px] text-muted">{current.helper}</p>}
-                  <QuestionInput param={current} value={valueOf(current)} onChange={(v) => set(current.id, v)} />
-                  {showErrors && current.required && !isAnswered(current) && <p className="text-[12.5px] font-medium text-danger">This question needs an answer.</p>}
-                </div>
-              )}
-
-              {declined && <p className="px-5 pb-4 text-[13px] text-ink-soft">The farmer declined, so the other questions are not asked. Ending records only the declined consent.</p>}
-
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-surface px-5 py-3">
-                <Button type="button" variant="outline" disabled={submitting || index === 0} onClick={() => setStep(index - 1)}>Previous</Button>
+              {/* Pinned to bottom of the card */}
+              <div className="mt-auto flex items-center justify-between gap-2.5 border-t border-line bg-surface px-4 py-3 sm:px-5 sm:py-3.5">
+                <Button type="button" variant="outline" className="h-10 px-4 sm:px-5 font-semibold text-[13.5px]" disabled={submitting || index === 0} onClick={() => setStep(index - 1)}>
+                  Previous
+                </Button>
                 {isLast ? (
-                  <Button type="submit" variant="brand" disabled={submitting || !consent}>
-                    {submitting ? "Submitting…" : declined ? "End response" : "Submit response"}
+                  <Button
+                    type="submit"
+                    variant={declined ? "outline" : "brand"}
+                    className={cn("h-10 px-5 sm:px-6 font-semibold text-[13.5px]", declined && "border-amber-600 text-amber-700 hover:bg-amber-50")}
+                    disabled={submitting || !consent}
+                  >
+                    {submitting ? "Submitting…" : declined ? "End response (Declined)" : "Submit response"}
                   </Button>
                 ) : (
-                  // Navigation only: answers are checked when the response is submitted.
-                  <Button type="button" variant="brand" disabled={submitting} onClick={() => setStep(index + 1)}>Next</Button>
+                  // Navigation: requires consent if on consent step
+                  <Button
+                    type="button"
+                    variant="brand"
+                    className="h-10 px-5 sm:px-6 font-semibold text-[13.5px]"
+                    disabled={submitting || (current?.type === "consent" && !consent)}
+                    onClick={() => setStep(index + 1)}
+                  >
+                    Next
+                  </Button>
                 )}
               </div>
             </form>
@@ -375,44 +562,146 @@ export function SurveyCapture({ id }: { id: string }) {
 function QuestionInput({ param, value, onChange }: { param: Parameter; value: string | string[] | undefined; onChange: (v: string | string[]) => void }) {
   const str = typeof value === "string" ? value : "";
   const arr = Array.isArray(value) ? value : [];
-  const option = (label: string, selected: boolean, onClick: () => void) => (
-    <button key={label} type="button" onClick={onClick} className={cn("flex items-center gap-3 rounded-lg border px-4 py-3 text-left text-[14px] transition-all", selected ? "border-brand-green bg-brand-wash text-brand-green" : "border-line bg-white text-ink hover:border-brand-green/30 hover:shadow-sm")}>
-      {label}
+
+  const option = (label: string, selected: boolean, onClick: () => void, subtitle?: string) => (
+    <button
+      key={label}
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex gap-3 rounded-xl border p-3.5 sm:p-4 text-left transition-all",
+        subtitle ? "items-start" : "items-center",
+        selected
+          ? "border-brand-green bg-brand-wash text-brand-green shadow-xs ring-1 ring-brand-green/30"
+          : "border-line bg-white text-ink hover:border-brand-green/40 hover:bg-slate-50/60 hover:shadow-xs",
+      )}
+    >
+      <span
+        className={cn(
+          "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors",
+          subtitle && "mt-0.5",
+          selected ? "border-brand-green bg-brand-green" : "border-slate-300 bg-white",
+        )}
+      >
+        {selected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-[13.5px] sm:text-[14px] font-medium leading-snug">{label}</p>
+        {subtitle && <p className="mt-0.5 text-[12px] text-ink-soft leading-normal">{subtitle}</p>}
+      </div>
     </button>
   );
 
   switch (param.type) {
     case "consent":
       return (
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {option("Farmer consents — continue", str === "granted", () => onChange("granted"))}
-          {option("Farmer declines — end response", str === "declined", () => onChange("declined"))}
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          {option(
+            "Farmer consents — continue",
+            str === "granted",
+            () => onChange("granted"),
+            "Consent granted to take part in this survey",
+          )}
+          {option(
+            "Farmer declines — end response",
+            str === "declined",
+            () => onChange("declined"),
+            "Declined consent ends the response immediately",
+          )}
         </div>
       );
     case "auto":
-      return <input readOnly value={str} className="h-11 w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 font-mono text-sm text-ink-soft" aria-label={`${param.prompt} (pre-filled from ${param.prefill})`} />;
+      return (
+        <input
+          readOnly
+          value={str}
+          className="h-11 w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 font-mono text-sm text-ink-soft"
+          aria-label={`${param.prompt} (pre-filled from ${param.prefill})`}
+        />
+      );
     case "lookup":
     case "single":
-      return <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">{param.options?.map((o) => option(o, str === o, () => onChange(o)))}</div>;
+      return (
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          {param.options?.map((o) => option(o, str === o, () => onChange(o)))}
+        </div>
+      );
     case "multi":
       return (
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {param.options?.map((o) => (
-            <label key={o} className={cn("flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 text-[14px]", arr.includes(o) ? "border-brand-green bg-brand-wash" : "border-line bg-white")}>
-              <Checkbox checked={arr.includes(o)} onChange={() => onChange(arr.includes(o) ? arr.filter((x) => x !== o) : [...arr, o])} /> {o}
-            </label>
-          ))}
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          {param.options?.map((o) => {
+            const checked = arr.includes(o);
+            return (
+              <label
+                key={o}
+                className={cn(
+                  "flex cursor-pointer items-center gap-3 rounded-xl border p-3.5 sm:p-4 text-left transition-all",
+                  checked
+                    ? "border-brand-green bg-brand-wash text-brand-green shadow-xs ring-1 ring-brand-green/30"
+                    : "border-line bg-white text-ink hover:border-brand-green/40 hover:bg-slate-50/60 hover:shadow-xs",
+                )}
+              >
+                <div className="shrink-0">
+                  <Checkbox
+                    checked={checked}
+                    onChange={() =>
+                      onChange(checked ? arr.filter((x) => x !== o) : [...arr, o])
+                    }
+                  />
+                </div>
+                <span className="text-[13.5px] sm:text-[14px] font-medium leading-snug min-w-0 flex-1">
+                  {o}
+                </span>
+              </label>
+            );
+          })}
         </div>
       );
     case "rating":
       return (
-        <div className="flex gap-2">
-          {[1, 2, 3, 4, 5].map((n) => (
-            <button key={n} type="button" onClick={() => onChange(String(n))} aria-label={`${n} of 5`} className={cn("flex h-12 w-12 items-center justify-center rounded-lg border text-[16px] font-semibold transition-colors", str === String(n) ? "border-brand-green bg-brand-green text-white" : "border-line bg-white text-ink hover:border-brand-green")}>{n}</button>
-          ))}
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2 sm:gap-3">
+            {[1, 2, 3, 4, 5].map((n) => {
+              const selected = str === String(n);
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => onChange(String(n))}
+                  aria-label={`${n} of 5`}
+                  className={cn(
+                    "flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-xl border text-[16px] sm:text-[17px] font-bold transition-all",
+                    selected
+                      ? "border-brand-green bg-brand-green text-white shadow-sm ring-2 ring-brand-green/20 scale-105"
+                      : "border-line bg-white text-ink hover:border-brand-green/60 hover:bg-slate-50",
+                  )}
+                >
+                  {n}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex items-center justify-between text-[11.5px] sm:text-[12px] text-muted max-w-[280px] sm:max-w-[320px] px-0.5">
+            <span>1 (Very dissatisfied)</span>
+            <span>5 (Very satisfied)</span>
+          </div>
         </div>
       );
     case "text":
-      return <Textarea rows={4} maxLength={500} value={str} onChange={(e) => onChange(e.target.value)} />;
+      return (
+        <div className="space-y-1.5">
+          <Textarea
+            rows={4}
+            maxLength={500}
+            value={str}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="Type farmer's response here…"
+            className="w-full text-[14px]"
+          />
+          <div className="flex justify-end text-[11.5px] text-muted">
+            {str.length} / 500 characters
+          </div>
+        </div>
+      );
   }
 }
