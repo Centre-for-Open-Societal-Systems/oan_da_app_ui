@@ -1,7 +1,7 @@
-import type { ApiVisit } from "./api";
+import { visitFarmerLabel, type ApiVisit } from "./api";
 import type { ArrivalState, PlannerVisit, TodaysVisit } from "./types";
 
-// API visits in the planner's shapes. The API carries the farmer's registry id only, so the id stands in for the name.
+// API visits in the planner's shapes. A visit without a farmer name shows the registry id instead.
 
 /** Visits that no longer happen; the visit that replaced a rescheduled one has its own row. */
 const OFF_PLANNER = ["Cancelled", "Rescheduled", "Superseded"];
@@ -12,7 +12,7 @@ export const isOnPlanner = (v: Pick<ApiVisit, "physical_status">) => !OFF_PLANNE
 export const toPlannerVisit = (v: ApiVisit): PlannerVisit => ({
   id: v.name,
   time: v.scheduled_at.slice(11, 16),
-  farmerName: v.farmer_id,
+  farmerName: visitFarmerLabel(v),
   kebele: v.kebele ?? "—",
   status: v.physical_status === "Missed" ? "overdue" : (v.planner_status ?? "scheduled"),
 });
@@ -37,7 +37,7 @@ const arrivalNote = (v: ApiVisit) => {
 
 export const toTodaysVisit = (v: ApiVisit): TodaysVisit => ({
   id: v.name,
-  farmerName: v.farmer_id,
+  farmerName: visitFarmerLabel(v),
   plannedArrival: v.scheduled_at.slice(11, 16),
   state: arrivalState(v),
   note: arrivalNote(v),

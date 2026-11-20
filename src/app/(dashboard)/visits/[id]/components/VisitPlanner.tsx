@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
 import { PlanVisitButton } from "@/features/farmers";
-import { canActOnVisit, canLogOutcome, fetchVisit, LogOutcomeModal, StartVisitModal, toVisitRecord, type ApiVisitDetail, type VisitRecord } from "@/features/visits";
+import { canActOnVisit, canLogOutcome, fetchVisit, LogOutcomeModal, StartVisitModal, toVisitRecord, visitFarmerLabel, type ApiVisitDetail, type VisitRecord } from "@/features/visits";
 import { useAuthStore } from "@/store/useAuthStore";
 import { TodaysVisits } from "./TodaysVisits";
 import { WeekCalendar } from "./WeekCalendar";
@@ -77,14 +77,14 @@ export function VisitPlanner({ visitId }: { visitId: string }) {
         <StartVisitModal
           visit={modal.visit}
           onClose={() => setModal(null)}
-          onStarted={(started) => done(`Checked in for ${started.farmer_id} (${started.name}). The visit is now in progress; log the outcome when you are done.`)}
+          onStarted={(started) => done(`Checked in for ${visitFarmerLabel(started)} (${started.name}). The visit is now in progress; log the outcome when you are done.`)}
         />
       )}
       {modal?.type === "outcome" && (
         <LogOutcomeModal
           visit={modal.visit}
           onClose={() => setModal(null)}
-          onSubmitted={(closed) => done(`Outcome submitted for ${closed.farmer_id} (${closed.name}). The visit is complete.`)}
+          onSubmitted={(closed) => done(`Outcome submitted for ${visitFarmerLabel(closed)} (${closed.name}). The visit is complete.`)}
         />
       )}
     </div>

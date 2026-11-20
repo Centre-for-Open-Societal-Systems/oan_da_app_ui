@@ -16,6 +16,8 @@ export interface ApiVisit {
   name: string;
   da_id: string;
   farmer_id: string;
+  /** The name sent when the visit was planned; older visits may not have one. */
+  farmer_name?: string | null;
   visit_type: string;
   purpose: string | null;
   /** "2026-10-16T10:30:00", server local time. */
@@ -64,10 +66,10 @@ export async function listVisits(q: VisitQuery = {}): Promise<{ items: ApiVisit[
 
 const UI_STATUSES: readonly VisitStatus[] = ["Confirmed", "Planned", "Completed", "Missed"];
 
-/**
- * An API visit in the table's shape. The API carries the farmer's registry id only (no name or email yet),
- * so the id stands in for the name. Cancelled / rescheduled visits show as Missed, the closest pill.
- */
+/** The farmer's name on a visit, or their registry id when the visit has no name (planned before names were stored). */
+export const visitFarmerLabel = (v: { farmer_id: string; farmer_name?: string | null }) => v.farmer_name?.trim() || v.farmer_id;
+
+/** An API visit in the table's shape. Cancelled / rescheduled visits show as Missed, the closest pill. */
 export function toVisitRecord(v: ApiVisit): VisitRecord {
   const at = new Date(v.scheduled_at);
   return {
@@ -76,7 +78,7 @@ export function toVisitRecord(v: ApiVisit): VisitRecord {
     time: v.scheduled_at.slice(11, 16),
     agent: v.da_id,
     farmerId: v.farmer_id,
-    farmerName: v.farmer_id,
+    farmerName: visitFarmerLabel(v),
     farmerEmail: "",
     kebele: v.kebele ?? "—",
     purpose: v.purpose || v.visit_type,
@@ -260,7 +262,7 @@ export interface ActivityReportData {
   /** Stays 0 until grievances are linked to visits on the backend. */
   issues_raised: number;
   follow_ups: number;
-  outcomes: { visit_id: string; farmer_id: string; kebele: string | null; purpose: string; summary: string | null; completed_at: string | null }[];
+  outcomes: { visit_id: string; farmer_id: string; farmer_name?: string | null; kebele: string | null; purpose: string; summary: string | null; completed_at: string | null }[];
 }
 
 /** `week` as "2026-W42"; the backend defaults to the current week. */

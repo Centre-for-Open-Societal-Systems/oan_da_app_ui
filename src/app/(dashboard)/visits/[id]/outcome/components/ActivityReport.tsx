@@ -8,7 +8,7 @@ import { StatCard } from "@/components/ui/StatCard";
 import { fileDate } from "@/lib/download";
 import { downloadTable, type ExportFormat } from "@/lib/export";
 import { FarmerAvatar } from "@/features/farmers";
-import { fetchActivityReport, formatVisitTime, type ActivityReportData } from "@/features/visits";
+import { fetchActivityReport, formatVisitTime, visitFarmerLabel, type ActivityReportData } from "@/features/visits";
 
 // One CSV: the week's metrics first, then every submitted outcome row.
 type ReportRow = { section: string; farmer: string; kebele: string; purpose: string; summary: string; date: string; metric: string; value: string };
@@ -57,9 +57,8 @@ export function ActivityReport() {
 
   const value = (n: number | undefined) => (n === undefined ? "—" : String(n));
   const weekLabel = report ? weekLabelOf(report) : "this week";
-  // The API carries the farmer's registry id only; it stands in for the name.
   const outcomes: OutcomeRow[] = (report?.outcomes ?? []).map((o) => ({
-    farmerName: o.farmer_id,
+    farmerName: visitFarmerLabel(o),
     kebele: o.kebele ?? "—",
     purpose: o.purpose,
     summary: o.summary ?? "",

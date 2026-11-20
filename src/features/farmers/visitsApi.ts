@@ -4,6 +4,8 @@ import { ApiError } from "@/lib/api";
 /** Body of POST /api/v1/da-services/visits. A DA plans for themself; an officer must also send `da_id`. */
 export interface PlanVisitRequest {
   farmer_id: string;
+  /** The farmer's display name as the UI shows it; required, stored as sent (no registry lookup on the backend). */
+  farmer_name: string;
   /** Frappe User name (email) of the DA the visit is for; the backend reads da_id from it. Required, no session fallback. */
   user: string;
   /** "2026-10-16" */
@@ -31,6 +33,7 @@ export interface PlannedVisit {
   name: string;
   da_id: string;
   farmer_id: string;
+  farmer_name?: string | null;
   visit_type: string;
   physical_status: string;
   scheduled_at: string;

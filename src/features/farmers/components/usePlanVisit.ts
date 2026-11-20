@@ -181,6 +181,7 @@ export function usePlanVisit(initial: Farmer[], preset: VisitPreset | undefined)
         const request: BatchVisitItem = {
           // A farmer from the farmers API sends its registry id; a sample farmer its mock registry code.
           farmer_id: code,
+          farmer_name: f.name.trim(),
           date: details.date,
           time: details.time,
           visit_type: visitType,
