@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
+import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { cn } from "@/lib/utils";
 import { describeFarmerError, usePlaces, type PlaceLevel } from "@/features/farmers";
 import type { StepProps } from "./FarmerStep";
-import { Grid, TextField } from "./fields";
 
 const LEVELS: PlaceLevel[] = ["region", "zone", "woreda", "kebele"];
 const title = (level: PlaceLevel) => level[0].toUpperCase() + level.slice(1);
@@ -67,20 +68,55 @@ export function LocationStep({ form, update, errors }: StepProps) {
   };
 
   return (
-    <>
-      <Grid className="xl:grid-cols-4">
+    <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
         {LEVELS.map((level, i) => (
-          <PlaceSelect key={level} level={level} parent={i === 0 ? undefined : form.places[LEVELS[i - 1]]} value={form.places[level] ?? ""} error={errors[level]} onChange={(id, name) => choose(level, id, name)} />
+          <PlaceSelect
+            key={level}
+            level={level}
+            parent={i === 0 ? undefined : form.places[LEVELS[i - 1]]}
+            value={form.places[level] ?? ""}
+            error={errors[level]}
+            onChange={(id, name) => choose(level, id, name)}
+          />
         ))}
-      </Grid>
-      <Grid>
-        <TextField id="location" label="GPS location" value={form.location} onChange={(v) => update({ location: v })} error={errors.location} hint={locating ?? "Latitude and longitude, then altitude and accuracy if known, separated by spaces."} placeholder="9.03 38.74 2350 5" />
-        <div className="flex items-end">
-          <Button type="button" variant="outline" onClick={locate} className="h-11">
-            Use this device&apos;s location
-          </Button>
-        </div>
-      </Grid>
-    </>
+      </div>
+
+      <div className="w-full">
+        <FormField
+          label="GPS location"
+          htmlFor="location"
+          hint={locating ?? "Latitude and longitude, then altitude and accuracy if known, separated by spaces."}
+          hintTone={locating && locating !== "Finding the location…" ? "error" : errors.location ? "error" : "muted"}
+        >
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+            <div className="relative flex-1">
+              <Input
+                id="location"
+                type="text"
+                value={form.location}
+                onChange={(e) => update({ location: e.target.value })}
+                placeholder="9.03 38.74 2350 5"
+                className={cn("h-11 w-full", errors.location && "border-danger")}
+                aria-invalid={errors.location ? true : undefined}
+              />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={locate}
+              disabled={locating === "Finding the location…"}
+              className="h-11 shrink-0 px-4 gap-2 text-[13px] font-semibold text-slate-700 hover:text-brand-green hover:border-brand-green border-line transition-all active:scale-95 shadow-2xs whitespace-nowrap"
+            >
+              <svg className="h-4 w-4 text-brand-green shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+              <span>{locating === "Finding the location…" ? "Detecting location…" : "Use this device's location"}</span>
+            </Button>
+          </div>
+        </FormField>
+      </div>
+    </div>
   );
 }

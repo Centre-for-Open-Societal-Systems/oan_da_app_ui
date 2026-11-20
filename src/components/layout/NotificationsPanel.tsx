@@ -248,7 +248,7 @@ export function NotificationsPanel({
       />
 
       {/* Drawer */}
-      <div className="relative w-full max-w-[400px] h-full bg-white shadow-[-10px_0_40px_rgba(0,0,0,0.1)] flex flex-col animate-in slide-in-from-right-full duration-300">
+      <div className="relative w-full max-w-[450px] h-full bg-white shadow-[-10px_0_40px_rgba(0,0,0,0.1)] flex flex-col animate-in slide-in-from-right-full duration-300">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-line-soft">
           <h2 className="text-xl font-bold text-ink">Notifications</h2>

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Card } from "@/components/ui/Card";
 import { tabClass } from "@/components/ui/PageTabs";
@@ -19,6 +20,7 @@ import { VisitDetailsModal } from "@/features/visits";
 import { RescheduleVisitModal } from "@/features/visits";
 import { CancelVisitModal, canActOnVisit, canCancel, canLogOutcome, canReschedule, canStartVisit, listVisits, LogOutcomeModal, StartVisitModal, toVisitRecord } from "@/features/visits";
 import { Banner } from "@/components/ui/Banner";
+import { cn } from "@/lib/utils";
 import type { VisitRecord } from "@/features/visits";
 import type { FilterFieldConfig } from "@/components/ui/AdvancedFiltersDrawer";
 
@@ -47,6 +49,174 @@ const isoToday = () => {
 
 // With no day picked the table asks for everything the caller may see, up to the API maximum.
 const ALL_DATES_LIMIT = 500;
+
+interface VisitActionMenuProps {
+  farmerName: string;
+  onReschedule?: () => void;
+  onCancel?: () => void;
+}
+
+function VisitActionMenu({ farmerName, onReschedule, onCancel }: VisitActionMenuProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const onPointerDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (!triggerRef.current?.contains(target) && !menuRef.current?.contains(target)) {
+        setIsOpen(false);
+      }
+    };
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+
+    const onScrollOrResize = (e: Event) => {
+      if (menuRef.current?.contains(e.target as Node)) return;
+      setIsOpen(false);
+    };
+
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScrollOrResize, true);
+    window.addEventListener("resize", onScrollOrResize);
+
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScrollOrResize, true);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, [isOpen]);
+
+  if (!onReschedule && !onCancel) return null;
+
+  const toggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isOpen) {
+      setIsOpen(false);
+      return;
+    }
+
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (rect) {
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const openUpward = spaceBelow < 120 && rect.top > spaceBelow;
+      const right = window.innerWidth - rect.right;
+
+      setMenuStyle({
+        position: "fixed",
+        right: Math.max(12, right),
+        minWidth: 165,
+        zIndex: 120,
+        ...(openUpward
+          ? { bottom: window.innerHeight - rect.top + 4 }
+          : { top: rect.bottom + 4 }),
+      });
+    }
+    setIsOpen(true);
+  };
+
+  return (
+    <div className="relative inline-flex items-center">
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={toggle}
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        aria-label={`More actions for visit with ${farmerName}`}
+        title="More actions"
+        className={cn(
+          "inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-2xs transition-all duration-150 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-green/30",
+          isOpen && "border-brand-green bg-emerald-50 text-brand-green ring-2 ring-brand-green/20"
+        )}
+      >
+        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <circle cx="5" cy="12" r="1.75" />
+          <circle cx="12" cy="12" r="1.75" />
+          <circle cx="19" cy="12" r="1.75" />
+        </svg>
+      </button>
+
+      {isOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={menuRef}
+            style={menuStyle}
+            role="menu"
+            aria-orientation="vertical"
+            className="rounded-xl border border-slate-200/90 bg-white p-1 shadow-lg ring-1 ring-black/5 animate-dropdown-in"
+          >
+            {onReschedule && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsOpen(false);
+                  onReschedule();
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-ink text-left"
+              >
+                <svg
+                  className="h-3.5 w-3.5 text-slate-500"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="3" y="5" width="18" height="16" rx="2" />
+                  <path d="M8 3v4M16 3v4M3 10h18" />
+                </svg>
+                <span>Reschedule visit</span>
+              </button>
+            )}
+            {onReschedule && onCancel && <div className="my-0.5 border-t border-slate-100" />}
+            {onCancel && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsOpen(false);
+                  onCancel();
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-red-600 transition-colors hover:bg-red-50 text-left"
+              >
+                <svg
+                  className="h-3.5 w-3.5 text-red-500"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+                <span>Cancel visit</span>
+              </button>
+            )}
+          </div>,
+          document.body
+        )}
+    </div>
+  );
+}
 
 export function VisitsTable() {
   // GET /visits is scoped by the backend: a DA gets every visit in their Kebeles, officers those in their scope.
@@ -143,7 +313,7 @@ export function VisitsTable() {
 
       {/* Toolbar */}
       <div className="flex flex-col gap-2.5 sm:gap-3 p-3.5 sm:p-4 lg:flex-row lg:items-center lg:justify-between border-b border-line-soft">
-        <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap sm:flex-nowrap">
+        <div className="flex w-full items-center justify-between gap-2.5 sm:w-auto sm:justify-start sm:gap-3">
           <div className="flex items-center gap-2 shrink-0">
             <h2 className="text-[14px] sm:text-[15px] font-semibold text-ink">Visits</h2>
             {loaded && !loaded.error && (
@@ -159,7 +329,7 @@ export function VisitsTable() {
               setDate(newDate);
               if (newDate) setSelectedDate(newDate);
             }}
-            className="h-9 sm:h-10 min-w-[150px] sm:min-w-[160px]"
+            className="h-9 sm:h-10 min-w-[145px] sm:min-w-[160px]"
           />
         </div>
 
@@ -180,8 +350,8 @@ export function VisitsTable() {
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[980px] border-collapse text-left">
+      <div className="overflow-x-auto green-scrollbar">
+        <table className="w-full min-w-[880px] border-collapse text-left">
           <thead>
             <tr className="border-y border-line bg-surface text-[13.5px] sm:text-[14px] font-semibold text-slate-500">
               <th className="whitespace-nowrap px-4 py-3 font-semibold">Date &amp; time</th>
@@ -200,7 +370,7 @@ export function VisitsTable() {
               <th className="whitespace-nowrap px-4 py-3 text-center font-semibold">
                 <FilterDropdown label="Status" allLabel="All Status" options={statusOptions} selected={filters.status} onApply={setFilter("status")} />
               </th>
-              <th className="whitespace-nowrap px-4 py-3 text-center font-semibold">Action</th>
+              <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">Actions</th>
             </tr>
           </thead>
           <tbody className="text-[14px] text-slate-700">
@@ -225,50 +395,69 @@ export function VisitsTable() {
                 </td>
               </tr>
             )}
-            {pageRows.map((v) => (
-              <tr key={v.id} className="border-b border-line-soft transition-colors last:border-0 hover:bg-surface">
-                <td className="px-4 py-3.5 leading-tight">
-                  {v.date}
-                  <br />
-                  <span className="text-slate-600">- {v.time}</span>
-                </td>
-                {!isDA && <td className="px-4 py-3.5">{v.agent}</td>}
-                <td className="px-4 py-3.5">
-                  <div className="flex items-center gap-2.5">
-                    <FarmerAvatar name={v.farmerName} avatar={v.farmerAvatar} />
-                    <div className="leading-tight">
-                      <p className="font-medium text-ink">{v.farmerName}</p>
-                      {v.farmerEmail && <p className="mt-0.5 text-[13px] text-muted">{v.farmerEmail}</p>}
+            {pageRows.map((v) => {
+              const showLogOutcome = canLogOutcome(v);
+              const showStart = canStartVisit(v) && canActOnVisit(v, isDA, ownDaId);
+              const canResched = v.physicalStatus === undefined || canReschedule(v);
+              const canCanc = canCancel(v) && canActOnVisit(v, isDA, ownDaId);
+              const hasMoreActions = canResched || canCanc;
+
+              return (
+                <tr key={v.id} className="border-b border-line-soft transition-colors last:border-0 hover:bg-surface">
+                  <td className="whitespace-nowrap px-4 py-3.5 leading-tight">
+                    <span className="font-medium text-ink">{v.date}</span>
+                    <br />
+                    <span className="text-[13px] text-slate-500">- {v.time}</span>
+                  </td>
+                  {!isDA && <td className="whitespace-nowrap px-4 py-3.5 text-slate-700">{v.agent}</td>}
+                  <td className="px-4 py-3.5">
+                    <div className="flex items-center gap-2.5">
+                      <FarmerAvatar name={v.farmerName} avatar={v.farmerAvatar} />
+                      <div className="min-w-0 leading-tight">
+                        <p className="max-w-[150px] sm:max-w-[200px] truncate font-medium text-ink" title={v.farmerName}>{v.farmerName}</p>
+                        {v.farmerEmail && <p className="mt-0.5 max-w-[150px] sm:max-w-[200px] truncate text-[13px] text-muted" title={v.farmerEmail}>{v.farmerEmail}</p>}
+                      </div>
                     </div>
-                  </div>
-                </td>
-                <td className="px-4 py-3.5">{v.kebele}</td>
-                <td className="whitespace-nowrap px-4 py-3.5">{v.visitType ?? "—"}</td>
-                <td className="px-4 py-3.5">{v.purpose}</td>
-                <td className="px-4 py-3.5 text-center">
-                  <VisitStatusPill status={v.status} />
-                  {v.physicalStatus === "In progress" && <p className="mt-1 text-[12px] font-medium text-blue-600">In progress</p>}
-                  {(v.physicalStatus === "Cancelled" || v.physicalStatus === "Rescheduled") && <p className="mt-1 text-[12px] font-medium text-muted">{v.physicalStatus}</p>}
-                </td>
-                <td className="px-4 py-3.5">
-                  <div className="flex items-center justify-center gap-2">
-                    {canLogOutcome(v) && (
-                      <RowAction tone="solid" icon="edit" onClick={() => setModal({ type: "outcome", visit: v })}>Log outcome</RowAction>
-                    )}
-                    {canStartVisit(v) && canActOnVisit(v, isDA, ownDaId) && (
-                      <RowAction tone="solid" icon="check" onClick={() => setModal({ type: "start", visit: v })}>Start</RowAction>
-                    )}
-                    <RowAction onClick={() => setModal({ type: "view", visit: v })} icon="view">View</RowAction>
-                    {(v.physicalStatus === undefined || canReschedule(v)) && (
-                      <RowAction tone="neutral" icon="calendar" onClick={() => setModal({ type: "reschedule", visit: v })}>Reschedule</RowAction>
-                    )}
-                    {canCancel(v) && canActOnVisit(v, isDA, ownDaId) && (
-                      <RowAction tone="danger" icon="remove" onClick={() => setModal({ type: "cancel", visit: v })}>Cancel</RowAction>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3.5 text-slate-700">{v.kebele}</td>
+                  <td className="whitespace-nowrap px-4 py-3.5 text-slate-700">{v.visitType ?? "—"}</td>
+                  <td className="px-4 py-3.5 max-w-[220px] sm:max-w-[280px]">
+                    <p className="line-clamp-2 text-[13.5px] leading-snug text-slate-700" title={v.purpose}>
+                      {v.purpose}
+                    </p>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3.5 text-center">
+                    <VisitStatusPill status={v.status} />
+                    {v.physicalStatus === "In progress" && <p className="mt-1 text-[12px] font-medium text-blue-600">In progress</p>}
+                    {(v.physicalStatus === "Cancelled" || v.physicalStatus === "Rescheduled") && <p className="mt-1 text-[12px] font-medium text-muted">{v.physicalStatus}</p>}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3.5 text-right">
+                    <div className="flex items-center justify-end gap-1.5 sm:gap-2">
+                      {showLogOutcome && (
+                        <RowAction tone="solid" icon="edit" onClick={() => setModal({ type: "outcome", visit: v })}>
+                          Log outcome
+                        </RowAction>
+                      )}
+                      {showStart && (
+                        <RowAction tone="solid" icon="check" onClick={() => setModal({ type: "start", visit: v })}>
+                          Start
+                        </RowAction>
+                      )}
+                      <RowAction onClick={() => setModal({ type: "view", visit: v })} icon="view">
+                        View
+                      </RowAction>
+                      {hasMoreActions && (
+                        <VisitActionMenu
+                          farmerName={v.farmerName}
+                          onReschedule={canResched ? () => setModal({ type: "reschedule", visit: v }) : undefined}
+                          onCancel={canCanc ? () => setModal({ type: "cancel", visit: v }) : undefined}
+                        />
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

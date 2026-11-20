@@ -75,14 +75,14 @@ export function TemplateDetail({ id }: { id: string }) {
   // An expired window reads as Closed too; reopening it needs a later close date (Edit).
   const expired = template.window_close < todayIso();
 
-  const run = async (action: () => Promise<SurveyTask>, message: string) => {
+  const run = async (action: () => Promise<string>, message: string) => {
     setBusy(true);
     setError(null);
     try {
-      setTemplate(await action());
+      setTemplate(await getSurveyTemplate(await action()));
       setNotice(message);
     } catch (err) {
-      setError(describeSurveyError(err, "save"));
+      setError(describeSurveyError(err));
     } finally {
       setBusy(false);
       setConfirmClose(false);
@@ -94,7 +94,7 @@ export function TemplateDetail({ id }: { id: string }) {
     try {
       await downloadSurveyResponses(template.id);
     } catch (err) {
-      setError(describeSurveyError(err, "export"));
+      setError(describeSurveyError(err));
     }
   };
 

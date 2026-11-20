@@ -112,7 +112,12 @@ export function GrievancesTable() {
       <PageHeader
         title="Grievances"
         description="Raise and track grievances for yourself or on behalf of a farmer. Triage and resolution happen in the external Grievance Service - this surface is read-only for case handling."
-        actions={<RaiseGrievanceButton onSubmitted={refresh} className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-md bg-brand-green px-5 text-[14px] font-semibold text-white transition-colors hover:bg-brand-green-dark" />}
+        actions={
+          <RaiseGrievanceButton
+            onSubmitted={refresh}
+            className="w-full sm:w-auto inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-brand-green px-5 text-[14px] font-semibold text-white transition-colors hover:bg-brand-green-dark shadow-xs"
+          />
+        }
       />
       <ServiceStatusBanner loading={loading} error={loaded?.error ?? null} lastLoaded={loaded?.at ?? null} total={loaded?.total ?? 0} shown={all.length} onRetry={refresh} />
       <GrievanceStats
@@ -123,30 +128,46 @@ export function GrievancesTable() {
 
       <Card className="overflow-hidden p-0 shadow-card">
         {/* Toolbar */}
-        <div className="flex flex-col gap-3 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h2 className="text-[16px] font-semibold text-ink">All Grievances</h2>
-            <p className="mt-0.5 text-[13px] text-ink-soft">Track and manage all reported grievances.</p>
+        <div className="flex flex-col gap-3.5 px-4 py-3.5 sm:px-5 sm:py-4 md:flex-row md:items-center md:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h2 className="text-[16px] sm:text-[17px] font-semibold text-ink">All Grievances</h2>
+              {activeCard !== "All" && (
+                <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-brand-green border border-brand-green/20">
+                  {activeCard}
+                </span>
+              )}
+            </div>
+            <p className="mt-0.5 text-[12px] sm:text-[13px] text-muted">Track and manage all reported grievances.</p>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end">
-            <SearchInput value={query} onChange={(value) => { setQuery(value); setPage(1); }} placeholder={SEARCH_PLACEHOLDER} />
-            <AdvancedFiltersButton activeCount={activeFilterCount} onClick={() => setIsFiltersOpen(true)} />
+          <div className="flex items-center gap-2 sm:gap-3 w-full md:w-auto">
+            <SearchInput
+              value={query}
+              onChange={(value) => { setQuery(value); setPage(1); }}
+              placeholder={SEARCH_PLACEHOLDER}
+              className="flex-1 min-w-0 md:w-[260px] lg:w-[280px]"
+            />
+            <AdvancedFiltersButton
+              activeCount={activeFilterCount}
+              onClick={() => setIsFiltersOpen(true)}
+              className="shrink-0 h-10 px-3 sm:px-4"
+            />
           </div>
         </div>
 
         {/* Table */}
         <div className="overflow-x-auto">
           {/* Fixed widths sized to content; Details takes the rest. Actions fits View + Upload Evidence on one line. */}
-          <table className="w-full min-w-[1180px] table-fixed border-collapse text-left">
+          <table className="w-full min-w-[960px] table-fixed border-collapse text-left">
             <colgroup>
-              <col className="w-[150px]" />
+              <col className="w-[140px]" />
               <col />
               <col className="w-[130px]" />
-              <col className="w-[170px]" />
+              <col className="w-[160px]" />
               <col className="w-[135px]" />
-              <col className="w-[140px]" />
-              <col className="w-[260px]" />
+              <col className="w-[130px]" />
+              <col className="w-[240px]" />
             </colgroup>
             <thead>
               <tr className="border-y border-line bg-surface text-[14px] font-semibold text-slate-500">

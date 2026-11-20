@@ -52,3 +52,4 @@ API_LIST.xlsx
 
 # local https certs (npm run dev:sso)
 /certificates
+built-chart/
