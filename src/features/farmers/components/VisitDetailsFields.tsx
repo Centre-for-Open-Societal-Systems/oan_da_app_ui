@@ -3,6 +3,8 @@ import { Banner } from "@/components/ui/Banner";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { DatePicker } from "@/components/ui/DatePicker";
+import { TimePicker } from "@/components/ui/TimePicker";
 import { todayIso } from "@/lib/utils";
 import type { Farmer } from "../types";
 import { DURATIONS, type VisitPreset } from "./planVisit";
@@ -18,6 +20,7 @@ interface VisitDetailsFieldsProps {
 export function VisitDetailsFields({ selected, preset, isSchedule }: VisitDetailsFieldsProps) {
   const today = todayIso();
   const [date, setDate] = useState(today);
+  const [time, setTime] = useState("09:00");
   const pastDate = date !== "" && date < today;
 
   return (
@@ -28,10 +31,26 @@ export function VisitDetailsFields({ selected, preset, isSchedule }: VisitDetail
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <FormField label="Date" htmlFor="visit-date" required hint={pastDate ? "You cannot select past date for visit" : "Today or later."} hintTone={pastDate ? "error" : "muted"}>
-          <Input id="visit-date" type="date" className="h-10" value={date} min={today} onChange={(e) => setDate(e.target.value)} required />
+          <DatePicker
+            id="visit-date"
+            name="date"
+            value={date}
+            minDate={today}
+            clearable={false}
+            onChange={setDate}
+            className="w-full h-10"
+            required
+          />
         </FormField>
         <FormField label="Time" htmlFor="visit-time" required>
-          <Input id="visit-time" type="time" className="h-10" defaultValue="09:00" required />
+          <TimePicker
+            id="visit-time"
+            name="time"
+            value={time}
+            onChange={setTime}
+            className="w-full h-10"
+            required
+          />
         </FormField>
         <FormField label="Duration" htmlFor="visit-duration">
           <Select id="visit-duration" className="h-10" defaultValue="45 min">

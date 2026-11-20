@@ -3,15 +3,12 @@ import { Card } from "@/components/ui/Card";
 import { cn } from "@/lib/utils";
 import { REGISTRATION_STEPS } from "../steps";
 
-// From md up every step gets the same 100px column so the circles line up evenly
-// from edge to edge; the connector's -34px margin (half column minus the 16px
-// circle radius) lets it run under the label columns right up to the circle edges.
-// Below md the labels are hidden and the columns share the width equally.
-
 export function Stepper({ currentStep }: { currentStep: number }) {
+  const activeStep = REGISTRATION_STEPS[currentStep - 1];
+
   return (
-    <Card className="overflow-x-auto px-4 py-5 shadow-card">
-      <ol className="flex items-start justify-between md:min-w-[900px]">
+    <Card className="px-3.5 py-4 sm:px-5 sm:py-5 shadow-card">
+      <ol className="flex items-start justify-between w-full min-w-0">
         {REGISTRATION_STEPS.map((step, i) => {
           const stepNo = i + 1;
           const isActive = stepNo === currentStep;
@@ -20,17 +17,17 @@ export function Stepper({ currentStep }: { currentStep: number }) {
 
           return (
             <Fragment key={step.label}>
-              <li className="flex flex-1 shrink-0 flex-col items-center md:w-[100px] md:flex-none">
+              <li className="flex flex-1 shrink-0 flex-col items-center min-w-0">
                 <div
                   className={cn(
-                    "relative z-10 flex h-8 w-8 items-center justify-center rounded-full text-[14px] font-semibold ring-4",
+                    "relative z-10 flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-full text-[12px] sm:text-[14px] font-semibold ring-3 sm:ring-4 transition-all duration-200",
                     isActive || isDone
-                      ? "bg-brand-green text-white ring-brand-tint"
+                      ? "bg-brand-green text-white ring-brand-tint shadow-xs"
                       : "bg-line text-gray-500 ring-gray-100"
                   )}
                 >
                   {isDone ? (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+                    <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
                       <path d="M20 6L9 17l-5-5" />
                     </svg>
                   ) : (
@@ -38,10 +35,10 @@ export function Stepper({ currentStep }: { currentStep: number }) {
                   )}
                 </div>
 
-                <span className={cn("mt-3 hidden text-[12.5px] font-semibold md:block", isActive ? "text-brand-green" : "text-gray-500")}>
+                <span className={cn("mt-2 hidden text-[11px] sm:text-[12px] font-semibold sm:block", isActive ? "text-brand-green" : "text-gray-500")}>
                   Step {stepNo}
                 </span>
-                <span className={cn("mt-1 hidden whitespace-nowrap text-[12.5px] md:block", isActive ? "font-semibold text-ink" : "font-medium text-gray-500")}>
+                <span className={cn("mt-0.5 hidden text-[11px] sm:text-[12px] sm:block text-center truncate max-w-full px-1", isActive ? "font-semibold text-ink" : "font-medium text-gray-500")}>
                   {step.label}
                 </span>
               </li>
@@ -49,13 +46,21 @@ export function Stepper({ currentStep }: { currentStep: number }) {
               {!isLast && (
                 <li
                   aria-hidden
-                  className={cn("mt-[15px] h-0.5 flex-1 md:-mx-[34px]", isDone ? "bg-brand-green" : "bg-line")}
+                  className={cn("mt-[13px] sm:mt-[15px] h-0.5 flex-1 -mx-2 sm:-mx-3 md:-mx-4 lg:-mx-6 transition-colors", isDone ? "bg-brand-green" : "bg-line")}
                 />
               )}
             </Fragment>
           );
         })}
       </ol>
+
+      {/* Mobile step status indicator */}
+      {activeStep && (
+        <div className="mt-3 flex items-center justify-center gap-1.5 border-t border-line-soft pt-2.5 sm:hidden">
+          <span className="text-[12px] font-semibold text-brand-green">Step {currentStep} of {REGISTRATION_STEPS.length}:</span>
+          <span className="text-[12px] font-bold text-ink">{activeStep.label}</span>
+        </div>
+      )}
     </Card>
   );
 }

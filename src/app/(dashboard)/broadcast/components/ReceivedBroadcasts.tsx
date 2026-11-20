@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/Card";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Pill } from "@/components/ui/Pill";
@@ -56,16 +57,53 @@ export function ReceivedBroadcasts() {
     {
       key: "title",
       header: "Broadcast",
+      className: "w-[30%] min-w-[200px]",
       cell: (n) => (
-        <div className="flex items-center gap-2">
-          {!n.read && <span className="h-2 w-2 shrink-0 rounded-full bg-brand-green" aria-label="Unread" />}
-          <span className={n.read ? "text-[14px] text-ink" : "text-[14px] font-semibold text-ink"}>{n.title}</span>
+        <div className="flex items-center gap-2.5">
+          {!n.read ? (
+            <span className="relative flex h-2.5 w-2.5 shrink-0" aria-label="Unread">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-green opacity-75" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-brand-green" />
+            </span>
+          ) : (
+            <span className="h-2 w-2 shrink-0 rounded-full bg-slate-300" aria-label="Read" />
+          )}
+          <span className={cn("text-[14px] leading-snug", n.read ? "text-slate-700 font-normal" : "text-ink font-semibold")}>
+            {n.title}
+          </span>
         </div>
       ),
     },
-    { key: "body", header: "Message", cell: (n) => <span className="line-clamp-2 block max-w-[460px] text-[13px] text-ink-soft">{n.body ?? "—"}</span> },
-    { key: "status", header: "Status", cell: (n) => <Pill tone={n.read ? "slate" : "green"}>{n.read ? "Read" : "New"}</Pill> },
-    { key: "at", header: "Received", cell: (n) => <span className="whitespace-nowrap text-[13px] text-muted">{receivedLabel(n.at)}</span> },
+    {
+      key: "body",
+      header: "Message",
+      className: "w-[42%] min-w-[260px]",
+      cell: (n) => (
+        <span className="line-clamp-2 block text-[13px] leading-relaxed text-ink-soft">
+          {n.body ?? "—"}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      className: "w-[12%] min-w-[90px]",
+      cell: (n) => (
+        <Pill tone={n.read ? "slate" : "green"}>
+          {n.read ? "Read" : "New"}
+        </Pill>
+      ),
+    },
+    {
+      key: "at",
+      header: "Received",
+      className: "w-[16%] min-w-[150px]",
+      cell: (n) => (
+        <span className="whitespace-nowrap text-[13px] text-muted">
+          {receivedLabel(n.at)}
+        </span>
+      ),
+    },
   ];
 
   return (
@@ -73,19 +111,35 @@ export function ReceivedBroadcasts() {
       <DataTable
         itemLabel="broadcasts"
         title={
-          <div>
-            <h2 className="text-[15px] font-semibold text-ink">Received broadcasts</h2>
-            <p className="mt-0.5 text-[12.5px] text-ink-soft">Broadcasts sent to you, newest first. Select one to open it and mark it read.</p>
+          <div className="py-0.5">
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-brand-green">
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 100-6 3 3 0 000 6z" />
+                </svg>
+              </div>
+              <h2 className="text-[16px] font-bold text-ink">Received broadcasts</h2>
+            </div>
+            <p className="mt-0.5 text-[12.5px] text-ink-soft">
+              Broadcasts sent to you, newest first. Select one to open it and mark it read.
+            </p>
           </div>
         }
         searchable
+        searchPlaceholder="Search broadcasts by title or message…"
         columns={columns}
         rows={rows}
         rowKey={(n) => n.id}
         state={loading ? "loading" : error ? "error" : "ready"}
         onRetry={refresh}
         onRowClick={open}
-        minWidth="820px"
+        rowClassName={(n) =>
+          cn(
+            "cursor-pointer transition-colors",
+            !n.read ? "bg-emerald-50/25 hover:bg-emerald-50/45" : "hover:bg-slate-50/80"
+          )
+        }
+        minWidth="720px"
         emptyTitle="No broadcasts yet"
         emptyHint="Broadcasts sent to you will appear here."
       />

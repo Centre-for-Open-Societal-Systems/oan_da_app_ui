@@ -64,6 +64,7 @@ export function Dropdown({
   const items = options.map(normalise);
   const selected = items.find((o) => o.value === value) ?? null;
   const [isOpen, setIsOpen] = useState(false);
+  const [animatingValue, setAnimatingValue] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [highlight, setHighlight] = useState(0);
   // The menu is portalled to <body> and fixed to the viewport, so scrolling, overflow-hidden or transformed
@@ -120,11 +121,13 @@ export function Dropdown({
       const spaceBelow = window.innerHeight - rect.bottom - VIEWPORT_GAP;
       const spaceAbove = rect.top - VIEWPORT_GAP;
       const up = spaceBelow < MENU_MAX_HEIGHT && spaceAbove > spaceBelow;
+      const isNearRightEdge = rect.left + Math.max(rect.width, 200) > window.innerWidth - 12;
+      const useRight = align === "right" || isNearRightEdge;
       setMenuStyle({
         maxHeight: Math.max(120, Math.min(MENU_MAX_HEIGHT, up ? spaceAbove : spaceBelow)),
         minWidth: rect.width,
         ...(up ? { bottom: window.innerHeight - rect.top + 6 } : { top: rect.bottom + 6 }),
-        ...(align === "right" ? { right: window.innerWidth - rect.right } : { left: rect.left }),
+        ...(useRight ? { right: Math.max(12, window.innerWidth - rect.right) } : { left: Math.max(12, rect.left) }),
       });
     }
     setIsOpen(true);
@@ -136,8 +139,12 @@ export function Dropdown({
   };
 
   const choose = (option: DropdownOption) => {
+    setAnimatingValue(option.value);
     onChange(option.value);
-    close();
+    setTimeout(() => {
+      setAnimatingValue(null);
+      close();
+    }, 140);
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -168,7 +175,7 @@ export function Dropdown({
   };
 
   const chevron = (
-    <svg className={cn("h-4 w-4 shrink-0 text-zinc-400 transition-transform", isOpen && "rotate-180", searchable && "pointer-events-none absolute right-3 top-1/2 -translate-y-1/2")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <svg className={cn("h-4 w-4 shrink-0 text-zinc-400 transition-transform duration-200 ease-in-out", isOpen && "rotate-180", searchable && "pointer-events-none absolute right-3 top-1/2 -translate-y-1/2")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <path d="M19 9l-7 7-7-7" />
     </svg>
   );
@@ -239,7 +246,7 @@ export function Dropdown({
         <div
           ref={menuRef}
           className={cn(
-            "fixed z-[110] flex animate-dropdown-in flex-col overflow-hidden rounded-lg border border-line bg-white text-[14px] shadow-[0_12px_40px_-12px_rgba(0,0,0,0.25)]",
+            "fixed z-[110] flex animate-dropdown-in origin-top flex-col overflow-hidden rounded-xl border border-line bg-white text-[13.5px] shadow-[0_12px_40px_-12px_rgba(0,0,0,0.22)]",
             searchable ? "max-w-[calc(100vw-2rem)]" : "w-max max-w-[min(440px,calc(100vw-2rem))]"
           )}
           // A searchable menu keeps the field's width so it does not jump around while results filter
@@ -248,6 +255,7 @@ export function Dropdown({
           <ul ref={listRef} id={listId} role="listbox" className="relative min-h-0 flex-1 overflow-y-auto py-0.5">
             {visible.map((option, i) => {
               const isSelected = option.value === value;
+              const isAnimating = option.value === animatingValue;
               const isHighlighted = i === highlight;
               return (
                 <li
@@ -258,9 +266,10 @@ export function Dropdown({
                   onMouseEnter={() => setHighlight(i)}
                   onClick={() => !option.disabled && choose(option)}
                   className={cn(
-                    "cursor-pointer border-b border-line-soft px-4 py-3 text-slate-700 transition-colors last:border-b-0",
+                    "cursor-pointer border-b border-line-soft px-4 py-3 text-slate-700 transition-all duration-150 last:border-b-0",
                     isHighlighted && "bg-surface",
-                    isSelected && !option.disabled && "bg-brand-mint font-medium text-brand-green",
+                    isSelected && !option.disabled && "bg-brand-mint font-semibold text-brand-green",
+                    isAnimating && "bg-emerald-100 font-bold text-brand-green scale-[1.01]",
                     option.disabled && "cursor-default bg-surface font-semibold text-slate-600"
                   )}
                 >
@@ -269,12 +278,12 @@ export function Dropdown({
                       <span className={cn("block", searchable ? "truncate" : "whitespace-nowrap")}>{option.label}</span>
                       {option.description && <span className={cn("mt-0.5 block text-[12.5px] text-muted", searchable ? "truncate" : "whitespace-nowrap")}>{option.description}</span>}
                     </div>
-                    {option.trailing && (
+                    {option.trailing ? (
                       <span className="flex shrink-0 items-center gap-2">
                         {isSelected ? (
                           <>
                             <span className="whitespace-nowrap text-[13px] font-semibold text-brand-green">{option.trailing}</span>
-                            <svg className="h-5 w-5 text-brand-green" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <svg className="h-5 w-5 text-brand-green animate-check-pop" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                               <path d="M12 2a10 10 0 100 20 10 10 0 000-20zm-1.2 14.2l-3.5-3.5 1.4-1.4 2.1 2.1 4.6-4.6 1.4 1.4-6 6z" />
                             </svg>
                           </>
@@ -282,7 +291,13 @@ export function Dropdown({
                           <span className="whitespace-nowrap rounded-full border border-line bg-surface px-3 py-1 text-[12.5px] font-semibold text-ink">{option.trailing}</span>
                         )}
                       </span>
-                    )}
+                    ) : (isSelected || isAnimating) && !option.disabled ? (
+                      <span className="flex shrink-0 items-center text-brand-green animate-check-pop">
+                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      </span>
+                    ) : null}
                   </div>
                 </li>
               );

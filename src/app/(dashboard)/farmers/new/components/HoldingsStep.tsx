@@ -1,5 +1,6 @@
 "use client";
 
+import { todayIso } from "@/lib/utils";
 import { EMPTY_CROP, EMPTY_LAND, EMPTY_LIVESTOCK, type CropRow, type LandRow, type LivestockRow } from "../registration";
 import type { StepProps } from "./FarmerStep";
 import { Grid, OptionField, RowList, TextField } from "./fields";
@@ -9,9 +10,10 @@ export function HoldingsStep({ form, update, errors, options, optionsLoading }: 
   const setLand = (i: number, patch: Partial<LandRow>) => update({ lands: form.lands.map((r, j) => (j === i ? { ...r, ...patch } : r)) });
   const setCrop = (i: number, patch: Partial<CropRow>) => update({ crops: form.crops.map((r, j) => (j === i ? { ...r, ...patch } : r)) });
   const setAnimal = (i: number, patch: Partial<LivestockRow>) => update({ livestock: form.livestock.map((r, j) => (j === i ? { ...r, ...patch } : r)) });
+  const today = todayIso();
 
   return (
-    <>
+    <div className="flex flex-col gap-8">
       <RowList
         title="Land parcel"
         rows={form.lands}
@@ -19,10 +21,10 @@ export function HoldingsStep({ form, update, errors, options, optionsLoading }: 
         onAdd={() => update({ lands: [...form.lands, { ...EMPTY_LAND }] })}
         onRemove={(i) => update({ lands: form.lands.filter((_, j) => j !== i) })}
         render={(row, i) => (
-          <Grid>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-4">
             <OptionField id={`lands.${i}.ownership`} label="Ownership" list="ownership" required {...choice} value={row.ownership} onChange={(v) => setLand(i, { ownership: v })} error={errors[`lands.${i}.ownership`]} />
-            <TextField id={`lands.${i}.area_hectare`} label="Area (ha)" type="number" inputMode="decimal" required value={row.area_hectare} onChange={(v) => setLand(i, { area_hectare: v })} error={errors[`lands.${i}.area_hectare`]} hint="A number above 0." />
-          </Grid>
+            <TextField id={`lands.${i}.area_hectare`} label="Area (ha)" type="number" inputMode="decimal" required value={row.area_hectare} onChange={(v) => setLand(i, { area_hectare: v })} error={errors[`lands.${i}.area_hectare`]} hint="A number above 0." placeholder="e.g. 1.75" />
+          </div>
         )}
       />
       <RowList
@@ -34,7 +36,7 @@ export function HoldingsStep({ form, update, errors, options, optionsLoading }: 
         render={(row, i) => (
           <Grid>
             <OptionField id={`crops.${i}.name`} label="Crop" list="crop" required {...choice} value={row.name} onChange={(v) => setCrop(i, { name: v })} error={errors[`crops.${i}.name`]} />
-            <TextField id={`crops.${i}.planted_date`} label="Planted date" type="date" value={row.planted_date} onChange={(v) => setCrop(i, { planted_date: v })} error={errors[`crops.${i}.planted_date`]} />
+            <TextField id={`crops.${i}.planted_date`} label="Planted date" type="date" maxDate={today} value={row.planted_date} onChange={(v) => setCrop(i, { planted_date: v })} error={errors[`crops.${i}.planted_date`]} />
             <OptionField id={`crops.${i}.season`} label="Season" list="season" {...choice} value={row.season} onChange={(v) => setCrop(i, { season: v })} error={errors[`crops.${i}.season`]} />
           </Grid>
         )}
@@ -48,11 +50,11 @@ export function HoldingsStep({ form, update, errors, options, optionsLoading }: 
         render={(row, i) => (
           <Grid>
             <OptionField id={`livestock.${i}.animal`} label="Animal" list="animal" required {...choice} value={row.animal} onChange={(v) => setAnimal(i, { animal: v })} error={errors[`livestock.${i}.animal`]} />
-            <TextField id={`livestock.${i}.count`} label="Count" type="number" inputMode="numeric" required value={row.count} onChange={(v) => setAnimal(i, { count: v })} error={errors[`livestock.${i}.count`]} hint="Whole number, 1 or more." />
+            <TextField id={`livestock.${i}.count`} label="Count" type="number" inputMode="numeric" required value={row.count} onChange={(v) => setAnimal(i, { count: v })} error={errors[`livestock.${i}.count`]} hint="Whole number, 1 or more." placeholder="e.g. 5" />
             <OptionField id={`livestock.${i}.system`} label="System" list="livestock_system" {...choice} value={row.system} onChange={(v) => setAnimal(i, { system: v })} error={errors[`livestock.${i}.system`]} />
           </Grid>
         )}
       />
-    </>
+    </div>
   );
 }

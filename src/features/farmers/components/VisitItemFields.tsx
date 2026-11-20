@@ -3,6 +3,8 @@
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { DatePicker } from "@/components/ui/DatePicker";
+import { TimePicker } from "@/components/ui/TimePicker";
 import { todayIso } from "@/lib/utils";
 import type { BatchVisitItem } from "../visitsApi";
 import { DURATIONS, durationMinutes, VISIT_TYPES } from "./planVisit";
@@ -31,10 +33,26 @@ export function VisitItemFields({ idPrefix, value, onChange }: VisitItemFieldsPr
       </FormField>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <FormField label="Date" htmlFor={id("date")} required hint={pastDate ? "You cannot select past date for visit" : undefined} hintTone={pastDate ? "error" : "muted"}>
-          <Input id={id("date")} type="date" className="h-9" min={todayIso()} value={value.date} onChange={(e) => onChange({ date: e.target.value })} required />
+          <DatePicker
+            id={id("date")}
+            name={id("date")}
+            minDate={todayIso()}
+            value={value.date}
+            clearable={false}
+            onChange={(date) => onChange({ date })}
+            className="w-full h-9"
+            required
+          />
         </FormField>
         <FormField label="Time" htmlFor={id("time")} required>
-          <Input id={id("time")} type="time" className="h-9" value={value.time} onChange={(e) => onChange({ time: e.target.value })} required />
+          <TimePicker
+            id={id("time")}
+            name={id("time")}
+            value={value.time}
+            onChange={(time) => onChange({ time })}
+            className="w-full h-9"
+            required
+          />
         </FormField>
         <FormField label="Duration" htmlFor={id("duration")}>
           <Select id={id("duration")} className="h-9" value={String(value.duration_min)} onChange={(e) => onChange({ duration_min: Number(e.target.value) })}>

@@ -193,12 +193,29 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
   const queued = result?.kind === "sent" && result.result.sync_state === "pending";
 
   return (
-    <Modal isOpen={isOpen} onClose={close} title="Raise a Grievance" subtitle="Submitted to the external OAN Grievance Service — triage, response and closure happen there." size="lg"
+    <Modal
+      isOpen={isOpen}
+      onClose={close}
+      title="Raise a Grievance"
+      subtitle="Submitted to the external OAN Grievance Service — triage, response and closure happen there."
+      size="xl"
+      bodyClassName="p-4 sm:p-6"
+      icon={
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-brand-green/20 bg-emerald-50 text-brand-green shadow-xs">
+          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            <line x1="9" y1="10" x2="15" y2="10" />
+            <line x1="12" y1="7" x2="12" y2="13" />
+          </svg>
+        </div>
+      }
       footer={result ? <Button variant="brand" onClick={close}>Done</Button> : (
         <>
           <Button variant="outline" onClick={close} disabled={submitting}>Cancel</Button>
           <Button variant="brandOutline" onClick={() => setResult({ kind: "draft" })} disabled={submitting}>Save draft</Button>
-          <Button variant="brand" disabled={!canSubmit} onClick={submit}>{submitting ? "Submitting…" : "Submit"}</Button>
+          <Button variant="brand" disabled={!canSubmit} onClick={submit} className="gap-2">
+            {submitting ? "Submitting…" : "Submit"}
+          </Button>
         </>
       )}
     >
@@ -222,40 +239,93 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
           )}
         </div>
       ) : (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-5">
           {error && <Banner tone="error" title="Grievance not submitted">{error}</Banner>}
           {optionsError && <Banner tone="warning" title="Categories unavailable">{optionsError}</Banner>}
 
-          <div className="grid grid-cols-2 gap-2 rounded-lg bg-slate-100 p-1">
-            {(["farmer", "me"] as const).map((k) => (
-              <button key={k} type="button" onClick={() => chooseFor(k)} className={cn("h-9 rounded-md text-[13.5px] font-semibold transition-colors", forWhom === k ? "bg-white text-brand-green shadow-sm" : "text-ink-soft")}>
-                {k === "farmer" ? "On behalf of a farmer" : "For myself"}
-              </button>
-            ))}
+          {/* Segmented Tab Switcher */}
+          <div className="grid grid-cols-2 gap-1.5 rounded-xl border border-slate-200/80 bg-slate-100/80 p-1.5 shadow-2xs">
+            <button
+              type="button"
+              onClick={() => chooseFor("farmer")}
+              className={cn(
+                "flex h-10 items-center justify-center gap-2 rounded-lg text-sm font-semibold transition-all cursor-pointer",
+                forWhom === "farmer"
+                  ? "bg-white text-brand-green shadow-xs border border-gray-200/60"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-white/50",
+              )}
+            >
+              <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+              <span className="truncate">
+                <span className="hidden min-[420px]:inline">On behalf of a </span>Farmer
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => chooseFor("me")}
+              className={cn(
+                "flex h-10 items-center justify-center gap-2 rounded-lg text-sm font-semibold transition-all cursor-pointer",
+                forWhom === "me"
+                  ? "bg-white text-brand-green shadow-xs border border-gray-200/60"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-white/50",
+              )}
+            >
+              <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+              <span className="truncate">For myself</span>
+            </button>
           </div>
 
-          {forWhom === "farmer" && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {/* Submitter details section */}
+          {forWhom === "farmer" ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <FormField label="Farmer ID" htmlFor="grv-farmer-id" required hint={farmerId ? "From the farmer's profile." : "Required, e.g. FR-675618129549."}>
                 <Input id="grv-farmer-id" value={farmerRef} disabled={!!farmerId} onChange={(e) => setFarmerRef(e.target.value)} placeholder="FR-…" />
               </FormField>
+              <FormField label="Submitter type" htmlFor="grv-subtype" required>
+                <Select id="grv-subtype" value={effectiveType} disabled={selfAsDa} onChange={(e) => setSubmitterType(e.target.value)}>
+                  {(selfAsDa ? [daType] : submitterTypes).map((t) => <option key={t}>{t}</option>)}
+                </Select>
+              </FormField>
+              <FormField label="Submitter name" htmlFor="grv-subname" required {...(nameLocked ? { hint: "From your DA record." } : minLengthNote(submitterName, 2))}>
+                <Input id="grv-subname" value={effectiveName} disabled={nameLocked} onChange={(e) => setSubmitterName(e.target.value)} placeholder="Full name" />
+              </FormField>
+              <FormField label="Contact mobile" htmlFor="grv-mobile" required {...(mobileLocked ? { hint: "From your DA record." } : minLengthNote(contactMobile, 6))}>
+                <Input id="grv-mobile" value={effectiveMobile} disabled={mobileLocked} onChange={(e) => setContactMobile(e.target.value)} placeholder="09xxxxxxxx" inputMode="tel" />
+              </FormField>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {selfAsDa && (
+                <div className="flex items-center gap-2.5 rounded-lg border border-brand-green/20 bg-emerald-50/60 px-3.5 py-2 text-xs text-brand-green">
+                  <svg className="h-4 w-4 shrink-0 text-brand-green" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  </svg>
+                  <span>Raising grievance as logged-in Development Agent. Submitter details are sourced from your DA record.</span>
+                </div>
+              )}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <FormField label="Submitter type" htmlFor="grv-subtype" required>
+                  <Select id="grv-subtype" value={effectiveType} disabled={selfAsDa} onChange={(e) => setSubmitterType(e.target.value)}>
+                    {(selfAsDa ? [daType] : submitterTypes).map((t) => <option key={t}>{t}</option>)}
+                  </Select>
+                </FormField>
+                <FormField label="Submitter name" htmlFor="grv-subname" required {...(nameLocked ? { hint: "From your DA record." } : minLengthNote(submitterName, 2))}>
+                  <Input id="grv-subname" value={effectiveName} disabled={nameLocked} onChange={(e) => setSubmitterName(e.target.value)} placeholder="Full name" />
+                </FormField>
+                <FormField label="Contact mobile" htmlFor="grv-mobile" required {...(mobileLocked ? { hint: "From your DA record." } : minLengthNote(contactMobile, 6))}>
+                  <Input id="grv-mobile" value={effectiveMobile} disabled={mobileLocked} onChange={(e) => setContactMobile(e.target.value)} placeholder="09xxxxxxxx" inputMode="tel" />
+                </FormField>
+              </div>
             </div>
           )}
-
-          {/* Submitter */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <FormField label="Submitter type" htmlFor="grv-subtype" required>
-              <Select id="grv-subtype" value={effectiveType} disabled={selfAsDa} onChange={(e) => setSubmitterType(e.target.value)}>
-                {(selfAsDa ? [daType] : submitterTypes).map((t) => <option key={t}>{t}</option>)}
-              </Select>
-            </FormField>
-            <FormField label="Submitter name" htmlFor="grv-subname" required {...(nameLocked ? { hint: "From your DA record." } : minLengthNote(submitterName, 2))}>
-              <Input id="grv-subname" value={effectiveName} disabled={nameLocked} onChange={(e) => setSubmitterName(e.target.value)} placeholder="Full name" />
-            </FormField>
-            <FormField label="Contact mobile" htmlFor="grv-mobile" required {...(mobileLocked ? { hint: "From your DA record." } : minLengthNote(contactMobile, 6))}>
-              <Input id="grv-mobile" value={effectiveMobile} disabled={mobileLocked} onChange={(e) => setContactMobile(e.target.value)} placeholder="09xxxxxxxx" inputMode="tel" />
-            </FormField>
-          </div>
 
           {/* Classification */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -289,14 +359,14 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
             <Textarea id="grv-outcome" rows={2} value={desiredOutcome} onChange={(e) => setDesiredOutcome(e.target.value)} placeholder="What resolution the submitter is seeking" />
           </FormField>
 
-          <div className="flex flex-col gap-2.5 rounded-lg border border-line bg-surface p-3">
-            <label className="flex items-center gap-2.5 text-[13.5px] text-ink">
-              <Checkbox checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-              The submitter consents to sharing this grievance with the Grievance Service.
+          <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface/60 p-3.5 sm:p-4">
+            <label className="flex items-start gap-2.5 text-[13.5px] text-ink cursor-pointer select-none">
+              <span className="mt-0.5 shrink-0"><Checkbox checked={consent} onChange={(e) => setConsent(e.target.checked)} /></span>
+              <span>The submitter consents to sharing this grievance with the Grievance Service.</span>
             </label>
-            <label className="flex items-center gap-2.5 text-[13.5px] text-ink">
-              <Checkbox checked={anonymous} onChange={(e) => setAnonymous(e.target.checked)} />
-              Submit anonymously (hide the submitter&rsquo;s identity in reports).
+            <label className="flex items-start gap-2.5 text-[13.5px] text-ink cursor-pointer select-none">
+              <span className="mt-0.5 shrink-0"><Checkbox checked={anonymous} onChange={(e) => setAnonymous(e.target.checked)} /></span>
+              <span>Submit anonymously (hide the submitter&rsquo;s identity in reports).</span>
             </label>
           </div>
 

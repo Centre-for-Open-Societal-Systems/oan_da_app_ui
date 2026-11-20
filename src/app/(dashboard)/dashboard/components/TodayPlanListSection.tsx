@@ -27,7 +27,7 @@ function PlanRow({ item }: { item: TodayItem }) {
         <p className="mt-0.5 truncate text-[11.5px] sm:text-[13px] text-muted">{item.subtitle}</p>
       </div>
 
-      <span className={cn("shrink-0 rounded-full px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide", STATUS_STYLE[item.status])}>{item.status}</span>
+      <span className={cn("shrink-0 rounded-full px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide border-b border-danger-border", STATUS_STYLE[item.status])}>{item.status}</span>
     </>
   );
 
