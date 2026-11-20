@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { PageLoader } from "@/components/ui/PageLoader";
@@ -9,13 +8,13 @@ import { PageLoader } from "@/components/ui/PageLoader";
 // Shown in place of the dashboard once the Keycloak session can no longer be renewed. It cannot be dismissed:
 // the only way on is the login page.
 export function SessionExpiredDialog() {
-  const router = useRouter();
   const [busy, setBusy] = useState(false);
 
-  // /login sends the browser on to Keycloak, so the user signs in again from the login page.
+  // A full page load of /login (not a client-side route change), so nothing of the expired session stays in memory:
+  // the "Session expired" flag, in-flight requests or a pending token refresh. /login then shows the sign-in.
   const relogin = () => {
     setBusy(true);
-    router.replace("/login");
+    window.location.replace("/login");
   };
 
   return (

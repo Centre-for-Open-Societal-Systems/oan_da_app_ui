@@ -86,7 +86,8 @@ export const useAuthStore = create<AuthState>()(
       hasHydrated: false,
       sessionExpired: false,
       setUser: (user) => set({ user, isAuthenticated: true }),
-      signIn: (user, role, tokens, profile) => set({ user, role, tokens: tokens ?? null, profile: profile ?? null, isAuthenticated: true }),
+      // A new sign-in ends the "Session expired" state, or the dashboard would show the dialog again.
+      signIn: (user, role, tokens, profile) => set({ user, role, tokens: tokens ?? null, profile: profile ?? null, isAuthenticated: true, sessionExpired: false }),
       setSession: (user, role, profile) => set({ user, role, profile }),
       setTokens: (tokens) => set({ tokens }),
       logout: () => {
