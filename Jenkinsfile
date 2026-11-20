@@ -167,9 +167,8 @@ ENDSSH
                     credentialsId: 'aws-ecr-creds'
                 ]]) {
                     script {
-                        def version = sh(returnStdout: true,
-                            script: "python3 -c 'import json; print(json.load(open(\"package.json\"))[\"version\"])'").trim()
-                        env.IMMUTABLE_TAG = "${version}-develop.${env.BUILD_NUMBER}"
+                        // <package.json version>-develop.<build>, which is also the chart version
+                        env.IMMUTABLE_TAG = sh(returnStdout: true, script: 'python3 ci/package_chart.py version').trim()
                     }
                     sh '''#!/usr/bin/env bash
                         set -euo pipefail
@@ -191,12 +190,31 @@ ENDSSH
             }
         }
 
+        // Flow (develop): Push image (helm) -> Package chart -> deploy -> Publish chart.
+        // helm/oan-da-app-ui is zipped with this build's image before the deploy; the deploy installs
+        // that archive, and the same archive is published to oan-helm afterwards.
+        stage('Package chart') {
+            when { branch 'develop' }
+            steps {
+                script {
+                    env.IMAGE_TAG = env.IMMUTABLE_TAG
+                    env.SOURCE_COMMIT = sh(returnStdout: true, script: 'git rev-parse --verify HEAD').trim()
+                    env.COMMIT_SUBJECT = sh(returnStdout: true, script: 'git log -1 --pretty=%s').trim()
+                    env.IMAGE_REPOSITORY = "${env.IMAGE_REGISTRY}/${env.ECR_REPO}"
+                }
+                sh 'python3 ci/package_chart.py package'
+                // The deploy stage runs on the VPN deploy agent, which gets the archive from here.
+                stash name: 'built-chart', includes: 'built-chart/**'
+            }
+        }
+
         stage('develop → oan_dev (helm)') {
             when { beforeAgent true; branch 'develop' }
             agent { label 'oan-ci-deploy' }   // VPN agent with helm and kubectl that reaches the oan_dev API
             options { timeout(time: 15, unit: 'MINUTES') }
             steps {
                 checkout scm
+                unstash 'built-chart'
                 withCredentials([file(credentialsId: 'oan-dev-kubeconfig', variable: 'KUBECONFIG')]) {
                     sh 'bash ci/deploy-helm-dev.sh'
                 }
@@ -220,6 +238,20 @@ ENDSSH
                     echo "da-app-ui did not return 200 at $url"
                     exit 1
                 '''
+            }
+        }
+
+        // Adds the archive built by 'Package chart' to repository/develop/ of oan-helm, only after
+        // the oan_dev deploy and its verify succeeded.
+        stage('Publish chart') {
+            when { branch 'develop' }
+            steps {
+                // UNSTABLE, not failed: the image is already deployed.
+                catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                    withCredentials([usernamePassword(credentialsId: 'oan-helm-fork-token', usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
+                        sh 'python3 ci/package_chart.py publish'
+                    }
+                }
             }
         }
     }
