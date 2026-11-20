@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { apiAgentToAgent, describeImportException, importStatusLabel, listAllImportExceptions } from "./api";
+import { apiAgentToAgent, describeImportException, importStatusLabel, listAllImportExceptions, listMyTeam } from "./api";
 
 const { authRequest } = vi.hoisted(() => ({ authRequest: vi.fn() }));
 vi.mock("@/features/auth", () => ({ authRequest }));
@@ -61,5 +61,23 @@ describe("apiAgentToAgent", () => {
   it("prefers names and marks the record as coming from the registry", () => {
     const agent = apiAgentToAgent({ da_id: "DA-1", full_name: "QA Rakesh Test", woreda: "ET120205", woreda_name: "Dima (Gm)", approval_status: "Published", farmer_count: null } as Parameters<typeof apiAgentToAgent>[0]);
     expect(agent).toMatchObject({ daId: "DA-1", fullName: "QA Rakesh Test", woreda: "Dima (Gm)", farmerCount: 0, moaPublication: "Published", source: "DA Registry" });
+  });
+});
+
+describe("listMyTeam", () => {
+  it("reads the Kebele team in the order the API sends it, with names and the joining date", async () => {
+    authRequest.mockResolvedValueOnce({
+      data: [
+        { da_id: "DA-1", full_name: "Selamawit Tesfaye", specialisation: "Livestock", phone: "0911", kebele: "ET01010805", kebele_name: "Lekatit", woreda: "ET010108", woreda_name: "Shire", active_status: "Active", joined_at: "2019-10-01" },
+        { da_id: "DA-2", full_name: "", specialisation: null, phone: null, kebele: "ET01010805", kebele_name: null, woreda: "ET010108", woreda_name: null, active_status: "On-leave", joined_at: null },
+      ],
+      meta: { total: 2 },
+    });
+
+    await expect(listMyTeam()).resolves.toEqual([
+      { daId: "DA-1", fullName: "Selamawit Tesfaye", kebele: "Lekatit", woreda: "Shire", specialisation: "Livestock", activeStatus: "Active", phone: "0911", joinedAt: "01 Oct 2019" },
+      { daId: "DA-2", fullName: "DA-2", kebele: "ET01010805", woreda: "ET010108", specialisation: "—", activeStatus: "On-leave", phone: "—", joinedAt: undefined },
+    ]);
+    expect(authRequest).toHaveBeenCalledWith("/da-services/my-team");
   });
 });

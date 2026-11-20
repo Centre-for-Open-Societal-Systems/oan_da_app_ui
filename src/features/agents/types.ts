@@ -31,16 +31,13 @@ export interface Agent {
 export interface TeamMember {
   daId: string;
   fullName: string;
+  /** Kebele name; its code when the registry gives no name. */
   kebele: string;
   woreda: string;
-  region: string;
   specialisation: string;
   activeStatus: ActiveStatus;
   phone: string;
-  email?: string;
-  language?: string;
-  /** Known for the signed-in DA's own registry record only. */
-  farmerCount?: number;
+  /** "01 Oct 2019"; absent when the registry holds no joining date. */
   joinedAt?: string;
 }
 

@@ -145,7 +145,7 @@ export interface ListExpertsParams {
 
 /**
  * GET /da-services/experts: the active DAs with a specialisation in the caller's scope (DA and Supervisor: their
- * Woreda), never the caller's own record. For a DA this is their Woreda team.
+ * Woreda), never the caller's own record.
  */
 export async function listExperts({ specialisation, q, limit = 200, start = 0 }: ListExpertsParams = {}): Promise<{ items: ApiExpert[]; total: number; bySpecialisation: Record<string, number> }> {
   const res = await authRequest<{ data: ApiExpert[]; meta?: { total?: number; by_specialisation?: Record<string, number> } }>(
@@ -154,31 +154,41 @@ export async function listExperts({ specialisation, q, limit = 200, start = 0 }:
   return { items: res.data ?? [], total: res.meta?.total ?? res.data?.length ?? 0, bySpecialisation: res.meta?.by_specialisation ?? {} };
 }
 
-export function expertToTeamMember(e: ApiExpert): TeamMember {
+/** One row of GET /da-services/my-team: a DA of the caller's Kebele team, as the DA Registry holds them. */
+export interface ApiTeamRow {
+  da_id: string;
+  full_name: string;
+  specialisation?: string | null;
+  education_tier?: string | null;
+  phone?: string | null;
+  kebele?: string | null;
+  kebele_name?: string | null;
+  woreda?: string | null;
+  woreda_name?: string | null;
+  active_status?: string | null;
+  joined_at?: string | null;
+}
+
+export function teamRowToMember(r: ApiTeamRow): TeamMember {
   return {
-    daId: e.da_id,
-    fullName: e.full_name || e.da_id,
-    kebele: e.kebele || UNASSIGNED,
-    woreda: e.woreda || "",
-    region: e.region || "",
-    specialisation: e.specialisation || UNASSIGNED,
-    activeStatus: toActiveStatus(e.active_status),
-    phone: e.phone || UNASSIGNED,
-    email: e.email || undefined,
-    language: e.language || undefined,
+    daId: r.da_id,
+    fullName: r.full_name || r.da_id,
+    kebele: r.kebele_name || r.kebele || UNASSIGNED,
+    woreda: r.woreda_name || r.woreda || "",
+    specialisation: r.specialisation || UNASSIGNED,
+    activeStatus: toActiveStatus(r.active_status),
+    phone: r.phone || UNASSIGNED,
+    joinedAt: r.joined_at ? formatIsoDate(r.joined_at) : undefined,
   };
 }
 
-/** The signed-in DA's own registry record (the `agent` of /me) as a team row, so it sits first in My Teams. */
-export function agentToTeamMember(a: ApiAgent): TeamMember {
-  return {
-    ...expertToTeamMember(a),
-    kebele: a.kebele_name || a.kebele || UNASSIGNED,
-    woreda: a.woreda_name || a.woreda || "",
-    region: a.region_name || a.region || "",
-    farmerCount: a.farmer_count ?? undefined,
-    joinedAt: a.joined_at ? formatIsoDate(a.joined_at) : undefined,
-  };
+/**
+ * GET /da-services/my-team: the signed-in DA's own record first, then the other DAs posted in the same Kebele (the
+ * Woreda when the DA has no Kebele on record), never the separated ones. Development Agent only.
+ */
+export async function listMyTeam(): Promise<TeamMember[]> {
+  const res = await authRequest<{ data: ApiTeamRow[] }>("/da-services/my-team");
+  return (res.data ?? []).map(teamRowToMember);
 }
 
 // ---- Bulk agent import (OAN Administrator) --------------------------------------------------------------------

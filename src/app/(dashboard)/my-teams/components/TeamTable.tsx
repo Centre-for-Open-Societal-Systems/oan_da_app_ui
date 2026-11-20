@@ -22,8 +22,8 @@ interface TeamFilters extends FilterSelection {
 }
 const EMPTY: TeamFilters = { specialisation: new Set(), status: new Set() };
 
-// The DA's Woreda team (GET /da-services/experts). Read-only: DAs see their colleagues' work contacts, not
-// registry records (no row links). Farmer counts and joining dates are known for the DA's own record only.
+// The DA's Kebele team (GET /da-services/my-team). Read-only: DAs see their colleagues' work contacts, not
+// registry records (no row links).
 export function TeamTable({ team, myDaId, loading = false }: { team: TeamMember[]; myDaId: string; loading?: boolean }) {
   const [filters, setFilters] = useState<TeamFilters>(EMPTY);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
@@ -44,7 +44,7 @@ export function TeamTable({ team, myDaId, loading = false }: { team: TeamMember[
     (a) =>
       has(filters.specialisation, a.specialisation) &&
       has(filters.status, a.activeStatus) &&
-      matchesQuery(query, a.fullName, a.daId, a.kebele, a.specialisation, a.activeStatus, a.phone, a.email, a.joinedAt),
+      matchesQuery(query, a.fullName, a.daId, a.kebele, a.specialisation, a.activeStatus, a.phone, a.joinedAt),
   );
 
   const columns: Column<TeamMember>[] = [
@@ -74,7 +74,6 @@ export function TeamTable({ team, myDaId, loading = false }: { team: TeamMember[
       className: "whitespace-nowrap",
       cell: (a) => a.specialisation,
     },
-    { key: "farmers", header: "Farmers", align: "right", className: "whitespace-nowrap", cell: (a) => (a.farmerCount != null ? a.farmerCount.toLocaleString() : <span className="text-subtle">—</span>) },
     {
       key: "status",
       header: <FilterDropdown label="Status" allLabel="All Status" options={statusOptions} selected={filters.status} onApply={setFilter("status")} />,
@@ -125,7 +124,7 @@ export function TeamTable({ team, myDaId, loading = false }: { team: TeamMember[
         minWidth="760px"
         state={loading ? "loading" : "ready"}
         emptyTitle={team.length === 0 ? "No team members yet" : "No team members match the selected filters"}
-        emptyHint={team.length === 0 ? "You will see your Kebele colleagues here once the DA Registry lists them in your Woreda." : "Clear a filter or try a different search."}
+        emptyHint={team.length === 0 ? "You will see your Kebele colleagues here once the DA Registry lists them in your Kebele." : "Clear a filter or try a different search."}
       />
 
       <AdvancedFiltersDrawer
