@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useAuthStore } from "@/store/useAuthStore";
+import { completeProfile, ownArea, useAuthStore, type AuthProfile } from "@/store/useAuthStore";
 import { login, NO_ASSIGNMENT_MESSAGE } from "./login";
 import { refreshProfile, toMeSession, type MeResponse } from "./me";
 
@@ -66,12 +66,81 @@ describe("toMeSession", () => {
     expect(toMeSession(me())).toEqual({
       user: { id: "Administrator", name: "Administrator", email: "Administrator" },
       role: "Admin",
-      profile: { roleLabel: "OAN / ATI Administrator", scopeLabel: "All regions", scope: { regions: [], woredas: [], zones: [] }, unrestricted: true, menu: ["/dashboard", "/admin/users"], daId: null, agent: null },
+      profile: { roleLabel: "OAN / ATI Administrator", scopeLabel: "All regions", scope: { regions: [], woredas: [], zones: [] }, unrestricted: true, menu: ["/dashboard", "/admin/users"], daId: null, agent: null, designation: null, location: { country: null, region: null, zone: null, woreda: null, kebele: null } },
     });
   });
 
   it("rejects a role the portal does not know", () => {
     expect(toMeSession(me({ role: "Auditor" }))).toBeNull();
+  });
+
+  it("fills in an empty scope when /me sends none, so screens can read scope.woredas", () => {
+    // What a backend that leaves scope to Frappe User Permissions sends: no scope, unrestricted, da_id or agent.
+    const body = { data: { user: { id: "da@x", name: "DA", email: "da@x" }, role: "DA", role_codes: ["DA"], role_label: "Development Agent", roles: ["Development Agent"], scope_label: "Own record", menu: ["/dashboard"] } } as MeResponse;
+
+    const profile = toMeSession(body)?.profile;
+    expect(profile?.scope).toEqual({ regions: [], woredas: [], zones: [] });
+    expect(profile?.scope.woredas).toEqual([]);
+    expect([profile?.unrestricted, profile?.daId, profile?.agent]).toEqual([false, null, null]);
+  });
+
+  it("reads the hierarchy location of the newer /me: own Woreda and Kebele, labels built here", () => {
+    // The /me of a backend with DA Hierarchy: no role_label, scope_label, scope, kebeles or da_id.
+    const body = {
+      data: {
+        user: { id: "da@x", name: "DA Agent", email: "da@x" },
+        role: "DA",
+        roles: ["Development Agent"],
+        designation: "agent",
+        country: { id: "ET", name: "Ethiopia" },
+        region: { id: "ET01", name: "Tigray" },
+        zone: { id: "ET0101", name: "North Western" },
+        woreda: { id: "ET010108", name: "Shire Endaslasie town" },
+        kebele: { id: "ET01010805", name: "Lekatit" },
+        menu: ["/dashboard", "/farmers"],
+      },
+    } as MeResponse;
+
+    const profile = toMeSession(body)!.profile;
+    expect(profile.location?.woreda).toEqual({ id: "ET010108", name: "Shire Endaslasie town" });
+    expect(profile.scope).toEqual({ regions: ["ET01"], zones: ["ET0101"], woredas: ["ET010108"] });
+    expect(profile.kebeles).toEqual([{ code: "ET01010805", name: "Lekatit" }]);
+    expect([profile.roleLabel, profile.scopeLabel, profile.designation]).toEqual(["Development Agent", "Own record · Shire Endaslasie town", "agent"]);
+  });
+
+  it("names a Supervisor's Woreda in the scope line and gives them no Kebele list", () => {
+    const body = { data: { user: { id: "s@x", name: "S", email: "s@x" }, role: "Supervisor", roles: ["Supervisor"], woreda: { id: "ET010108", name: "Shire" }, kebele: null, menu: [] } } as MeResponse;
+    const profile = toMeSession(body)!.profile;
+    expect([profile.scopeLabel, profile.kebeles, profile.scope.woredas]).toEqual(["Woreda · Shire", undefined, ["ET010108"]]);
+  });
+});
+
+describe("ownArea", () => {
+  const at = { country: null, region: null, zone: null, woreda: { id: "ET010108", name: "Shire" }, kebele: { id: "ET01010805", name: "Lekatit" } };
+  const profile = { roleLabel: "", scopeLabel: "", menu: [], location: at } as unknown as AuthProfile;
+
+  it("gives a DA their Woreda and Kebele, and a Supervisor the Woreda only", () => {
+    useAuthStore.getState().setSession({ id: "da@x", name: "DA", email: "da@x" }, "DA", profile);
+    expect(ownArea()).toEqual({ woreda: "ET010108", kebele: "ET01010805", daId: undefined });
+    useAuthStore.getState().setSession({ id: "s@x", name: "S", email: "s@x" }, "Supervisor", profile);
+    expect(ownArea()).toEqual({ woreda: "ET010108", kebele: undefined, daId: undefined });
+  });
+});
+
+describe("completeProfile", () => {
+  it("gives a stored profile without a scope an empty one, and leaves a full profile as it is", () => {
+    const stored = { roleLabel: "Development Agent", scopeLabel: "Own record", menu: ["/dashboard"] } as unknown as AuthProfile;
+    expect(completeProfile(stored)).toMatchObject({ scope: { regions: [], woredas: [], zones: [] }, unrestricted: false, daId: null, agent: null, menu: ["/dashboard"] });
+
+    const full = toMeSession(me({ scope: { regions: ["ET04"], woredas: ["ET040801"], zones: [] } }))!.profile;
+    expect(completeProfile(full)).toEqual(full);
+    expect(completeProfile(null)).toBeNull();
+  });
+
+  it("is applied when a session is set, so the store never holds a profile without a scope", () => {
+    const stored = { roleLabel: "Development Agent", scopeLabel: "Own record", menu: [] } as unknown as AuthProfile;
+    useAuthStore.getState().setSession({ id: "da@x", name: "DA", email: "da@x" }, "DA", stored);
+    expect(useAuthStore.getState().profile?.scope.woredas).toEqual([]);
   });
 });
 

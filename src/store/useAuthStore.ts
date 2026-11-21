@@ -45,6 +45,41 @@ export interface AuthProfile {
   agent: Record<string, unknown> | null;
   /** The Kebeles a DA is posted to (Effective assignments); a DA broadcasts to these. Absent for other roles. */
   kebeles?: { code: string; name: string }[];
+  /** The user's post in the DA Hierarchy, e.g. "agent". */
+  designation?: string | null;
+  /** Where the user's DA Hierarchy node sits; a level the node does not set is null. */
+  location?: ProfileLocation;
+}
+
+/** One administrative area as /me names it: its code and its display name. */
+export interface AreaRef {
+  id: string;
+  name: string;
+}
+
+export interface ProfileLocation {
+  country: AreaRef | null;
+  region: AreaRef | null;
+  zone: AreaRef | null;
+  woreda: AreaRef | null;
+  kebele: AreaRef | null;
+}
+
+/** No Region, Zone or Woreda: what a profile holds when /me sends no scope. */
+export const EMPTY_SCOPE: AuthProfile["scope"] = { regions: [], woredas: [], zones: [] };
+
+/** A stored or received profile with the lists the screens read always present (older sessions and newer backends may omit them). */
+export function completeProfile(profile: AuthProfile | null | undefined): AuthProfile | null {
+  if (!profile) return null;
+  const scope = profile.scope ?? EMPTY_SCOPE;
+  return {
+    ...profile,
+    scope: { regions: scope.regions ?? [], woredas: scope.woredas ?? [], zones: scope.zones ?? [] },
+    unrestricted: profile.unrestricted ?? false,
+    menu: profile.menu ?? [],
+    daId: profile.daId ?? null,
+    agent: profile.agent ?? null,
+  };
 }
 
 interface AuthState {
@@ -87,8 +122,8 @@ export const useAuthStore = create<AuthState>()(
       sessionExpired: false,
       setUser: (user) => set({ user, isAuthenticated: true }),
       // A new sign-in ends the "Session expired" state, or the dashboard would show the dialog again.
-      signIn: (user, role, tokens, profile) => set({ user, role, tokens: tokens ?? null, profile: profile ?? null, isAuthenticated: true, sessionExpired: false }),
-      setSession: (user, role, profile) => set({ user, role, profile }),
+      signIn: (user, role, tokens, profile) => set({ user, role, tokens: tokens ?? null, profile: completeProfile(profile), isAuthenticated: true, sessionExpired: false }),
+      setSession: (user, role, profile) => set({ user, role, profile: completeProfile(profile) }),
       setTokens: (tokens) => set({ tokens }),
       logout: () => {
         // Drafts hold farmer and visit personal data; none of it may outlive the session.
@@ -114,6 +149,11 @@ export const useAuthStore = create<AuthState>()(
       // Rehydrated after mount (see AuthHydration) so the first client render matches the server HTML.
       skipHydration: true,
       partialize: (s) => ({ user: s.user, isAuthenticated: s.isAuthenticated, role: s.role, tokens: s.tokens, profile: s.profile }),
+      // A session stored before a backend change may lack a list a screen reads; fill it in on the way back.
+      merge: (persisted, current) => {
+        const stored = (persisted ?? {}) as Partial<AuthState>;
+        return { ...current, ...stored, profile: completeProfile(stored.profile) };
+      },
       // Runs after every rehydrate, including the empty-storage case, so the guard never waits forever.
       onRehydrateStorage: () => (state) => state?.setHasHydrated(true),
     },
@@ -122,3 +162,17 @@ export const useAuthStore = create<AuthState>()(
 
 // Every API call sends the session CSRF token as X-CSRF-Token (see lib/api).
 setCsrfProvider(() => useAuthStore.getState().tokens?.csrfToken);
+
+/**
+ * The signed-in user's own Woreda, Kebele and DA-ID, for the calls that must name them: the backend no longer
+ * reads them from the token. The Kebele is a DA's only (other roles work across their Woreda).
+ */
+export function ownArea(): { woreda?: string; kebele?: string; daId?: string } {
+  const { profile, role } = useAuthStore.getState();
+  const woredas = profile?.scope?.woredas ?? [];
+  return {
+    woreda: profile?.location?.woreda?.id ?? (woredas.length === 1 ? woredas[0] : undefined),
+    kebele: role === "DA" ? (profile?.location?.kebele?.id ?? undefined) : undefined,
+    daId: profile?.daId ?? undefined,
+  };
+}
