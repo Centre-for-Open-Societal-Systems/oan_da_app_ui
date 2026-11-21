@@ -29,21 +29,33 @@ const loginOk = () => json(200, {
   message: "Success",
   status: "success",
 });
+const NO_LOCATION = { country: null, region: null, zone: null, woreda: null, kebele: null };
+// The shape of GET /da-services/me: role, DA Hierarchy post and place, menu.
 const me = (over: Partial<MeResponse["data"]> = {}): MeResponse => ({
   data: {
     user: { id: "Administrator", name: "Administrator", email: "Administrator" },
     role: "Admin",
-    role_codes: ["Admin"],
-    role_label: "OAN / ATI Administrator",
     roles: ["OAN Administrator"],
-    scope: { regions: [], woredas: [], zones: [] },
-    scope_label: "All regions",
-    unrestricted: true,
+    designation: null,
+    ...NO_LOCATION,
     menu: ["/dashboard", "/admin/users"],
-    da_id: null,
     ...over,
   },
 });
+// /me of a Development Agent posted to a Kebele, as the development backend returns it.
+const daMe = () =>
+  me({
+    user: { id: "da@iam.internal", name: "DA Agent", email: "da@iam.internal" },
+    role: "DA",
+    roles: ["Development Agent"],
+    designation: "agent",
+    country: { id: "ET", name: "Ethiopia" },
+    region: { id: "ET01", name: "Tigray" },
+    zone: { id: "ET0101", name: "North Western" },
+    woreda: { id: "ET010108", name: "Shire Endaslasie town" },
+    kebele: { id: "ET01010805", name: "Lekatit" },
+    menu: ["/dashboard", "/farmers"],
+  });
 
 beforeEach(() => {
   globalThis.sessionStorage = new MemoryStorage();
@@ -53,20 +65,37 @@ beforeEach(() => {
   useAuthStore.setState({ user: null, isAuthenticated: false, tokens: null, profile: null });
 });
 
-describe("toMeSession name", () => {
-  it("shows the DA's registry name instead of the account name", () => {
-    const body = me();
-    body.data.agent = { full_name: " Selamawit Tesfaye " };
-    expect(toMeSession(body)?.user.name).toBe("Selamawit Tesfaye");
-  });
-});
-
 describe("toMeSession", () => {
-  it("maps /me to identity, portal role and profile", () => {
+  it("maps /me of a user without a hierarchy node: identity, role, labels and an empty scope", () => {
     expect(toMeSession(me())).toEqual({
       user: { id: "Administrator", name: "Administrator", email: "Administrator" },
       role: "Admin",
-      profile: { roleLabel: "OAN / ATI Administrator", scopeLabel: "All regions", scope: { regions: [], woredas: [], zones: [] }, unrestricted: true, menu: ["/dashboard", "/admin/users"], daId: null, agent: null, designation: null, location: { country: null, region: null, zone: null, woreda: null, kebele: null } },
+      profile: { roleLabel: "OAN / ATI Administrator", scopeLabel: "All regions", scope: { regions: [], woredas: [], zones: [] }, unrestricted: true, menu: ["/dashboard", "/admin/users"], daId: null, agent: null, designation: null, location: NO_LOCATION },
+    });
+  });
+
+  it("maps /me of a Development Agent: post, place, own scope, Kebele and labels", () => {
+    expect(toMeSession(daMe())).toEqual({
+      user: { id: "da@iam.internal", name: "DA Agent", email: "da@iam.internal" },
+      role: "DA",
+      profile: {
+        roleLabel: "Development Agent",
+        scopeLabel: "Own record · Shire Endaslasie town",
+        scope: { regions: ["ET01"], zones: ["ET0101"], woredas: ["ET010108"] },
+        unrestricted: false,
+        menu: ["/dashboard", "/farmers"],
+        daId: null,
+        agent: null,
+        kebeles: [{ code: "ET01010805", name: "Lekatit" }],
+        designation: "agent",
+        location: {
+          country: { id: "ET", name: "Ethiopia" },
+          region: { id: "ET01", name: "Tigray" },
+          zone: { id: "ET0101", name: "North Western" },
+          woreda: { id: "ET010108", name: "Shire Endaslasie town" },
+          kebele: { id: "ET01010805", name: "Lekatit" },
+        },
+      },
     });
   });
 
@@ -74,44 +103,20 @@ describe("toMeSession", () => {
     expect(toMeSession(me({ role: "Auditor" }))).toBeNull();
   });
 
-  it("fills in an empty scope when /me sends none, so screens can read scope.woredas", () => {
-    // What a backend that leaves scope to Frappe User Permissions sends: no scope, unrestricted, da_id or agent.
-    const body = { data: { user: { id: "da@x", name: "DA", email: "da@x" }, role: "DA", role_codes: ["DA"], role_label: "Development Agent", roles: ["Development Agent"], scope_label: "Own record", menu: ["/dashboard"] } } as MeResponse;
-
-    const profile = toMeSession(body)?.profile;
-    expect(profile?.scope).toEqual({ regions: [], woredas: [], zones: [] });
-    expect(profile?.scope.woredas).toEqual([]);
-    expect([profile?.unrestricted, profile?.daId, profile?.agent]).toEqual([false, null, null]);
-  });
-
-  it("reads the hierarchy location of the newer /me: own Woreda and Kebele, labels built here", () => {
-    // The /me of a backend with DA Hierarchy: no role_label, scope_label, scope, kebeles or da_id.
-    const body = {
-      data: {
-        user: { id: "da@x", name: "DA Agent", email: "da@x" },
-        role: "DA",
-        roles: ["Development Agent"],
-        designation: "agent",
-        country: { id: "ET", name: "Ethiopia" },
-        region: { id: "ET01", name: "Tigray" },
-        zone: { id: "ET0101", name: "North Western" },
-        woreda: { id: "ET010108", name: "Shire Endaslasie town" },
-        kebele: { id: "ET01010805", name: "Lekatit" },
-        menu: ["/dashboard", "/farmers"],
-      },
-    } as MeResponse;
-
-    const profile = toMeSession(body)!.profile;
-    expect(profile.location?.woreda).toEqual({ id: "ET010108", name: "Shire Endaslasie town" });
-    expect(profile.scope).toEqual({ regions: ["ET01"], zones: ["ET0101"], woredas: ["ET010108"] });
-    expect(profile.kebeles).toEqual([{ code: "ET01010805", name: "Lekatit" }]);
-    expect([profile.roleLabel, profile.scopeLabel, profile.designation]).toEqual(["Development Agent", "Own record · Shire Endaslasie town", "agent"]);
+  it("gives a DA without a hierarchy node an empty scope, so screens can read scope.woredas", () => {
+    const profile = toMeSession(me({ role: "DA", roles: ["Development Agent"] }))!.profile;
+    expect(profile.scope).toEqual({ regions: [], woredas: [], zones: [] });
+    expect([profile.scopeLabel, profile.kebeles, profile.unrestricted]).toEqual(["Own record", undefined, false]);
   });
 
   it("names a Supervisor's Woreda in the scope line and gives them no Kebele list", () => {
-    const body = { data: { user: { id: "s@x", name: "S", email: "s@x" }, role: "Supervisor", roles: ["Supervisor"], woreda: { id: "ET010108", name: "Shire" }, kebele: null, menu: [] } } as MeResponse;
-    const profile = toMeSession(body)!.profile;
-    expect([profile.scopeLabel, profile.kebeles, profile.scope.woredas]).toEqual(["Woreda · Shire", undefined, ["ET010108"]]);
+    const profile = toMeSession(me({ role: "Supervisor", roles: ["Supervisor"], woreda: { id: "ET010108", name: "Shire" } }))!.profile;
+    expect([profile.roleLabel, profile.scopeLabel, profile.kebeles, profile.scope.woredas]).toEqual(["Supervisor (Woreda)", "Woreda · Shire", undefined, ["ET010108"]]);
+  });
+
+  it("names an Executive's Region as read only", () => {
+    const profile = toMeSession(me({ role: "Executive", roles: ["Executive"], region: { id: "ET01", name: "Tigray" } }))!.profile;
+    expect([profile.scopeLabel, profile.scope]).toEqual(["Region · Tigray (read)", { regions: ["ET01"], zones: [], woredas: [] }]);
   });
 });
 
@@ -132,7 +137,7 @@ describe("completeProfile", () => {
     const stored = { roleLabel: "Development Agent", scopeLabel: "Own record", menu: ["/dashboard"] } as unknown as AuthProfile;
     expect(completeProfile(stored)).toMatchObject({ scope: { regions: [], woredas: [], zones: [] }, unrestricted: false, daId: null, agent: null, menu: ["/dashboard"] });
 
-    const full = toMeSession(me({ scope: { regions: ["ET04"], woredas: ["ET040801"], zones: [] } }))!.profile;
+    const full = toMeSession(daMe())!.profile;
     expect(completeProfile(full)).toEqual(full);
     expect(completeProfile(null)).toBeNull();
   });
@@ -146,7 +151,7 @@ describe("completeProfile", () => {
 
 describe("login", () => {
   it("signs in through sso/login, then takes identity and role from /me with the returned token", async () => {
-    fetchMock.mockResolvedValueOnce(loginOk()).mockResolvedValueOnce(json(200, me({ role: "Supervisor", role_label: "Supervisor (Woreda)" })));
+    fetchMock.mockResolvedValueOnce(loginOk()).mockResolvedValueOnce(json(200, me({ role: "Supervisor", roles: ["Supervisor"] })));
 
     const result = await login(" admin@moa.gov.et ", "pw");
 

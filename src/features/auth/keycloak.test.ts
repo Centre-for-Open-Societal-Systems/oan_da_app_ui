@@ -20,7 +20,7 @@ const TOKEN = `h.${b64(claims)}.s`;
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 const fetchMock = vi.fn<typeof fetch>();
-const ME = { data: { user: { id: "u1", name: "Da Agent", email: "da@x.com" }, role: "DA", role_codes: ["DA"], role_label: "Development Agent", roles: [], scope: { regions: [], woredas: [], zones: [] }, scope_label: "Own", unrestricted: false, menu: [], da_id: "DA-1" } };
+const ME = { data: { user: { id: "u1", name: "Da Agent", email: "da@x.com" }, role: "DA", roles: ["Development Agent"], designation: "agent", country: null, region: null, zone: null, woreda: { id: "ET010108", name: "Shire" }, kebele: { id: "ET01010805", name: "Lekatit" }, menu: [] } };
 
 beforeEach(() => {
   globalThis.sessionStorage = new MemoryStorage();
@@ -50,7 +50,7 @@ describe("completeKeycloakLogin", () => {
 
     const result = await completeKeycloakLogin(new URLSearchParams({ state: "s1" }));
     expect(result.role).toBe("DA");
-    expect(result.profile?.daId).toBe("DA-1");
+    expect(result.profile?.location?.woreda?.id).toBe("ET010108");
     expect(result.tokens).toEqual(IAM_SESSION);
     expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/me");
     expect(headersOf(0).Authorization).toBeUndefined();
