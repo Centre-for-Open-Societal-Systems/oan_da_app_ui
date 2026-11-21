@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useAuthStore } from "@/store/useAuthStore";
+import { completeProfile, ownArea, useAuthStore, type AuthProfile } from "@/store/useAuthStore";
 import { login, NO_ASSIGNMENT_MESSAGE } from "./login";
 import { refreshProfile, toMeSession, type MeResponse } from "./me";
 
@@ -29,21 +29,33 @@ const loginOk = () => json(200, {
   message: "Success",
   status: "success",
 });
+const NO_LOCATION = { country: null, region: null, zone: null, woreda: null, kebele: null };
+// The shape of GET /da-services/me: role, DA Hierarchy post and place, menu.
 const me = (over: Partial<MeResponse["data"]> = {}): MeResponse => ({
   data: {
     user: { id: "Administrator", name: "Administrator", email: "Administrator" },
     role: "Admin",
-    role_codes: ["Admin"],
-    role_label: "OAN / ATI Administrator",
     roles: ["OAN Administrator"],
-    scope: { regions: [], woredas: [], zones: [] },
-    scope_label: "All regions",
-    unrestricted: true,
+    designation: null,
+    ...NO_LOCATION,
     menu: ["/dashboard", "/admin/users"],
-    da_id: null,
     ...over,
   },
 });
+// /me of a Development Agent posted to a Kebele, as the development backend returns it.
+const daMe = () =>
+  me({
+    user: { id: "da@iam.internal", name: "DA Agent", email: "da@iam.internal" },
+    role: "DA",
+    roles: ["Development Agent"],
+    designation: "agent",
+    country: { id: "ET", name: "Ethiopia" },
+    region: { id: "ET01", name: "Tigray" },
+    zone: { id: "ET0101", name: "North Western" },
+    woreda: { id: "ET010108", name: "Shire Endaslasie town" },
+    kebele: { id: "ET01010805", name: "Lekatit" },
+    menu: ["/dashboard", "/farmers"],
+  });
 
 beforeEach(() => {
   globalThis.sessionStorage = new MemoryStorage();
@@ -53,31 +65,93 @@ beforeEach(() => {
   useAuthStore.setState({ user: null, isAuthenticated: false, tokens: null, profile: null });
 });
 
-describe("toMeSession name", () => {
-  it("shows the DA's registry name instead of the account name", () => {
-    const body = me();
-    body.data.agent = { full_name: " Selamawit Tesfaye " };
-    expect(toMeSession(body)?.user.name).toBe("Selamawit Tesfaye");
-  });
-});
-
 describe("toMeSession", () => {
-  it("maps /me to identity, portal role and profile", () => {
+  it("maps /me of a user without a hierarchy node: identity, role, labels and an empty scope", () => {
     expect(toMeSession(me())).toEqual({
       user: { id: "Administrator", name: "Administrator", email: "Administrator" },
       role: "Admin",
-      profile: { roleLabel: "OAN / ATI Administrator", scopeLabel: "All regions", scope: { regions: [], woredas: [], zones: [] }, unrestricted: true, menu: ["/dashboard", "/admin/users"], daId: null, agent: null },
+      profile: { roleLabel: "OAN / ATI Administrator", scopeLabel: "All regions", scope: { regions: [], woredas: [], zones: [] }, unrestricted: true, menu: ["/dashboard", "/admin/users"], daId: null, agent: null, designation: null, location: NO_LOCATION },
+    });
+  });
+
+  it("maps /me of a Development Agent: post, place, own scope, Kebele and labels", () => {
+    expect(toMeSession(daMe())).toEqual({
+      user: { id: "da@iam.internal", name: "DA Agent", email: "da@iam.internal" },
+      role: "DA",
+      profile: {
+        roleLabel: "Development Agent",
+        scopeLabel: "Own record · Shire Endaslasie town",
+        scope: { regions: ["ET01"], zones: ["ET0101"], woredas: ["ET010108"] },
+        unrestricted: false,
+        menu: ["/dashboard", "/farmers"],
+        daId: null,
+        agent: null,
+        kebeles: [{ code: "ET01010805", name: "Lekatit" }],
+        designation: "agent",
+        location: {
+          country: { id: "ET", name: "Ethiopia" },
+          region: { id: "ET01", name: "Tigray" },
+          zone: { id: "ET0101", name: "North Western" },
+          woreda: { id: "ET010108", name: "Shire Endaslasie town" },
+          kebele: { id: "ET01010805", name: "Lekatit" },
+        },
+      },
     });
   });
 
   it("rejects a role the portal does not know", () => {
     expect(toMeSession(me({ role: "Auditor" }))).toBeNull();
   });
+
+  it("gives a DA without a hierarchy node an empty scope, so screens can read scope.woredas", () => {
+    const profile = toMeSession(me({ role: "DA", roles: ["Development Agent"] }))!.profile;
+    expect(profile.scope).toEqual({ regions: [], woredas: [], zones: [] });
+    expect([profile.scopeLabel, profile.kebeles, profile.unrestricted]).toEqual(["Own record", undefined, false]);
+  });
+
+  it("names a Supervisor's Woreda in the scope line and gives them no Kebele list", () => {
+    const profile = toMeSession(me({ role: "Supervisor", roles: ["Supervisor"], woreda: { id: "ET010108", name: "Shire" } }))!.profile;
+    expect([profile.roleLabel, profile.scopeLabel, profile.kebeles, profile.scope.woredas]).toEqual(["Supervisor (Woreda)", "Woreda · Shire", undefined, ["ET010108"]]);
+  });
+
+  it("names an Executive's Region as read only", () => {
+    const profile = toMeSession(me({ role: "Executive", roles: ["Executive"], region: { id: "ET01", name: "Tigray" } }))!.profile;
+    expect([profile.scopeLabel, profile.scope]).toEqual(["Region · Tigray (read)", { regions: ["ET01"], zones: [], woredas: [] }]);
+  });
+});
+
+describe("ownArea", () => {
+  const at = { country: null, region: null, zone: null, woreda: { id: "ET010108", name: "Shire" }, kebele: { id: "ET01010805", name: "Lekatit" } };
+  const profile = { roleLabel: "", scopeLabel: "", menu: [], location: at } as unknown as AuthProfile;
+
+  it("gives a DA their Woreda and Kebele, and a Supervisor the Woreda only", () => {
+    useAuthStore.getState().setSession({ id: "da@x", name: "DA", email: "da@x" }, "DA", profile);
+    expect(ownArea()).toEqual({ woreda: "ET010108", kebele: "ET01010805", daId: undefined });
+    useAuthStore.getState().setSession({ id: "s@x", name: "S", email: "s@x" }, "Supervisor", profile);
+    expect(ownArea()).toEqual({ woreda: "ET010108", kebele: undefined, daId: undefined });
+  });
+});
+
+describe("completeProfile", () => {
+  it("gives a stored profile without a scope an empty one, and leaves a full profile as it is", () => {
+    const stored = { roleLabel: "Development Agent", scopeLabel: "Own record", menu: ["/dashboard"] } as unknown as AuthProfile;
+    expect(completeProfile(stored)).toMatchObject({ scope: { regions: [], woredas: [], zones: [] }, unrestricted: false, daId: null, agent: null, menu: ["/dashboard"] });
+
+    const full = toMeSession(daMe())!.profile;
+    expect(completeProfile(full)).toEqual(full);
+    expect(completeProfile(null)).toBeNull();
+  });
+
+  it("is applied when a session is set, so the store never holds a profile without a scope", () => {
+    const stored = { roleLabel: "Development Agent", scopeLabel: "Own record", menu: [] } as unknown as AuthProfile;
+    useAuthStore.getState().setSession({ id: "da@x", name: "DA", email: "da@x" }, "DA", stored);
+    expect(useAuthStore.getState().profile?.scope.woredas).toEqual([]);
+  });
 });
 
 describe("login", () => {
   it("signs in through sso/login, then takes identity and role from /me with the returned token", async () => {
-    fetchMock.mockResolvedValueOnce(loginOk()).mockResolvedValueOnce(json(200, me({ role: "Supervisor", role_label: "Supervisor (Woreda)" })));
+    fetchMock.mockResolvedValueOnce(loginOk()).mockResolvedValueOnce(json(200, me({ role: "Supervisor", roles: ["Supervisor"] })));
 
     const result = await login(" admin@moa.gov.et ", "pw");
 
