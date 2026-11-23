@@ -235,5 +235,5 @@ export function areaLabel(names: Record<string, string>, code: string | null | u
 }
 
 /** code → English name, for showing stored scopes. */
-export const areaNameMap = ({ regions, woredas }: ScopeAreas): Record<string, string> =>
-  Object.fromEntries([...regions, ...woredas].map((a) => [a.code, a.name_en]));
+export const areaNameMap = (areas?: Partial<ScopeAreas> | null): Record<string, string> =>
+  Object.fromEntries([...(areas?.regions ?? []), ...(areas?.woredas ?? [])].map((a) => [a.code, a.name_en]));

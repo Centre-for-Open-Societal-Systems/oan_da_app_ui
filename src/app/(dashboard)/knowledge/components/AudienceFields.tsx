@@ -39,10 +39,10 @@ const codes = (saved: KbAudienceScope[] | undefined, key: "woreda" | "kebele") =
 export function initialAudience(role: Role | null, scope: UserScope | undefined, saved?: KbAudienceScope[]): AudienceDraft {
   const first = saved?.[0];
   if (role === "Supervisor") {
-    return { ...EMPTY, region: scope?.regions[0] ?? "", zone: scope?.zones[0] ?? "", woreda: scope?.woredas[0] ?? "", kebeles: codes(saved, "kebele") };
+    return { ...EMPTY, region: scope?.regions?.[0] ?? "", zone: scope?.zones?.[0] ?? "", woreda: scope?.woredas?.[0] ?? "", kebeles: codes(saved, "kebele") };
   }
   if (role === "Executive") {
-    return { ...EMPTY, region: scope?.regions[0] ?? "", zone: scope?.zones[0] ?? "", woredas: codes(saved, "woreda") };
+    return { ...EMPTY, region: scope?.regions?.[0] ?? "", zone: scope?.zones?.[0] ?? "", woredas: codes(saved, "woreda") };
   }
   if (!first) return { ...EMPTY };
   return { ...EMPTY, region: first.region || "", zone: first.zone || "", woreda: first.woreda || "", kebeles: codes(saved, "kebele") };
@@ -54,8 +54,8 @@ export function audienceScopes(d: AudienceDraft): KbAudienceScope[] {
   if (d.region) base.region = d.region;
   if (d.zone) base.zone = d.zone;
   if (d.woreda) base.woreda = d.woreda;
-  if (d.woreda && d.kebeles.length) return d.kebeles.map((kebele) => ({ ...base, kebele }));
-  if (!d.woreda && d.woredas.length) return d.woredas.map((woreda) => ({ ...base, woreda }));
+  if (d.woreda && d.kebeles?.length) return d.kebeles.map((kebele) => ({ ...base, kebele }));
+  if (!d.woreda && d.woredas?.length) return d.woredas.map((woreda) => ({ ...base, woreda }));
   return d.region ? [base] : [];
 }
 

@@ -128,10 +128,10 @@ export function GrievancesTable() {
 
       <Card className="overflow-hidden p-0 shadow-card">
         {/* Toolbar */}
-        <div className="flex flex-col gap-3.5 px-4 py-3.5 sm:px-5 sm:py-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-3 px-3.5 py-3 sm:px-5 sm:py-4 md:flex-row md:items-center md:justify-between">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="text-[16px] sm:text-[17px] font-semibold text-ink">All Grievances</h2>
+              <h2 className="text-[15px] sm:text-[17px] font-semibold text-ink">All Grievances</h2>
               {activeCard !== "All" && (
                 <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-brand-green border border-brand-green/20">
                   {activeCard}
@@ -157,42 +157,44 @@ export function GrievancesTable() {
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto">
-          {/* Fixed widths sized to content; Details takes the rest. Actions fits View + Upload Evidence on one line. */}
-          <table className="w-full min-w-[960px] table-fixed border-collapse text-left">
+        <div className="overflow-x-auto green-scrollbar">
+          {/* Sized to content with generous Details width; S.No. centered at the start; Actions fits View + Upload Evidence. */}
+          <table className="w-full min-w-[1100px] lg:min-w-[1180px] table-fixed border-collapse text-left">
             <colgroup>
-              <col className="w-[140px]" />
+              <col className="w-[56px] sm:w-[64px]" />
+              <col className="w-[130px] sm:w-[140px]" />
               <col />
-              <col className="w-[130px]" />
-              <col className="w-[160px]" />
-              <col className="w-[135px]" />
-              <col className="w-[130px]" />
-              <col className="w-[240px]" />
+              <col className="w-[160px] sm:w-[175px]" />
+              <col className="w-[160px] sm:w-[180px]" />
+              <col className="w-[130px] sm:w-[140px]" />
+              <col className="w-[150px] sm:w-[165px]" />
+              <col className="w-[230px] sm:w-[250px]" />
             </colgroup>
             <thead>
-              <tr className="border-y border-line bg-surface text-[14px] font-semibold text-slate-500">
-                <th className="whitespace-nowrap px-4 py-3 font-semibold">Ticket ID</th>
-                <th className="px-4 py-3 font-semibold">Details</th>
-                <th className="px-4 py-3 font-semibold">
+              <tr className="border-y border-line bg-surface text-[13.5px] sm:text-[14px] font-semibold text-slate-500">
+                <th className="w-12 sm:w-14 px-3 sm:px-4 py-3 text-center font-semibold whitespace-nowrap">S.No.</th>
+                <th className="whitespace-nowrap px-3.5 sm:px-4 py-3 font-semibold">Ticket ID</th>
+                <th className="px-3.5 sm:px-4 py-3 font-semibold">Details</th>
+                <th className="px-3.5 sm:px-4 py-3 font-semibold">
                   <FilterDropdown label="Category" allLabel="All categories" options={categoryOptions} selected={filters.category} onApply={setFilter("category")} />
                 </th>
-                <th className="px-4 py-3 font-semibold">Location</th>
-                <th className="px-4 py-3 font-semibold">Submitted</th>
-                <th className="px-4 py-3 font-semibold">
+                <th className="px-3.5 sm:px-4 py-3 font-semibold">Location</th>
+                <th className="px-3.5 sm:px-4 py-3 font-semibold">Submitted</th>
+                <th className="px-3.5 sm:px-4 py-3 text-center font-semibold">
                   <FilterDropdown label="Status" allLabel="All statuses" options={statusOptions} selected={filters.status} onApply={setFilter("status")} />
                 </th>
-                <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                <th className="px-3.5 sm:px-4 py-3 text-center font-semibold whitespace-nowrap">Actions</th>
               </tr>
             </thead>
-            <tbody className="text-[14px] text-slate-700">
+            <tbody className="text-[13.5px] sm:text-[14px] text-slate-700">
               {loading && all.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-[13.5px] text-muted">Loading grievances…</td>
+                  <td colSpan={8} className="px-4 py-8 text-center text-[13.5px] text-muted">Loading grievances…</td>
                 </tr>
               )}
               {!loading && pageRows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6">
+                  <td colSpan={8} className="px-4 py-6">
                     {all.length === 0 ? (
                       <EmptyState title={loaded?.error ? "Could not load grievances" : "No grievances yet"} hint={loaded?.error ?? "Grievances you raise show up here."} tone={loaded?.error ? "error" : "muted"} />
                     ) : (
@@ -201,32 +203,54 @@ export function GrievancesTable() {
                   </td>
                 </tr>
               )}
-              {pageRows.map((g) => (
-                <tr key={g.ticketId} className="border-b border-line-soft transition-colors last:border-0 hover:bg-surface">
-                  <td className="truncate whitespace-nowrap px-4 py-4 text-[13px] font-semibold text-ink" title={g.ticketId}>{g.ticketId}</td>
-                  <td className="px-4 py-4">
-                    <p className="truncate text-[14.5px] font-semibold text-ink" title={g.title}>{g.title}</p>
-                    {g.submitter && <p className="mt-1 truncate text-[13px] text-muted" title={g.submitter}>{g.submitter}</p>}
-                    {g.type && <p className="mt-0.5 text-[13px] text-muted">{g.type}</p>}
-                  </td>
-                  <td className="px-4 py-4 text-[13.5px]">{g.category || "-"}</td>
-                  <td className="px-4 py-4 text-[13px] leading-snug text-slate-700">{g.location || <span className="text-muted">-</span>}</td>
-                  <td className="whitespace-nowrap px-4 py-4 text-[13px] leading-snug text-slate-700">
-                    {g.submittedAt.split(", ").slice(0, 2).join(", ")},
-                    <br />
-                    {g.submittedAt.split(", ")[2]}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-4">
-                    <GrievanceStatusPill status={g.status} />
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="flex items-center justify-end gap-2 whitespace-nowrap">
-                      <RowAction onClick={() => setUploading(g)} icon="upload" className="border-brand-border">Upload Evidence</RowAction>
-                      <RowAction onClick={() => setSelected(g)} icon="view" className="border-brand-border">View</RowAction>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {pageRows.map((g, index) => {
+                const sNo = (currentPage - 1) * pageSize + index + 1;
+                return (
+                  <tr key={g.ticketId} className="border-b border-line-soft transition-colors last:border-0 hover:bg-surface">
+                    <td className="whitespace-nowrap px-3 sm:px-4 py-3.5 sm:py-4 text-center text-[13px] font-medium text-slate-500 align-middle">
+                      {sNo}
+                    </td>
+                    <td className="truncate whitespace-nowrap px-3.5 sm:px-4 py-3.5 sm:py-4 text-[13px] font-semibold text-ink align-middle" title={g.ticketId}>
+                      {g.ticketId}
+                    </td>
+                    <td className="px-3.5 sm:px-4 py-3.5 sm:py-4 align-middle">
+                      <p className="text-[13.5px] sm:text-[14px] font-semibold text-ink leading-snug break-words line-clamp-2" title={g.title}>
+                        {g.title}
+                      </p>
+                      {g.submitter && (
+                        <p className="mt-1 truncate text-[12px] sm:text-[12.5px] text-muted" title={g.submitter}>
+                          {g.submitter}
+                        </p>
+                      )}
+                      {g.type && <p className="mt-0.5 text-[12px] text-muted">{g.type}</p>}
+                    </td>
+                    <td className="px-3.5 sm:px-4 py-3.5 sm:py-4 text-[13px] text-slate-700 leading-snug align-middle">
+                      {g.category || "-"}
+                    </td>
+                    <td className="px-3.5 sm:px-4 py-3.5 sm:py-4 text-[13px] leading-snug text-slate-700 align-middle">
+                      {g.location || <span className="text-muted">-</span>}
+                    </td>
+                    <td className="whitespace-nowrap px-3.5 sm:px-4 py-3.5 sm:py-4 text-[12.5px] sm:text-[13px] leading-snug text-slate-700 align-middle">
+                      {g.submittedAt.split(", ").slice(0, 2).join(", ")},
+                      <br />
+                      <span className="text-muted text-[12px]">{g.submittedAt.split(", ")[2]}</span>
+                    </td>
+                    <td className="whitespace-nowrap px-3.5 sm:px-4 py-3.5 sm:py-4 text-center align-middle">
+                      <GrievanceStatusPill status={g.status} />
+                    </td>
+                    <td className="px-3.5 sm:px-4 py-3.5 sm:py-4 text-center align-middle">
+                      <div className="flex items-center justify-center gap-1.5 sm:gap-2 whitespace-nowrap">
+                        <RowAction onClick={() => setUploading(g)} icon="upload" className="border-brand-border text-[12px] sm:text-[13px]">
+                          Upload Evidence
+                        </RowAction>
+                        <RowAction onClick={() => setSelected(g)} icon="view" className="border-brand-border text-[12px] sm:text-[13px]">
+                          View
+                        </RowAction>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

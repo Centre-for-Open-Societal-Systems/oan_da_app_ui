@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useRef, useState, useEffect, type ReactNode } from "react";
 import { Card } from "@/components/ui/Card";
 import type { PillTone } from "@/components/ui/Pill";
 import { statusTone } from "@/features/grievances";
@@ -47,32 +49,111 @@ function iconFor(tone: PillTone): ReactNode {
 
 // Clicking a card filters the table to that status; the "All" card clears it.
 export function GrievanceStats({ cards, active, onSelect }: GrievanceStatsProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [activeDot, setActiveDot] = useState(0);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const handleScroll = () => {
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      if (maxScroll <= 0) {
+        setActiveDot(0);
+        return;
+      }
+      const ratio = el.scrollLeft / maxScroll;
+      if (ratio < 0.33) {
+        setActiveDot(0);
+      } else if (ratio < 0.67) {
+        setActiveDot(1);
+      } else {
+        setActiveDot(2);
+      }
+    };
+
+    el.addEventListener("scroll", handleScroll, { passive: true });
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToDot = (dotIndex: number) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    if (maxScroll <= 0) return;
+    const targetScroll = (dotIndex / 2) * maxScroll;
+    el.scrollTo({ left: targetScroll, behavior: "smooth" });
+    setActiveDot(dotIndex);
+  };
+
   if (cards.length === 0) return null;
+
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 sm:gap-4">
-      {cards.map((card) => {
-        const isAll = card.status === "All";
-        const tone = isAll ? "blue" : statusTone(card.status);
-        const style = TONE_STYLES[tone];
-        const isActive = active === card.status;
-        return (
-          <button key={card.status} type="button" onClick={() => onSelect(card.status)} aria-pressed={isActive} className="text-left">
-            <Card
-              className={cn(
-                "group flex h-full items-center justify-between gap-2 border-l-4 px-3 py-3.5 shadow-card transition-all hover:shadow-md sm:px-4 sm:py-4 cursor-pointer",
-                style.accent,
-                isActive ? "bg-surface ring-2 ring-brand-green/70 shadow-sm" : "hover:-translate-y-0.5",
-              )}
+    <div className="flex flex-col gap-2.5">
+      {/* Horizontally scrollable cards with increased size and NO green scrollbar line */}
+      <div
+        ref={scrollRef}
+        className="flex items-stretch gap-3.5 sm:gap-4 overflow-x-auto no-scrollbar scroll-smooth pt-1 pb-1 -mx-0.5 px-0.5 overscroll-x-contain"
+      >
+        {cards.map((card) => {
+          const isAll = card.status === "All";
+          const tone = isAll ? "blue" : statusTone(card.status);
+          const style = TONE_STYLES[tone];
+          const isActive = active === card.status;
+          return (
+            <button
+              key={card.status}
+              type="button"
+              onClick={() => onSelect(card.status)}
+              aria-pressed={isActive}
+              className="text-left shrink-0 w-[220px] sm:w-[245px] md:w-[265px]"
             >
-              <div className="min-w-0">
-                <p className="truncate text-[13px] leading-snug text-ink-soft sm:text-[14px]" title={card.label}>{card.label}</p>
-                <p className="mt-1.5 text-[22px] font-semibold leading-none text-ink sm:text-[24px]">{card.count}</p>
-              </div>
-              <div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover:-translate-y-1.5 group-hover:scale-[1.15] group-hover:shadow-sm [&>svg]:h-5 [&>svg]:w-5 sm:h-14 sm:w-14 sm:[&>svg]:h-6 sm:[&>svg]:w-6", style.tile)}>{iconFor(tone)}</div>
-            </Card>
-          </button>
-        );
-      })}
+              <Card
+                className={cn(
+                  "group flex h-full items-center justify-between gap-3.5 border-l-[5px] p-4 sm:p-5 shadow-card transition-all duration-200 hover:shadow-md cursor-pointer rounded-2xl min-h-[105px] sm:min-h-[115px]",
+                  style.accent,
+                  isActive ? "bg-surface ring-2 ring-brand-green/70 shadow-sm" : "hover:-translate-y-0.5",
+                )}
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13.5px] sm:text-[14.5px] font-semibold leading-snug text-ink-soft" title={card.label}>
+                    {card.label}
+                  </p>
+                  <p className="mt-1 text-[26px] sm:text-[30px] font-bold leading-none text-ink tracking-tight">
+                    {card.count}
+                  </p>
+                </div>
+                <div
+                  className={cn(
+                    "flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-xl transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover:-translate-y-1.5 group-hover:scale-[1.1] group-hover:shadow-sm [&>svg]:h-6 [&>svg]:w-6 sm:[&>svg]:h-7 sm:[&>svg]:w-7",
+                    style.tile,
+                  )}
+                >
+                  {iconFor(tone)}
+                </div>
+              </Card>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 3 Dots Navigation Indicator */}
+      <div className="flex items-center justify-center gap-2 pt-1 pb-1">
+        {[0, 1, 2].map((idx) => (
+          <button
+            key={idx}
+            type="button"
+            onClick={() => scrollToDot(idx)}
+            aria-label={`Scroll to card set ${idx + 1}`}
+            className={cn(
+              "transition-all duration-300 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green",
+              activeDot === idx
+                ? "w-6 h-2 bg-brand-green shadow-xs"
+                : "w-2 h-2 bg-zinc-300 hover:bg-zinc-400"
+            )}
+          />
+        ))}
+      </div>
     </div>
   );
 }

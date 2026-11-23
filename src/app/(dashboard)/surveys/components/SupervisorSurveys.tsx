@@ -83,7 +83,7 @@ function SurveyResultsView({ initialSurvey }: { initialSurvey?: string }) {
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   // A Supervisor with one Woreda opens the Answers grid on it (the Woreda of their profile).
-  const scopeWoredas = useAuthStore((st) => st.profile?.scope.woredas);
+  const scopeWoredas = useAuthStore((st) => st.profile?.scope?.woredas);
   const ownWoreda = useAuthStore((st) => st.role) === "Supervisor" && scopeWoredas?.length === 1 ? scopeWoredas[0] : "";
 
   useEffect(() => {

@@ -36,35 +36,37 @@ export function UserProfile() {
   };
 
   return (
-    <div className="relative w-fit" ref={dropdownRef}>
+    <div className="relative w-fit sm:min-w-[210px]" ref={dropdownRef}>
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         aria-label="User menu"
         aria-haspopup="true"
         aria-expanded={isOpen}
-        className={`flex items-center gap-1.5 sm:gap-2 md:gap-2.5 py-1 pl-1 pr-2 sm:py-1.5 sm:pl-1.5 sm:pr-3 md:pr-3.5 border transition-all duration-300 bg-white group active:scale-[0.98] shrink-0 ${
+        className={`flex w-full items-center justify-between gap-1.5 sm:gap-2 md:gap-2.5 py-1 pl-1 pr-2 sm:py-1.5 sm:pl-1.5 sm:pr-3 md:pr-3.5 border transition-all duration-300 bg-white group active:scale-[0.98] shrink-0 ${
           isOpen
-            ? "rounded-t-[20px] rounded-b-none border-zinc-200 border-b-transparent shadow-[0_-4px_10px_-5px_rgba(0,0,0,0.05)] relative z-[61]"
+            ? "rounded-t-[20px] rounded-b-none border-zinc-200 border-b-transparent shadow-[0_-4px_10px_-5px_rgba(0,0,0,0.05)] relative z-[61] max-sm:rounded-full max-sm:border-b-zinc-200"
             : "rounded-full border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 hover:shadow-md"
         }`}
       >
-        <div className="relative h-8 w-8 sm:h-9 sm:w-9 shrink-0 overflow-hidden rounded-full shadow-inner">
-          <PersonAvatar />
-        </div>
-        <div className="hidden min-w-0 text-left sm:block">
-          <p
-            title={name}
-            className="max-w-[75px] md:max-w-[100px] lg:max-w-[120px] xl:max-w-[150px] truncate text-[13px] md:text-[14px] font-bold leading-tight text-gray-900"
-          >
-            {name}
-          </p>
-          <p
-            title={profile?.roleLabel ?? ROLE_LABELS[role]}
-            className="hidden md:block max-w-[100px] lg:max-w-[120px] xl:max-w-[150px] truncate mt-0.5 text-[11px] md:text-[12px] font-medium leading-tight text-gray-600"
-          >
-            {profile?.roleLabel ?? ROLE_LABELS[role]}
-          </p>
+        <div className="flex items-center gap-1.5 sm:gap-2 md:gap-2.5 min-w-0">
+          <div className="relative h-8 w-8 sm:h-9 sm:w-9 shrink-0 overflow-hidden rounded-full shadow-inner">
+            <PersonAvatar />
+          </div>
+          <div className="hidden min-w-0 text-left sm:block">
+            <p
+              title={name}
+              className="max-w-[75px] md:max-w-[100px] lg:max-w-[120px] xl:max-w-[150px] truncate text-[13px] md:text-[14px] font-bold leading-tight text-gray-900"
+            >
+              {name}
+            </p>
+            <p
+              title={profile?.roleLabel ?? ROLE_LABELS[role]}
+              className="hidden md:block max-w-[100px] lg:max-w-[120px] xl:max-w-[150px] truncate mt-0.5 text-[11px] md:text-[12px] font-medium leading-tight text-gray-600"
+            >
+              {profile?.roleLabel ?? ROLE_LABELS[role]}
+            </p>
+          </div>
         </div>
         <svg
           className={`h-3.5 w-3.5 shrink-0 text-slate-700 transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${
@@ -80,8 +82,8 @@ export function UserProfile() {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full mt-0 w-full min-w-[210px] bg-white rounded-b-[20px] max-sm:rounded-tl-[20px] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.15)] border border-t-0 border-zinc-200 pt-0 pb-1.5 z-[60] animate-in fade-in duration-200">
-          <div className="h-[1px] bg-zinc-200 w-full mb-1.5" />
+        <div className="absolute left-0 right-0 top-full mt-0 w-full bg-white rounded-b-[20px] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.15)] border border-t-0 border-zinc-200 pt-0 pb-1.5 z-[60] animate-in fade-in duration-200 max-sm:left-auto max-sm:right-0 max-sm:w-56 max-sm:min-w-[210px] max-sm:mt-2 max-sm:rounded-2xl max-sm:border-t">
+          <div className="h-[1px] bg-zinc-200 w-full mb-1.5 max-sm:hidden" />
           
           {/* User info for mobile & small tablets */}
           <div className="px-4 py-2 border-b border-line-soft md:hidden">
