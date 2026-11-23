@@ -94,7 +94,7 @@ function AdvisorView({ advisor }: { advisor: Advisor }) {
 
   return (
     <div className="flex w-full flex-col gap-4">
-      <BackLink href="/advisors" label="Back to Advisors" />
+      <BackLink href="/advisors" label="Back" />
 
       <PageHeader
         title="Advisor Details"
