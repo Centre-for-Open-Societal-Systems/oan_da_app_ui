@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import {
   NotificationsPanel,
@@ -40,10 +40,12 @@ function coverageOf(items: AppNotification[], now = new Date()): LiveCoverage {
   };
 }
 
+const emptySubscribe = () => () => {};
+
 // Header bell: unread badge from the API's meta.unread_count, and the drawer listing the user's notifications.
 export function NotificationBell() {
   const router = useRouter();
-  const [mounted, setMounted] = useState(false);
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const hasSession = useAuthStore((s) => !!s.tokens);
   const [isOpen, setIsOpen] = useState(false);
   const [tab, setTab] = useState<NotificationsTab>("all");
@@ -53,10 +55,6 @@ export function NotificationBell() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [fallbackItems, setFallbackItems] = useState<AppNotification[]>(() => createFallbackNotifications());
   const [liveCoverage, setLiveCoverage] = useState<LiveCoverage | null>(null);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const refreshCount = useCallback(() => {
     listNotifications({ unread: false, limit: PAGE_SIZE })
