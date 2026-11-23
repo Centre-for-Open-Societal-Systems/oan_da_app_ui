@@ -33,21 +33,24 @@ class MemoryStorage implements Storage {
 const json = (body: unknown) => new Response(JSON.stringify(body));
 const fetchMock = vi.fn<typeof fetch>();
 
+// A row of the live response (GET /da-services/farmers, Farmer Registry register).
 const row: ApiFarmer = {
-  farmer_id: "FRM-000103",
-  reg_id: "FR-88341",
-  farmer_name: "Lelise Gudeta",
-  phone: "+251 91 246 3157",
-  kebele: "Bako Tibe",
-  woreda: "ET04-W01",
-  region: "ET04",
-  total_land_hectares: 1.2,
-  total_plots: 2,
-  photo_url: "https://storage.example/photo.jpg",
-  registration_state: "APPROVED",
-  registered_at: "2026-05-12 08:20:00",
-  visit_count: 9,
-  last_visit: "2026-06-12",
+  functional_record_id: "FR-821910965037",
+  internal_record_id: "95162d8b-1f6c-4d0c-beee-2f2e12710b2c",
+  record_name: "Signoff Odk Test",
+  first_name: "Signoff",
+  middle_name: "Odk",
+  last_name: "Test",
+  primary_phone_number: "+251911200001",
+  kebele_name: "Adi Hageray",
+  woreda_name: "Tahtay Adiyabo",
+  zone_name: "North Western",
+  region_name: "Tigray",
+  total_land_area: "2.25",
+  total_plots: "2",
+  record_image_url: "https://storage.example/photo.jpg",
+  created_at: "2026-11-20T04:59:52.512221",
+  last_approved_at: "2026-11-20T05:46:37.876763",
 };
 
 beforeEach(() => {
@@ -60,17 +63,17 @@ beforeEach(() => {
 
 describe("farmer calls", () => {
   it("lists farmers by search text and page", async () => {
-    fetchMock.mockResolvedValueOnce(json({ data: { farmers: [row], total: 1 } }));
+    fetchMock.mockResolvedValueOnce(json({ data: [row], meta: { api_version: "v1", number_of_items: 26, number_of_pages: 3 } }));
 
-    await expect(listFarmers({ searchText: "Lelise", page: 2, pageSize: 20 })).resolves.toEqual({ items: [row], total: 1 });
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/farmers?search_text=Lelise&page=2&page_size=20");
+    await expect(listFarmers({ searchText: "Signoff", page: 2, pageSize: 10 })).resolves.toEqual({ items: [row], total: 26, totalPages: 3 });
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/farmers?search_text=Signoff&current_page=2&page_size=10");
   });
 
-  it("searches for FR- (every farmer) when the search box is empty", async () => {
-    fetchMock.mockResolvedValueOnce(json({ data: { farmers: [], total: 0 } }));
+  it("sends an empty search text when the search box is empty", async () => {
+    fetchMock.mockResolvedValueOnce(json({ data: [], meta: { number_of_items: 0, number_of_pages: 0 } }));
 
-    await listFarmers({ searchText: "  " });
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/farmers?search_text=FR-&page=1&page_size=50");
+    await expect(listFarmers({ searchText: "  " })).resolves.toEqual({ items: [], total: 0, totalPages: 0 });
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/farmers?search_text=&current_page=1&page_size=50");
   });
 
   it("reads the profile, visits and plots of one farmer", async () => {
@@ -102,19 +105,23 @@ describe("farmer calls", () => {
 describe("mapping", () => {
   it("turns a list row into a table farmer", () => {
     expect(apiFarmerToFarmer(row)).toMatchObject({
-      id: "FRM-000103",
-      regId: "FR-88341",
+      id: "FR-821910965037",
+      regId: "FR-821910965037",
       avatar: "https://storage.example/photo.jpg",
+      phone: "+251911200001",
       totalPlots: 2,
-      name: "Lelise Gudeta",
-      kebele: "Bako Tibe",
+      name: "Signoff Odk Test",
+      kebele: "Adi Hageray",
+      woreda: "Tahtay Adiyabo",
+      region: "Tigray",
       crop: "—",
-      landHa: 1.2,
-      registeredAt: "12 May 2026",
-      registeredTime: "08:20",
+      landHa: 2.25,
+      registeredAt: "20 Nov 2026",
+      registeredTime: "05:46",
       status: "Verified",
-      visits: 9,
-      lastVisit: "12 Jun 2026",
+      statusReason: undefined,
+      visits: 0,
+      lastVisit: "—",
     });
   });
 
@@ -150,8 +157,8 @@ describe("mapping", () => {
   });
 
   it("sends the Farmer ID for API farmers and the mock code for sample ones", () => {
-    expect(registryCode(apiFarmerToFarmer(row))).toBe("FR-88341");
-    expect(registryCode(apiFarmerToFarmer({ ...row, reg_id: null }))).toBe("FRM-000103");
+    expect(registryCode(apiFarmerToFarmer(row))).toBe("FR-821910965037");
+    expect(registryCode(apiFarmerToFarmer({ ...row, functional_record_id: null }))).toBe("95162d8b-1f6c-4d0c-beee-2f2e12710b2c");
     expect(registryCode(FARMERS[0])).toMatch(/^FR-\d{5}$/);
   });
 });
@@ -159,9 +166,9 @@ describe("mapping", () => {
 // The collection's saved responses (OAN-DA-Farmers: "List farmers", "Farmer profile", "Farmer plots").
 describe("mapping the collection's example responses", () => {
   it("shows a list row with nulls as dashes and initials, not as 0 ha or a broken photo", () => {
-    const bare: ApiFarmer = { ...row, phone: null, photo_url: null, total_land_hectares: null, total_plots: null };
+    const bare: ApiFarmer = { ...row, primary_phone_number: null, record_image_url: null, total_land_area: null, total_plots: null };
     expect(apiFarmerToFarmer(bare)).toMatchObject({ phone: "", avatar: undefined, landUnknown: true, plotsUnknown: true, landHa: 0, totalPlots: 0 });
-    expect(apiFarmerToFarmer({ ...row, phone: "+251964815374", total_land_hectares: 4.25, total_plots: 2 })).toMatchObject({ phone: "+251964815374", landUnknown: false, plotsUnknown: false, landHa: 4.25, totalPlots: 2 });
+    expect(apiFarmerToFarmer({ ...row, total_land_area: "0.00", total_plots: "0" })).toMatchObject({ landUnknown: false, plotsUnknown: false, landHa: 0, totalPlots: 0 });
   });
 
   it("reads the profile example: phone without +251, no verification_state or primary_crop", () => {

@@ -3,46 +3,78 @@ import { ApiError } from "@/lib/api";
 import { labelOfCode } from "./cropSownSpecApply";
 import type { Farmer, FarmerStatus, Plot, Visit } from "./types";
 
-/** One row of GET /api/v1/da-services/farmers. */
+/**
+ * One row of GET /api/v1/da-services/farmers: a Farmer Registry register row, its display fields as plain keys.
+ * Numbers come as strings ("2.25", "2").
+ */
 export interface ApiFarmer {
-  /** Farmer Registry internal record id; the id every other farmer call takes. */
-  farmer_id: string;
-  /** Registry number shown to people, e.g. "FR-88341". */
-  reg_id: string | null;
-  farmer_name: string;
-  phone: string | null;
-  kebele: string | null;
-  woreda: string | null;
-  region: string | null;
-  total_land_hectares: number | null;
-  /** Number of land records (plots). */
-  total_plots: number | null;
+  /** Farmer-ID shown to people, e.g. "FR-821910965037"; the id every other farmer call takes. */
+  functional_record_id: string | null;
+  /** Registry internal record id (a UUID). */
+  internal_record_id: string;
+  /** Full name, e.g. "Signoff Odk Test". */
+  record_name: string | null;
+  first_name?: string | null;
+  middle_name?: string | null;
+  last_name?: string | null;
+  /** With the +251 prefix. */
+  primary_phone_number: string | null;
+  kebele_name: string | null;
+  woreda_name: string | null;
+  zone_name?: string | null;
+  region_name: string | null;
+  /** Hectares, as a decimal string. */
+  total_land_area: string | number | null;
+  /** Number of land records (plots), as a string. */
+  total_plots: string | number | null;
   /** Time-limited link to the farmer's photo (about an hour); null when there is none. */
-  photo_url: string | null;
-  /** DRAFT, PENDING_APPROVAL, APPROVED … */
-  registration_state: string | null;
-  registered_at: string | null;
-  visit_count?: number;
-  last_visit?: string | null;
+  record_image_url: string | null;
+  created_at?: string | null;
+  created_by?: string | null;
+  last_approved_at: string | null;
+  last_approved_by?: string | null;
+  birth_date?: string | null;
+  gender?: string | null;
+  education_level?: string | null;
+  marital_status?: string | null;
+  foundational_id?: string | null;
+  link_internal_record_id?: string | null;
+  link_foundational_id?: string | null;
 }
 
+/** The Farmer-ID of a list row, the internal record id when the registry sent none. */
+export const apiFarmerId = (f: ApiFarmer) => f.functional_record_id || f.internal_record_id;
+
 export interface FarmerQuery {
-  /** Name, Farmer-ID or phone. The list always needs one: "FR-" matches every farmer. */
+  /** Name, Farmer-ID or phone, as typed in the search box; empty lists every farmer in scope. */
   searchText?: string;
   /** 1-based. */
   page?: number;
-  /** Default 50, at most 500. */
+  /** Default 50, at most 1000. */
   pageSize?: number;
 }
 
-/** What the list sends as the search text to get every farmer: each Farmer-ID starts with it. */
+/** The search text the list used to send for "every farmer"; kept so callers can tell a real search from none. */
 export const ALL_FARMERS_SEARCH = "FR-";
 
-/** GET /farmers?search_text=&page=&page_size=: farmers in the caller's scope (a DA's assigned kebele, a supervisor's woreda, all for Admin). */
-export async function listFarmers({ searchText, page = 1, pageSize = 50 }: FarmerQuery = {}): Promise<{ items: ApiFarmer[]; total: number }> {
-  const query = new URLSearchParams({ search_text: searchText?.trim() || ALL_FARMERS_SEARCH, page: String(page), page_size: String(pageSize) });
-  const res = await authRequest<{ data: { farmers: ApiFarmer[]; total: number } }>(`/da-services/farmers?${query}`);
-  return { items: res.data.farmers, total: res.data.total };
+export interface FarmerPage {
+  items: ApiFarmer[];
+  /** meta.number_of_items: rows across all pages. */
+  total: number;
+  /** meta.number_of_pages. */
+  totalPages: number;
+}
+
+/**
+ * GET /farmers?search_text=&current_page=&page_size=: one page of the Farmer Registry register in the caller's scope
+ * (a DA's kebele, a supervisor's woreda, all for Admin). Answers `{ data: ApiFarmer[], meta: { number_of_items, number_of_pages } }`.
+ */
+export async function listFarmers({ searchText, page = 1, pageSize = 50 }: FarmerQuery = {}): Promise<FarmerPage> {
+  const query = new URLSearchParams({ search_text: searchText?.trim() ?? "", current_page: String(page), page_size: String(pageSize) });
+  const res = await authRequest<{ data: ApiFarmer[] | null; meta?: { number_of_items?: number; number_of_pages?: number } }>(`/da-services/farmers?${query}`);
+  const items = res.data ?? [];
+  const total = res.meta?.number_of_items ?? items.length;
+  return { items, total, totalPages: res.meta?.number_of_pages ?? Math.max(1, Math.ceil(total / pageSize)) };
 }
 
 /** The text to show for a failed farmer call, following the backend's error table. */
@@ -258,33 +290,47 @@ export function toFarmerStatus(state: string | null): { status: FarmerStatus; re
   return { status: "Pending", reason: humanize(state) };
 }
 
-/** A list row as a table Farmer. The list carries no crop or livestock yet, so those read "—". */
+/** "2.25" / 2.25 → 2.25; null, "" or not a number → null. */
+function toNumber(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * A list row as a table Farmer. The register row carries no registration state, visits, crop or livestock: the status
+ * reads as the default (no state), visits as 0 and the rest as "—". "Registered" shows when the record was last approved.
+ */
 export function apiFarmerToFarmer(f: ApiFarmer): Farmer {
-  const registered = splitDateTime(f.registered_at);
-  const { status, reason } = toFarmerStatus(f.registration_state);
+  const approved = splitDateTime(f.last_approved_at);
+  const { status, reason } = toFarmerStatus(null);
+  const land = toNumber(f.total_land_area);
+  const plots = toNumber(f.total_plots);
+  const id = apiFarmerId(f);
+  const name = f.record_name?.trim() || [f.first_name, f.middle_name, f.last_name].filter(Boolean).join(" ");
   return {
-    id: f.farmer_id,
-    regId: f.reg_id ?? undefined,
-    avatar: f.photo_url ?? undefined,
-    name: f.farmer_name,
+    id,
+    regId: f.functional_record_id ?? undefined,
+    avatar: f.record_image_url ?? undefined,
+    name,
     email: "",
-    phone: withCountryCode(f.phone),
-    landUnknown: f.total_land_hectares === null || f.total_land_hectares === undefined,
-    plotsUnknown: f.total_plots === null || f.total_plots === undefined,
-    kebele: f.kebele ?? "—",
-    woreda: f.woreda ?? "",
-    region: f.region ?? "",
+    phone: withCountryCode(f.primary_phone_number),
+    landUnknown: land === null,
+    plotsUnknown: plots === null,
+    kebele: f.kebele_name ?? "—",
+    woreda: f.woreda_name ?? "",
+    region: f.region_name ?? "",
     crop: "—",
-    landHa: f.total_land_hectares ?? 0,
+    landHa: land ?? 0,
     livestock: "—",
     livestockHeads: 0,
-    registeredAt: registered.date,
-    registeredTime: registered.time,
+    registeredAt: approved.date,
+    registeredTime: approved.time,
     status,
     statusReason: reason,
-    totalPlots: f.total_plots ?? 0,
-    visits: f.visit_count ?? 0,
-    lastVisit: splitDateTime(f.last_visit ?? null).date,
+    totalPlots: plots ?? 0,
+    visits: 0,
+    lastVisit: "—",
   };
 }
 

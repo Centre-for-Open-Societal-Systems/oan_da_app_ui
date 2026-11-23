@@ -84,7 +84,7 @@ export function FarmersTable() {
   const [isBatchOpen, setIsBatchOpen] = useState(false);
   // GET /farmers is scoped by the backend: a DA gets farmers in their kebele, a supervisor in their woreda, Admin all.
   // Search and paging run on the server; the column filters only narrow the page on screen.
-  const [loaded, setLoaded] = useState<{ key: string; rows: Farmer[]; total: number; error: string | null } | null>(null);
+  const [loaded, setLoaded] = useState<{ key: string; rows: Farmer[]; total: number; totalPages: number; error: string | null } | null>(null);
   const [searchText, setSearchText] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
@@ -102,8 +102,8 @@ export function FarmersTable() {
     let current = true;
     const key = `${searchText}|${page}|${pageSize}`;
     listFarmers({ searchText, page, pageSize })
-      .then(({ items, total }) => current && setLoaded({ key, rows: items.map(apiFarmerToFarmer), total, error: null }))
-      .catch((err: unknown) => current && setLoaded({ key, rows: [], total: 0, error: describeFarmerError(err) }));
+      .then(({ items, total, totalPages }) => current && setLoaded({ key, rows: items.map(apiFarmerToFarmer), total, totalPages, error: null }))
+      .catch((err: unknown) => current && setLoaded({ key, rows: [], total: 0, totalPages: 0, error: describeFarmerError(err) }));
     return () => {
       current = false;
     };
@@ -161,6 +161,7 @@ export function FarmersTable() {
     page,
     pageSize,
     total: loaded?.total ?? 0,
+    totalPages: loaded?.totalPages || undefined,
     onPageChange: setPage,
     onPageSizeChange: (size: number) => {
       setPageSize(size);
