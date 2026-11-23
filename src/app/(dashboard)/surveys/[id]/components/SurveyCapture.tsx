@@ -13,7 +13,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { BackLink } from "@/components/ui/BackLink";
 import { cn, todayIso } from "@/lib/utils";
 import { useAuthStore } from "@/store/useAuthStore";
-import { describeFarmerError, listFarmers, type ApiFarmer } from "@/features/farmers";
+import { apiFarmerId, describeFarmerError, listFarmers, type ApiFarmer } from "@/features/farmers";
 import { listAgents, type ApiAgent } from "@/features/agents";
 import {
   RESPONSE_TONE,
@@ -90,9 +90,9 @@ export function SurveyCapture({ id }: { id: string }) {
 
   const answered = useMemo(() => new Set(task?.answered ?? []), [task]);
   // Capture needs a Kebele, so farmers without one are not offered.
-  const capturable = useMemo(() => (farmers ?? []).filter((f) => f.kebele), [farmers]);
-  const farmer = capturable.find((f) => f.farmer_id === farmerId);
-  const isAnsweredFarmer = (f: ApiFarmer) => answered.has(f.farmer_id) || (f.reg_id ? answered.has(f.reg_id) : false);
+  const capturable = useMemo(() => (farmers ?? []).filter((f) => f.kebele_name), [farmers]);
+  const farmer = capturable.find((f) => apiFarmerId(f) === farmerId);
+  const isAnsweredFarmer = (f: ApiFarmer) => answered.has(apiFarmerId(f)) || answered.has(f.internal_record_id);
   const duplicate = Boolean(farmer && isAnsweredFarmer(farmer));
 
   const parameters = useMemo(() => task?.parameters ?? [], [task]);
@@ -124,7 +124,7 @@ export function SurveyCapture({ id }: { id: string }) {
   const needsCollector = !isDA && !daId;
 
   // p2 / p3 are pre-filled from the picked farmer; the server overwrites them with the resolved farmer's values.
-  const prefillFor = (p: Parameter) => (p.prefill === "Farmer Registry" ? farmer?.reg_id ?? farmer?.farmer_id ?? "" : p.prefill === "DA assignment" ? farmer?.kebele ?? "" : "");
+  const prefillFor = (p: Parameter) => (p.prefill === "Farmer Registry" ? (farmer ? apiFarmerId(farmer) : "") : p.prefill === "DA assignment" ? farmer?.kebele_name ?? "" : "");
   const valueOf = (p: Parameter) => (p.type === "auto" ? prefillFor(p) : answers[p.id]);
   const isAnswered = (p: Parameter) => {
     const v = valueOf(p);
@@ -175,10 +175,10 @@ export function SurveyCapture({ id }: { id: string }) {
     try {
       const state: ResponseStatus = given === "declined" ? "Declined" : "Synced";
       await submitSurveyResponse(task.id, {
-        farmer_id: farmer.farmer_id,
+        farmer_id: apiFarmerId(farmer),
         consent: given,
         answers: body,
-        ...(farmer.kebele ? { kebele: farmer.kebele } : {}),
+        ...(farmer.kebele_name ? { kebele: farmer.kebele_name } : {}),
         sync_state: state,
         client_op_id: opId.current,
         ...(!isDA && daId ? { da_id: daId } : {}),
@@ -337,8 +337,8 @@ export function SurveyCapture({ id }: { id: string }) {
             <Select id="farmer" value={farmerId} disabled={submitting || readOnly} onChange={(e) => { setFarmerId(e.target.value); setStatus(null); resetCapture(); }} className="mt-1.5 w-full">
               <option value="">{farmers ? (capturable.length === 0 ? "No farmer in your Kebele" : "Select farmer....") : "Loading farmers…"}</option>
               {capturable.map((f) => (
-                <option key={f.farmer_id} value={f.farmer_id}>
-                  {f.farmer_name}{f.reg_id ? ` (${f.reg_id})` : ""} — {f.kebele}{isAnsweredFarmer(f) ? " · answered" : ""}
+                <option key={apiFarmerId(f)} value={apiFarmerId(f)}>
+                  {f.record_name}{f.functional_record_id ? ` (${f.functional_record_id})` : ""} — {f.kebele_name}{isAnsweredFarmer(f) ? " · answered" : ""}
                 </option>
               ))}
             </Select>
@@ -348,8 +348,8 @@ export function SurveyCapture({ id }: { id: string }) {
 
           {farmer && (
             <dl className="mt-3 space-y-1.5 rounded-lg border border-line bg-surface p-3 text-[13px]">
-              <div className="flex justify-between items-center gap-3"><dt className="text-ink-soft">Farmer ID</dt><dd className="font-mono text-[12px] font-medium text-ink">{farmer.reg_id ?? farmer.farmer_id}</dd></div>
-              <div className="flex justify-between items-center gap-3"><dt className="text-ink-soft">Kebele</dt><dd className="font-medium text-ink">{farmer.kebele}</dd></div>
+              <div className="flex justify-between items-center gap-3"><dt className="text-ink-soft">Farmer ID</dt><dd className="font-mono text-[12px] font-medium text-ink">{apiFarmerId(farmer)}</dd></div>
+              <div className="flex justify-between items-center gap-3"><dt className="text-ink-soft">Kebele</dt><dd className="font-medium text-ink">{farmer.kebele_name}</dd></div>
             </dl>
           )}
 
@@ -383,22 +383,22 @@ export function SurveyCapture({ id }: { id: string }) {
                 {status === "Synced" ? "Response submitted successfully" : "Response queued for sync"}
               </h2>
               <p className="mt-1.5 max-w-md text-[13.5px] sm:text-[14px] text-ink-soft leading-relaxed">
-                Response for <strong className="font-semibold text-ink">{farmer?.farmer_name ?? "the farmer"}</strong> is stored and counted toward <strong className="font-semibold text-ink">{task.name}</strong>. A second response for this farmer is blocked.
+                Response for <strong className="font-semibold text-ink">{farmer?.record_name ?? "the farmer"}</strong> is stored and counted toward <strong className="font-semibold text-ink">{task.name}</strong>. A second response for this farmer is blocked.
               </p>
 
               {/* Summary metadata card */}
               <div className="mt-6 w-full max-w-md rounded-xl border border-line bg-surface p-4 text-left text-[13px] shadow-xs space-y-2.5">
                 <div className="flex justify-between items-center text-ink-soft">
                   <span>Farmer</span>
-                  <span className="font-medium text-ink">{farmer?.farmer_name}</span>
+                  <span className="font-medium text-ink">{farmer?.record_name}</span>
                 </div>
                 <div className="flex justify-between items-center text-ink-soft">
                   <span>Farmer ID</span>
-                  <span className="font-mono text-ink text-[12px]">{farmer?.reg_id ?? farmer?.farmer_id}</span>
+                  <span className="font-mono text-ink text-[12px]">{farmer ? apiFarmerId(farmer) : ""}</span>
                 </div>
                 <div className="flex justify-between items-center text-ink-soft">
                   <span>Kebele</span>
-                  <span className="font-medium text-ink">{farmer?.kebele}</span>
+                  <span className="font-medium text-ink">{farmer?.kebele_name}</span>
                 </div>
                 <div className="flex justify-between items-center text-ink-soft pt-1.5 border-t border-line-soft">
                   <span>Status</span>
@@ -451,7 +451,7 @@ export function SurveyCapture({ id }: { id: string }) {
               <div className="flex flex-col">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-line px-4 py-3.5 sm:px-5">
                   <div>
-                    <h2 className="text-[15px] sm:text-[16px] font-semibold text-ink">Response for {farmer!.farmer_name}</h2>
+                    <h2 className="text-[15px] sm:text-[16px] font-semibold text-ink">Response for {farmer!.record_name}</h2>
                     <p className="text-[12px] sm:text-[12.5px] text-ink-soft">Use Previous / Next or the question numbers. Questions marked <span className="text-danger">*</span> must be answered.</p>
                   </div>
                   <div className="flex flex-col items-start sm:items-end gap-1.5 shrink-0">

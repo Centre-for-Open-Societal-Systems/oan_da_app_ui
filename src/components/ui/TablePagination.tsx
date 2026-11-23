@@ -50,6 +50,8 @@ interface TablePaginationProps {
   pageSize: number;
   /** Number of rows across all pages. */
   total: number;
+  /** Page count as the server reports it; worked out from total and pageSize when absent. */
+  totalPages?: number;
   /** Noun shown after the total, e.g. "farmers". */
   itemLabel: string;
   onPageChange: (page: number) => void;
@@ -219,8 +221,8 @@ function PageSizeDropdown({
 }
 
 // Table footer: "Showing [10] of N items" on the left, Previous · 1 2 3 … 10 · Next on the right.
-export function TablePagination({ page, pageSize, total, itemLabel, onPageChange, onPageSizeChange }: TablePaginationProps) {
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+export function TablePagination({ page, pageSize, total, totalPages: serverPages, itemLabel, onPageChange, onPageSizeChange }: TablePaginationProps) {
+  const totalPages = Math.max(1, serverPages ?? Math.ceil(total / pageSize));
 
   // Every list shows its footer (even a single page) so the total and page size are always visible; only an empty list has none.
   if (total === 0) return null;
