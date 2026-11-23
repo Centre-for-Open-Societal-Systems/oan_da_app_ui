@@ -56,7 +56,7 @@ function kebeleSearch(woredas: string[], href: string) {
 // Components never import features, and the server layout cannot pass a function, so the header gets its searches here.
 export function DashboardHeader({ notifications }: { notifications: ReactNode }) {
   const role = useAuthStore((s) => s.role);
-  const scopeWoredas = useAuthStore((s) => s.profile?.scope.woredas);
+  const scopeWoredas = useAuthStore((s) => s.profile?.scope?.woredas);
   const agentWoreda = useAuthStore((s) => s.profile?.agent?.woreda);
   const woredaKey = [...(scopeWoredas ?? []), ...(typeof agentWoreda === "string" && agentWoreda ? [agentWoreda] : [])].join(",");
   // There is no Kebele page: a Supervisor lands on Agent Assignment (Kebele coverage), everyone else on their farmers.

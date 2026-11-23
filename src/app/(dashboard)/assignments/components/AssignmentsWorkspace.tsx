@@ -100,7 +100,7 @@ export function AssignmentsWorkspace() {
   const canAssign = role === "Supervisor" || role === "Admin";
   const isDA = role === "DA";
   // A Supervisor with one Woreda in scope (from /me) assigns inside it only, so the form starts on it and keeps it.
-  const scopeWoredas = useAuthStore((s) => s.profile?.scope.woredas);
+  const scopeWoredas = useAuthStore((s) => s.profile?.scope?.woredas);
   const ownWoreda = role === "Supervisor" && scopeWoredas?.length === 1 ? scopeWoredas[0] : "";
   const [reload, setReload] = useState(0);
   const [list, setList] = useState<Loaded<{ rows: AgentAssignment[]; summary: AssignmentSummary | null }> & { key: number } | null>(null);

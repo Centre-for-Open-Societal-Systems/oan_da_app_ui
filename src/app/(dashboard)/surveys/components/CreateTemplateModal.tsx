@@ -61,7 +61,7 @@ const agentLabel =(a: ApiAgent) => `${a.full_name} · ${a.da_id}`;
 // Supervisor / Admin: create = publish (POST /surveys/templates), or edit an existing template (PATCH).
 export function CreateTemplateModal({ onClose, onSaved, template }: CreateTemplateModalProps) {
   const role = useAuthStore((s) => s.role);
-  const scopeWoredas = useAuthStore((s) => s.profile?.scope.woredas ?? NO_WOREDAS);
+  const scopeWoredas = useAuthStore((s) => s.profile?.scope?.woredas ?? NO_WOREDAS);
   // The Woreda as the Supervisor's own profile page shows it (the /me scope label).
   const scopeLabel = useAuthStore((s) => s.profile?.scopeLabel ?? "");
   const editing = Boolean(template);

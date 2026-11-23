@@ -152,7 +152,7 @@ export function SupervisorDashboard() {
   useEffect(() => {
     let current = true;
     loadScopeAreas()
-      .then((areas) => current && setAreaNames(new Map(areas.woredas.map((w) => [w.code, w.name_en]))))
+      .then((areas) => current && setAreaNames(new Map((areas?.woredas ?? []).map((w) => [w.code, w.name_en]))))
       .catch(() => undefined);
     return () => {
       current = false;
