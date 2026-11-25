@@ -79,14 +79,14 @@ export function WeeklyAttendanceTable({
   const isCurrentWeek = effectiveWeekStart === getCurrentWeekStartIso();
 
   return (
-    <Card className="overflow-hidden p-0 shadow-card border border-line bg-white">
+    <Card className="overflow-hidden p-0 shadow-card border border-line bg-white rounded-2xl">
       {/* Header */}
-      <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between border-b border-line-soft">
+      <div className="flex flex-col gap-3 p-4 sm:p-5 sm:flex-row sm:items-center sm:justify-between border-b border-line-soft">
         <div>
-          <h2 className="text-[16px] font-semibold text-ink">
+          <h2 className="text-[15px] sm:text-[16px] font-bold text-ink">
             Weekly attendance
           </h2>
-          <p className="mt-0.5 text-[12.5px] text-ink-soft">
+          <p className="mt-0.5 text-[12px] sm:text-[12.5px] text-ink-soft">
             One row per agent · {selectedWeekLabel}. Times show check-in.
           </p>
         </div>
@@ -200,10 +200,10 @@ export function WeeklyAttendanceTable({
       </div>
 
       {/* Footer */}
-      <div className="flex flex-wrap items-center justify-between border-t border-line-soft px-4 py-3 text-[12.5px]">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2.5 border-t border-line-soft px-4 sm:px-5 py-3 text-[12px] sm:text-[12.5px]">
+        <div className="flex flex-wrap items-center gap-2.5 sm:gap-3.5">
           <span className="text-muted font-medium">
-            {isCurrentWeek ? "Team this week so far" : `Team summary · ${selectedWeekLabel}`}
+            {isCurrentWeek ? "Team this week so far:" : `Team summary · ${selectedWeekLabel}:`}
           </span>
           <span className="text-brand-green font-semibold">
             Checked in: {weeklyStats.checkedIn}
@@ -213,8 +213,8 @@ export function WeeklyAttendanceTable({
           </span>
         </div>
 
-        <div className="font-semibold text-brand-green">
-          Attendance rate {weeklyStats.rate}%
+        <div className="font-bold text-brand-green">
+          Attendance rate: {weeklyStats.rate}%
         </div>
       </div>
 

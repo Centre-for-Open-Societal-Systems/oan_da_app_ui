@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { Checkbox } from "@/components/ui/Checkbox";
+import { DatePicker } from "@/components/ui/DatePicker";
 import { MultiSelectDropdown } from "@/components/ui/MultiSelectDropdown";
 import { todayIso } from "@/lib/utils";
 import { AreaPicker, type AreaSelection } from "@/features/geo";
@@ -152,16 +153,19 @@ export function CreateTemplateModal({ onClose, onSaved, template }: CreateTempla
       title={editing ? "Edit Template" : "Create Template"}
       subtitle={editing ? `${template!.name} · template ${template!.templateVersion}` : "Publishing opens the survey for the DAs right away — there is no separate draft or approval step."}
       size="xl"
+      bodyClassName="p-4 sm:p-6 max-h-[75vh] overflow-y-auto"
       footer={
-        <>
-          <Button type="button" variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button type="button" variant="brand" onClick={submit} disabled={saving}>
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 w-full">
+          <Button type="button" variant="outline" className="h-10 sm:h-10.5 rounded-xl px-5 font-semibold border-line justify-center" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button type="button" variant="brand" className="h-10 sm:h-10.5 rounded-xl px-6 font-semibold shadow-xs justify-center" onClick={submit} disabled={saving}>
             {saving ? (editing ? "Saving…" : "Publishing…") : editing ? "Save changes" : "Publish to DAs"}
           </Button>
-        </>
+        </div>
       }
     >
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 sm:gap-5">
         {error && <Banner tone="error" title={editing ? "Couldn't save the template" : "Couldn't publish the template"} onDismiss={() => setError(null)}>{error}</Banner>}
         {showErrors && errors.length > 0 && (
           <Banner tone="error" title="Fix these before publishing">
@@ -174,23 +178,52 @@ export function CreateTemplateModal({ onClose, onSaved, template }: CreateTempla
           </Banner>
         )}
 
+        {/* Template Basic Info */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField label="Template name" htmlFor="tpl-name" required hint="At least 3 characters." hintTone={draft.name.trim().length > 0 && draft.name.trim().length < 3 ? "error" : "muted"}>
-            <Input id="tpl-name" className="h-10" value={draft.name} onChange={(e) => patch({ name: e.target.value })} placeholder="e.g. Meher input satisfaction" />
+            <Input id="tpl-name" className="h-10 sm:h-10.5 rounded-xl" value={draft.name} onChange={(e) => patch({ name: e.target.value })} placeholder="e.g. Meher input satisfaction" />
           </FormField>
           <FormField label="Survey type" htmlFor="tpl-type" required hint={editing ? "Can't be changed after publishing." : undefined}>
-            <Select id="tpl-type" className="h-10" value={draft.type} disabled={editing} onChange={(e) => patch({ type: e.target.value as TemplateInput["type"] })}>
+            <Select id="tpl-type" className="h-10 sm:h-10.5 rounded-xl font-medium" value={draft.type} disabled={editing} onChange={(e) => patch({ type: e.target.value as TemplateInput["type"] })}>
               {SURVEY_TYPES.map((t) => <option key={t}>{t}</option>)}
             </Select>
           </FormField>
         </div>
 
+        {/* Collection Window with Modern Animated DatePicker */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField label="Opens" htmlFor="tpl-open" required hint={showErrors && !draft.open ? "Pick the date the survey opens." : undefined} hintTone="error">
-            <Input id="tpl-open" type="date" min={editing ? undefined : todayIso()} className="h-10" value={draft.open} onChange={(e) => patch({ open: e.target.value })} />
+            <DatePicker
+              id="tpl-open"
+              value={draft.open}
+              minDate={editing ? undefined : todayIso()}
+              onChange={(date) => {
+                patch({ open: date });
+                if (draft.close && date && draft.close < date) {
+                  patch({ open: date, close: date });
+                }
+              }}
+              placeholder="Select open date"
+              className="h-10 sm:h-10.5 rounded-xl"
+              clearable={false}
+            />
           </FormField>
-          <FormField label="Closes" htmlFor="tpl-close" required hint={showErrors && !draft.close ? "Pick the date the survey closes." : "On or after the Opens date."} hintTone={(showErrors && !draft.close) || (draft.close !== "" && draft.close < draft.open) ? "error" : "muted"}>
-            <Input id="tpl-close" type="date" className="h-10" value={draft.close} min={draft.open || undefined} onChange={(e) => patch({ close: e.target.value })} />
+          <FormField
+            label="Closes"
+            htmlFor="tpl-close"
+            required
+            hint={showErrors && !draft.close ? "Pick the date the survey closes." : "On or after the Opens date."}
+            hintTone={(showErrors && !draft.close) || (draft.close !== "" && draft.close < draft.open) ? "error" : "muted"}
+          >
+            <DatePicker
+              id="tpl-close"
+              value={draft.close}
+              minDate={draft.open || (editing ? undefined : todayIso())}
+              onChange={(date) => patch({ close: date })}
+              placeholder="Select close date"
+              className="h-10 sm:h-10.5 rounded-xl"
+              clearable={false}
+            />
           </FormField>
         </div>
 
@@ -207,11 +240,11 @@ export function CreateTemplateModal({ onClose, onSaved, template }: CreateTempla
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {editing && (
             <FormField label="Woreda" htmlFor="tpl-woreda" hint="Can't be changed after publishing.">
-              <Input id="tpl-woreda" className="h-10" value={draft.woreda || "—"} disabled readOnly />
+              <Input id="tpl-woreda" className="h-10 sm:h-10.5 rounded-xl bg-surface-muted" value={draft.woreda || "—"} disabled readOnly />
             </FormField>
           )}
           <FormField label="Assign to" htmlFor="tpl-mode" required>
-            <Select id="tpl-mode" className="h-10" value={draft.assignmentMode} onChange={(e) => patch({ assignmentMode: e.target.value as TemplateInput["assignmentMode"] })}>
+            <Select id="tpl-mode" className="h-10 sm:h-10.5 rounded-xl font-medium" value={draft.assignmentMode} onChange={(e) => patch({ assignmentMode: e.target.value as TemplateInput["assignmentMode"] })}>
               <option value="Woreda">Every DA in the Woreda</option>
               <option value="Selected">Selected DAs only</option>
             </Select>
@@ -231,45 +264,66 @@ export function CreateTemplateModal({ onClose, onSaved, template }: CreateTempla
           </FormField>
         )}
 
-        <fieldset>
-          <legend className="text-[14px] font-medium text-ink">Languages <span className="text-danger">*</span></legend>
-          <div className="mt-2 flex flex-wrap gap-5">
+        {/* Languages Selection */}
+        <fieldset className="rounded-xl border border-line-soft bg-surface-subtle/30 p-3.5 sm:p-4">
+          <legend className="text-[13px] sm:text-[13.5px] font-semibold text-ink px-1">
+            Languages <span className="text-danger">*</span>
+          </legend>
+          <div className="mt-1.5 flex flex-wrap gap-4 sm:gap-6">
             {SURVEY_LANGUAGES.map((lang) => (
-              <label key={lang} className="flex cursor-pointer items-center gap-2 text-[13.5px] text-slate-700">
-                <Checkbox checked={draft.languages.includes(lang)} disabled readOnly /> {lang}
+              <label key={lang} className="flex cursor-pointer items-center gap-2 text-[13px] sm:text-[13.5px] font-medium text-slate-700 select-none">
+                <Checkbox checked={draft.languages.includes(lang)} disabled readOnly />
+                <span>{lang}</span>
               </label>
             ))}
           </div>
         </fieldset>
 
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-[14px] font-medium text-ink">Questions <span className="text-danger">*</span></p>
-            <span className="text-[12.5px] text-muted">Consent, Farmer ID and Kebele are added automatically</span>
+        {/* Questions Section */}
+        <div className="flex flex-col gap-3.5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 border-t border-line-soft pt-3">
+            <p className="text-[14px] sm:text-[15px] font-bold text-ink">
+              Questions <span className="text-danger">*</span>
+            </p>
+            <span className="text-[12px] sm:text-[12.5px] text-muted">
+              Consent, Farmer ID and Kebele are added automatically
+            </span>
           </div>
 
           {draft.questions.map((q, i) => {
             const withOptions = QUESTION_TYPES.find((qt) => qt.value === q.type)?.hasOptions;
             return (
-              <div key={q.id} className="flex flex-col gap-3 rounded-xl border border-line bg-surface-alt p-3.5">
+              <div key={q.id} className="flex flex-col gap-3 rounded-2xl border border-line bg-surface/40 p-4 sm:p-4.5 shadow-2xs transition-all hover:border-slate-300">
                 <div className="flex items-center justify-between">
-                  <span className="rounded-full bg-brand-mint px-2.5 py-0.5 text-[12px] font-semibold text-brand-green">Q{i + 1}</span>
+                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-brand-wash px-2.5 py-1 text-[12px] font-bold text-brand-green border border-brand-green/20">
+                    Question {i + 1}
+                  </span>
                   {draft.questions.length > 1 && (
-                    <button type="button" onClick={() => patch({ questions: draft.questions.filter((o) => o.id !== q.id) })} className="text-[12.5px] font-medium text-danger hover:underline">
-                      Remove
+                    <button
+                      type="button"
+                      onClick={() => patch({ questions: draft.questions.filter((o) => o.id !== q.id) })}
+                      className="inline-flex items-center gap-1 text-[12px] sm:text-[12.5px] font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2 py-1 rounded-lg transition-colors"
+                    >
+                      <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                      </svg>
+                      <span>Remove</span>
                     </button>
                   )}
                 </div>
+
                 <FormField label="Question (English)" htmlFor={`tpl-q-${q.id}`} required>
-                  <Input id={`tpl-q-${q.id}`} className="h-10 bg-white" value={q.prompt} onChange={(e) => patchQuestion(q.id, { prompt: e.target.value })} placeholder="What should the DA ask the farmer?" />
+                  <Input id={`tpl-q-${q.id}`} className="h-10 sm:h-10.5 rounded-xl bg-white" value={q.prompt} onChange={(e) => patchQuestion(q.id, { prompt: e.target.value })} placeholder="What should the DA ask the farmer?" />
                 </FormField>
+
                 {translationLanguages.length > 0 && (
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {translationLanguages.map((lang) => (
                       <FormField key={lang} label={`Question (${lang})`} htmlFor={`tpl-q-${q.id}-${lang}`} hint="Optional · DAs see English when empty">
                         <Input
                           id={`tpl-q-${q.id}-${lang}`}
-                          className="h-10 bg-white"
+                          className="h-10 sm:h-10.5 rounded-xl bg-white"
                           value={q.translations[lang] ?? ""}
                           onChange={(e) => patchQuestion(q.id, { translations: { ...q.translations, [lang]: e.target.value } })}
                         />
@@ -277,13 +331,22 @@ export function CreateTemplateModal({ onClose, onSaved, template }: CreateTempla
                     ))}
                   </div>
                 )}
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-[200px_1fr]">
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-[220px_1fr] items-end">
                   <FormField label="Answer type" htmlFor={`tpl-qt-${q.id}`}>
-                    <Select id={`tpl-qt-${q.id}`} className="h-10 bg-white" value={q.type} onChange={(e) => patchQuestion(q.id, { type: e.target.value as TemplateQuestion["type"] })}>
+                    <Select id={`tpl-qt-${q.id}`} className="h-10 sm:h-10.5 rounded-xl bg-white font-medium" value={q.type} onChange={(e) => patchQuestion(q.id, { type: e.target.value as TemplateQuestion["type"] })}>
                       {questionTypesFor(q.type).map((qt) => <option key={qt.value} value={qt.value}>{qt.label}</option>)}
                     </Select>
                   </FormField>
+
+                  <div className="pb-0.5">
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-line bg-white px-3.5 py-2.5 text-[13px] font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs select-none">
+                      <Checkbox checked={q.required} onChange={() => patchQuestion(q.id, { required: !q.required })} />
+                      <span>Required question</span>
+                    </label>
+                  </div>
                 </div>
+
                 {withOptions && (
                   <FormField label="Answers" htmlFor={`tpl-qo-${q.id}-0`} required hint={q.type === "multi" ? "Fill at least two. The farmer can pick more than one." : "Fill at least two. The farmer picks one."}>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -292,24 +355,21 @@ export function CreateTemplateModal({ onClose, onSaved, template }: CreateTempla
                           key={n}
                           id={`tpl-qo-${q.id}-${n}`}
                           aria-label={`Answer ${n + 1}`}
-                          className="h-10 bg-white"
+                          className="h-10 sm:h-10.5 rounded-xl bg-white"
                           value={choice}
                           placeholder={`Answer ${n + 1}`}
-                          // A comma separates choices in the draft, so it can't be part of one.
                           onChange={(e) => patchQuestion(q.id, { options: slots.map((c, k) => (k === n ? e.target.value.replace(/,/g, "") : c)).join(",") })}
                         />
                       ))}
                     </div>
                   </FormField>
                 )}
+
                 {q.type === "text" && (
-                  <FormField label="Answer" htmlFor={`tpl-qa-${q.id}`} hint="Preview only: the DA types the farmer's answer here (up to 500 characters).">
-                    <Textarea id={`tpl-qa-${q.id}`} rows={3} className="bg-white" placeholder="Farmer's answer…" disabled readOnly />
+                  <FormField label="Answer preview" htmlFor={`tpl-qa-${q.id}`} hint="Preview only: DA types the farmer's answer here (up to 500 characters).">
+                    <Textarea id={`tpl-qa-${q.id}`} rows={2} className="rounded-xl bg-white" placeholder="Farmer's answer text will appear here…" disabled readOnly />
                   </FormField>
                 )}
-                <label className="flex w-fit cursor-pointer items-center gap-2 text-[13px] text-slate-700">
-                  <Checkbox checked={q.required} onChange={() => patchQuestion(q.id, { required: !q.required })} /> Required
-                </label>
               </div>
             );
           })}
@@ -317,12 +377,12 @@ export function CreateTemplateModal({ onClose, onSaved, template }: CreateTempla
           <button
             type="button"
             onClick={() => patch({ questions: [...draft.questions, blankQuestion(Math.max(0, ...draft.questions.map((q) => q.id)) + 1)] })}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-dashed border-brand-green/50 text-[13.5px] font-semibold text-brand-green transition-colors hover:bg-brand-wash"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border-2 border-dashed border-brand-green/40 bg-brand-wash/30 text-[13.5px] font-semibold text-brand-green transition-all hover:bg-brand-wash hover:border-brand-green shadow-2xs active:scale-[0.99]"
           >
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" aria-hidden="true">
+            <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" aria-hidden="true">
               <path d="M12 5v14M5 12h14" />
             </svg>
-            Add question
+            <span>Add another question</span>
           </button>
         </div>
       </div>
