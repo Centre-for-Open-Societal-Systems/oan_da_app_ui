@@ -54,6 +54,13 @@ pipeline {
                     def sha = sh(returnStdout: true, script: 'git rev-parse --short=7 HEAD').trim()
                     env.IMAGE_TAG_BUILD = "${env.TARGET_ENV}-${env.BUILD_NUMBER}-${sha}"
                     env.FULL_IMAGE      = "${env.IMAGE_REPO}:${env.IMAGE_TAG_BUILD}"
+                    // The Helm chart version, also the image tag in eoan/oan-da-app-ui/da-app-ui (ci/package_chart.py version):
+                    //   develop <package.json version>-develop.<build>, pushed by "Push image (helm)";
+                    //   staging <package.json version>-staging.<build>: the develop image of the same source tree, tagged
+                    //   again by "Package chart" (promote). Nothing is rebuilt for the QA cluster.
+                    if (env.BRANCH_NAME == 'develop' || env.BRANCH_NAME == 'staging') {
+                        env.IMMUTABLE_TAG = sh(returnStdout: true, script: 'python3 ci/package_chart.py version').trim()
+                    }
                     echo "Branch ${env.BRANCH_NAME} -> namespace ${env.K8S_NAMESPACE}, image ${env.FULL_IMAGE}"
                 }
             }
@@ -193,16 +200,31 @@ ENDSSH
         // Flow (develop): Push image (helm) -> Package chart -> deploy -> Publish chart.
         // helm/oan-da-app-ui is zipped with this build's image before the deploy; the deploy installs
         // that archive, and the same archive is published to oan-helm afterwards.
+        // staging: `promote` instead of `package` (as oan_a2c and oan_da_app_services): the chart develop built from this
+        // source tree, its image tagged <package.json version>-staging.<build> in ECR. Fails if develop never built this
+        // tree: merge develop into staging.
         stage('Package chart') {
-            when { branch 'develop' }
+            when { anyOf { branch 'develop'; branch 'staging' } }
             steps {
                 script {
                     env.IMAGE_TAG = env.IMMUTABLE_TAG
                     env.SOURCE_COMMIT = sh(returnStdout: true, script: 'git rev-parse --verify HEAD').trim()
                     env.COMMIT_SUBJECT = sh(returnStdout: true, script: 'git log -1 --pretty=%s').trim()
                     env.IMAGE_REPOSITORY = "${env.IMAGE_REGISTRY}/${env.ECR_REPO}"
+                    if (env.BRANCH_NAME == 'staging') {
+                        // The workspace holds the staging branch only; promote needs the develop commits the chart index names.
+                        withCredentials([gitUsernamePassword(credentialsId: scm.userRemoteConfigs[0].credentialsId, gitToolName: 'Default')]) {
+                            sh 'git fetch --quiet --no-tags origin +refs/heads/develop:refs/remotes/origin/develop'
+                        }
+                    }
                 }
-                sh 'python3 ci/package_chart.py package'
+                // promote tags the image in ECR (batch-get-image + put-image) with the same credential as "Push image".
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-ecr-creds'
+                ]]) {
+                    sh "python3 ci/package_chart.py ${env.BRANCH_NAME == 'staging' ? 'promote' : 'package'}"
+                }
                 // The deploy stage runs on the VPN deploy agent, which gets the archive from here.
                 stash name: 'built-chart', includes: 'built-chart/**'
             }
@@ -241,10 +263,27 @@ ENDSSH
             }
         }
 
-        // Adds the archive built by 'Package chart' to repository/develop/ of oan-helm, only after
-        // the oan_dev deploy and its verify succeeded.
+        // ---- staging -> Helm release `da-app-ui` on the QA cluster (qa.oanstaging.com), as oan_a2c ----
+        // Runs after the DA node staging deploy above, so a problem here never blocks it. Installs the promoted
+        // archive with helm/environments/staging; the kubeconfig is the jenkins-qa-deployer ServiceAccount
+        // (oan-helm docs/qa-cluster.md), whose oan-cluster-access lists namespace da-app.
+        stage('staging → QA cluster (helm)') {
+            when { beforeAgent true; branch 'staging' }
+            agent { label 'oan-ci-deploy' }   // VPN agent with helm and kubectl; must reach the QA API
+            options { timeout(time: 15, unit: 'MINUTES') }
+            steps {
+                checkout scm
+                unstash 'built-chart'
+                withCredentials([file(credentialsId: 'oan-qa-kubeconfig', variable: 'KUBECONFIG')]) {
+                    sh 'DEPLOY_ENV=staging bash ci/deploy-helm-dev.sh'
+                }
+            }
+        }
+
+        // Adds the archive built by 'Package chart' to repository/<branch>/ of oan-helm (develop or staging), only
+        // after the oan_dev / QA deploy succeeded.
         stage('Publish chart') {
-            when { branch 'develop' }
+            when { anyOf { branch 'develop'; branch 'staging' } }
             steps {
                 // UNSTABLE, not failed: the image is already deployed.
                 catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {

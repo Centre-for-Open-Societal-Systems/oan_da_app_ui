@@ -1,0 +1,34 @@
+# Values for the oan-da-app-ui chart (helm/oan-da-app-ui) on the QA RKE2 node (qa.oanstaging.com), the staging environment.
+# Release `da-app-ui`, namespace `da-app` (shared with the DA services backend). Installed by the Jenkins
+# stage "staging → QA cluster (helm)" (ci/deploy-helm-dev.sh with DEPLOY_ENV=staging).
+#
+# Set at install, not here:
+# - ui.image.tag: the Jenkins tag `<package.json version>-staging.<build>`: the develop image of the same source tree,
+#   tagged for staging by `ci/package_chart.py promote`. Nothing is rebuilt: the backend URL is read at runtime.
+
+ui:
+  image:
+    # Jenkinsfile ECR_REPO. The QA node pulls from ECR with its IAM role.
+    repository: 379220350808.dkr.ecr.ap-south-1.amazonaws.com/eoan/oan-da-app-ui/da-app-ui
+
+  # QA is one shared node: at most two Pods.
+  autoscaling:
+    maxReplicas: 2
+
+  env:
+    # The DA services API through APISIX on QA (oan_da_app_services helm/environments/staging/oan-da-services-gateway.yaml),
+    # served with the QA wildcard certificate.
+    API_BASE_URL: https://da-services.qa.oanstaging.com
+    # APISIX publishes the API without Frappe's /api and puts it back itself.
+    API_PATH_PREFIX: ""
+
+  ingress:
+    enabled: true
+    # APISIX is the IngressClass and the edge of qa.oanstaging.com.
+    className: apisix
+    hosts:
+    - host: da-app.qa.oanstaging.com
+      # Helm replaces the chart's default host list, so the paths are repeated here.
+      paths:
+      - path: /
+        pathType: Prefix
