@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuthStore } from "@/store/useAuthStore";
-import { assignAgent, fetchCoverage, fetchMyAssignment, formatAssignmentDate, listAssignments, listKebeles, toAgentAssignment, type ApiAssignmentRow } from "./api";
-import { areaLabel, areaNameMap, listGeo, woredasInRegion } from "./api";
+import { assignAgent, fetchCoverage, fetchMyAssignment, formatAssignmentDate, listAssignments, toAgentAssignment, type ApiAssignmentRow } from "./api";
+import { areaLabel, listGeo } from "./api";
 
 // Minimal in-memory Storage so the persisted auth store runs under Node.
 class MemoryStorage implements Storage {
@@ -62,18 +62,16 @@ describe("assignments api", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/get_master_data?data_type=geo&field_name=zone&parent=ET12");
   });
 
-  it("asks for coverage, kebeles and the DA's own posting", async () => {
+  it("asks for coverage and the DA's own posting", async () => {
     fetchMock.mockImplementation(async () => json({ data: {} }));
 
     await fetchCoverage();
     await fetchCoverage("ET04-W01");
-    await listKebeles("ET04-W01");
     await fetchMyAssignment();
 
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
       "/api/v1/da-services/assignments/coverage",
       "/api/v1/da-services/assignments/coverage?woreda=ET04-W01",
-      "/api/v1/da-services/master/kebeles?woreda=ET04-W01",
       "/api/v1/da-services/assignments/me",
     ]);
   });
@@ -123,17 +121,8 @@ describe("toAgentAssignment", () => {
 });
 
 describe("scope area helpers", () => {
-  const area = (code: string, level: "Region" | "Woreda", name_en: string) => ({ code, level, parent_area: null, name_en }) as import("./api").AdminArea;
-  const regions = [area("ET04", "Region", "Oromia"), area("ET01", "Region", "Tigray")];
-  const woredas = [area("ET040301", "Woreda", "Bako Tibe"), area("ET010101", "Woreda", "Tahtay Adiyabo"), area("ET040302", "Woreda", "Ambo")];
-
-  it("picks a region's woredas by code prefix", () => {
-    expect(woredasInRegion(woredas, "ET04").map((w) => w.code)).toEqual(["ET040301", "ET040302"]);
-    expect(woredasInRegion(woredas, "")).toEqual([]);
-  });
-
   it("labels known codes with their name and leaves other values alone", () => {
-    const names = areaNameMap({ regions, woredas });
+    const names = { ET04: "Oromia", ET010101: "Tahtay Adiyabo" };
     expect(areaLabel(names, "ET04")).toBe("Oromia (ET04)");
     expect(areaLabel(names, "ET010101")).toBe("Tahtay Adiyabo (ET010101)");
     expect(areaLabel(names, "Bako Tibe")).toBe("Bako Tibe");

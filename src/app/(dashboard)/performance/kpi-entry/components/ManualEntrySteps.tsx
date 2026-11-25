@@ -6,6 +6,7 @@ import { Select } from "@/components/ui/Select";
 import { cn } from "@/lib/utils";
 import { METRICS, REQUIRED, SELECT_FIELDS, type FormErrors, type ManualForm } from "./kpiEntry";
 import { KpiSection } from "./KpiSection";
+import { useScopeAreaNames } from "@/features/geo";
 
 interface ManualEntryStepsProps {
   form: ManualForm;
@@ -14,6 +15,11 @@ interface ManualEntryStepsProps {
 }
 
 export function ManualEntrySteps({ form, errors, setField }: ManualEntryStepsProps) {
+  // Woreda and Kebele: the user's own area from the geo Master Data (get_master_data).
+  const areaOptions: Partial<Record<keyof ManualForm, string[]>> = {
+    woreda: useScopeAreaNames("woreda", [form.woreda]),
+    kebele: useScopeAreaNames("kebele", [form.kebele]),
+  };
   return (
     <>
       <KpiSection title="Step 1: Agent & reporting period">
@@ -21,7 +27,8 @@ export function ManualEntrySteps({ form, errors, setField }: ManualEntryStepsPro
           {SELECT_FIELDS.map(({ key, label, options }) => (
             <FormField key={key} label={label} htmlFor={`kpi-${key}`} required hint={errors[key]} hintTone="error">
               <Select id={`kpi-${key}`} value={form[key]} onChange={(e) => setField(key)(e.target.value)} className="h-10">
-                {options.map((o) => (
+                {!form[key] && <option value="">Select {label.toLowerCase()}</option>}
+                {(areaOptions[key] ?? options).map((o) => (
                   <option key={o} value={o}>{o}</option>
                 ))}
               </Select>

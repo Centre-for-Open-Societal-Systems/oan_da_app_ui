@@ -14,10 +14,11 @@ import { DataTable, type Column } from "@/components/ui/DataTable";
 import { AdvancedFiltersButton } from "@/components/ui/AdvancedFiltersButton";
 import { AdvancedFiltersDrawer, type FilterFieldConfig, type FilterSelection } from "@/components/ui/AdvancedFiltersDrawer";
 import { FilterDropdown, type FilterOption } from "@/components/ui/FilterDropdown";
-import { DEPARTMENTS, DEPARTMENT_TYPES, REGION_OPTIONS, type Department } from "@/features/superadmin";
+import { DEPARTMENTS, DEPARTMENT_TYPES, type Department } from "@/features/superadmin";
 import { matchesQuery } from "@/lib/search";
 import { DepartmentFormModal, type DepartmentFormValues } from "./DepartmentFormModal";
 import { DepartmentViewModal } from "./DepartmentViewModal";
+import { useScopeAreaNames } from "@/features/geo";
 
 type FilterKey = "name" | "type" | "status" | "region";
 type Filters = Record<FilterKey, Set<string>>;
@@ -45,7 +46,9 @@ export function DepartmentDirectory() {
   const nameOptions = optionsOf(departments.map((d) => d.name));
   const typeOptions = optionsOf(departments.map((d) => d.type), DEPARTMENT_TYPES);
   const statusOptions = optionsOf(departments.map(statusLabel), ["Active", "Inactive"]);
-  const regionOptions = optionsOf(departments.map((d) => d.region), REGION_OPTIONS);
+  // Every Region from the geo Master Data, then those the rows hold.
+  const regionNames = useScopeAreaNames("region", departments.map((d) => d.region));
+  const regionOptions = optionsOf(departments.map((d) => d.region), regionNames);
 
   const rows = departments.filter(
     (d) =>

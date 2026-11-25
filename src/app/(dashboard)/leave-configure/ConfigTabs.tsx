@@ -18,6 +18,7 @@ import {
   AGENTS, ANNUAL_BASE, ASSIGN_COUNT, CHAINS, LEAVE_YEAR_OPTIONS, allowanceOf, effectLabel, overrideChange, serviceLabel,
   type AgentRow, type ChainRow, type LeaveTypeRow, type OverrideRow, type RuleRow,
 } from "./data";
+import { areaFilterOptions, useScopeAreaNames } from "@/features/geo";
 
 const PENCIL = "M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z";
 const CHECK_CIRCLE = "M12 22a10 10 0 100-20 10 10 0 000 20zM8 12l3 3 5-6";
@@ -276,7 +277,9 @@ export function AssignTab({ assigned, onAssign }: { assigned: boolean; onAssign:
   const [filters, setFilters] = useState(() => emptyFilters<AgentKey>(["name", "kebele", "designation"]));
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
 
-  const options = { name: optionsOf(AGENTS.map((a) => a.name)), kebele: optionsOf(AGENTS.map((a) => a.kebele)), designation: optionsOf(AGENTS.map((a) => a.designation)) };
+  // Every Kebele of the user's own area from the geo Master Data, then those the rows hold.
+  const kebeleNames = useScopeAreaNames("kebele", AGENTS.map((a) => a.kebele));
+  const options = { name: optionsOf(AGENTS.map((a) => a.name)), kebele: areaFilterOptions(AGENTS.map((a) => a.kebele), kebeleNames), designation: optionsOf(AGENTS.map((a) => a.designation)) };
   const fields: FilterFieldConfig[] = [
     { key: "name", label: "Agent", allLabel: "All Agents", placeholder: "All Agents", options: options.name },
     { key: "kebele", label: "Kebele", allLabel: "All Kebeles", placeholder: "All Kebeles", options: options.kebele },

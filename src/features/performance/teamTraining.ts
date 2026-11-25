@@ -59,14 +59,13 @@ const optionsFor = (pick: (row: TeamComplianceRow) => string): FilterOption[] =>
 };
 
 export const COMPLIANCE_AGENT_OPTIONS = optionsFor((r) => r.name);
-export const COMPLIANCE_KEBELE_OPTIONS = optionsFor((r) => r.kebele);
-export const COMPLIANCE_WOREDA_OPTIONS = optionsFor((r) => r.woreda);
 export const COMPLIANCE_INCENTIVE_OPTIONS = optionsFor((r) => r.incentive);
 
 export const COMPLIANCE_FILTER_FIELDS: FilterFieldConfig[] = [
   { key: "agent", label: "Agent", allLabel: "All agents", placeholder: "All Agents", options: COMPLIANCE_AGENT_OPTIONS },
-  { key: "kebele", label: "Kebele", allLabel: "All kebeles", placeholder: "All Kebeles", options: COMPLIANCE_KEBELE_OPTIONS },
-  { key: "woreda", label: "Woreda", allLabel: "All woredas", placeholder: "All Woredas", options: COMPLIANCE_WOREDA_OPTIONS },
+  // Kebele and Woreda are filled in by the component from the geo Master Data (useAreaFilterOptions).
+  { key: "kebele", label: "Kebele", allLabel: "All kebeles", placeholder: "All Kebeles", options: [] },
+  { key: "woreda", label: "Woreda", allLabel: "All woredas", placeholder: "All Woredas", options: [] },
   { key: "incentive", label: "Incentive", allLabel: "All statuses", placeholder: "All Statuses", options: COMPLIANCE_INCENTIVE_OPTIONS },
 ];
 

@@ -23,6 +23,7 @@ import { Banner } from "@/components/ui/Banner";
 import { cn } from "@/lib/utils";
 import type { VisitRecord } from "@/features/visits";
 import type { FilterFieldConfig } from "@/components/ui/AdvancedFiltersDrawer";
+import { useScopeAreaNames } from "@/features/geo";
 
 const SEARCH_PLACEHOLDER = searchPlaceholder(["Date & time", "Agent", "Farmer", "Kebele", "Purpose", "Status"]);
 
@@ -259,7 +260,9 @@ export function VisitsTable() {
   const source = loading ? [] : loaded.rows;
   const error = loading ? null : loaded.error;
   const agentOptions = optionsOf(source.map((v) => v.agent));
-  const kebeleOptions = optionsOf(source.map((v) => v.kebele));
+  // Every Kebele of the user's own area from the geo Master Data, then those the rows hold.
+  const kebeleNames = useScopeAreaNames("kebele", source.map((v) => v.kebele));
+  const kebeleOptions = optionsOf(source.map((v) => v.kebele), kebeleNames);
   const statuses = source.map(visitStatusLabel);
   const statusOptions = optionsOf(statuses, [...STATUS_ORDER.filter((s) => statuses.includes(s)), ...new Set(statuses.filter((s) => !STATUS_ORDER.includes(s)))]);
   const filterFields: FilterFieldConfig[] = [

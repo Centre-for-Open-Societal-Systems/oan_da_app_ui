@@ -18,12 +18,10 @@ import {
   submitGrievance,
   toAdministrativeArea,
   toEthiopianMobile,
-  grievanceAreaPreset,
-  type AreaPick,
   type GrievanceOptions,
   type SubmitGrievanceResult,
 } from "../api";
-import { KebelePicker } from "./KebelePicker";
+import { AreaPicker, type AreaSelection } from "@/features/geo";
 import { VoiceRecorder } from "./VoiceRecorder";
 
 interface Props {
@@ -56,11 +54,6 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
   const accountName = useAuthStore((s) => s.user?.name);
   const agent = useAuthStore((s) => s.profile?.agent);
   const self = useMemo(() => selfSubmitter(agent, accountName), [agent, accountName]);
-  // The area is pre-filled from the user's own location (/me): a DA's down to the Kebele, a Supervisor's down to the
-  // Woreda (the Kebele is then picked).
-  const location = useAuthStore((s) => s.profile?.location);
-  const scopeWoreda = useAuthStore((s) => s.profile?.scope?.woredas?.[0] ?? null);
-  const areaPreset = useMemo(() => grievanceAreaPreset(role, location, scopeWoreda), [role, location, scopeWoreda]);
 
   const [forWhom, setForWhom] = useState<"farmer" | "me">(farmerId ? "farmer" : "me");
   // Fixed when launched from a farmer profile, otherwise typed in.
@@ -78,12 +71,13 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
   const [grievanceType, setGrievanceType] = useState("");
   const [priority, setPriority] = useState("Medium");
 
-  // Administrative area: the Kebele from the Master Data picker (KebelePicker).
+  // Administrative area: the Kebele from the Master Data picker (AreaPicker). The levels /me fills for the role are
+  // locked (a DA's down to the Kebele, a Supervisor's to the Woreda, an Executive's to the Zone); the rest are picked.
   const [kebeleCode, setKebeleCode] = useState("");
   const [kebeleName, setKebeleName] = useState("");
-  const pickKebele = useCallback((kebele: AreaPick | null) => {
-    setKebeleCode(kebele?.code ?? "");
-    setKebeleName(kebele?.name ?? "");
+  const pickKebele = useCallback((area: AreaSelection | null) => {
+    setKebeleCode(area?.kebele?.code ?? "");
+    setKebeleName(area?.kebele?.name ?? "");
   }, []);
   // Bumped to start the picker afresh (its preset filled in again) when the form is cleared.
   const [pickerKey, setPickerKey] = useState(0);
@@ -363,7 +357,7 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
             </FormField>
           </div>
 
-          <KebelePicker key={pickerKey} preset={areaPreset} onChange={pickKebele} />
+          <AreaPicker key={pickerKey} depth="kebele" required idPrefix="grv" onChange={pickKebele} />
 
           <FormField label="Subject" htmlFor="grv-subject" required {...minLengthNote(subject, 3)}>
             <Input id="grv-subject" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Short title" />

@@ -20,6 +20,7 @@ import { PageIntro } from "../leave-admin/shared";
 import { returnDate } from "../lifecycle/components/leave";
 import { TEAM_SIZE, mockTeam, type TeamLeaveRow, type WaitingRequest } from "./data";
 import { ApproveDialog, CoverDialog, SuggestDatesDialog } from "./TeamLeaveDialogs";
+import { areaFilterOptions, useScopeAreaNames } from "@/features/geo";
 
 /** An agent this close to their last day of leave counts as returning. */
 const RETURNING_WITHIN_DAYS = 3;
@@ -131,7 +132,9 @@ export function TeamLeave() {
   const uncovered = inMonth.filter((r) => !r.cover);
   const oldest = waiting.reduce((max, w) => Math.max(max, w.daysAgo), 0);
 
-  const kebeleOptions = optionsOf(rows.map((r) => r.kebele));
+  // Every Kebele of the user's own area from the geo Master Data, then those the rows hold.
+  const kebeleNames = useScopeAreaNames("kebele", rows.map((r) => r.kebele));
+  const kebeleOptions = areaFilterOptions(rows.map((r) => r.kebele), kebeleNames);
   const typeOptions = optionsOf(rows.map((r) => r.type));
   const statusOptions = optionsOf(rows.map((r) => statusOf(r, today).kind));
   const filterFields: FilterFieldConfig[] = [

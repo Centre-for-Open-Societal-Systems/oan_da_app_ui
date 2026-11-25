@@ -33,6 +33,7 @@ import {
 } from "@/features/beneficiaries";
 import { matchesQuery, searchPlaceholder } from "@/lib/search";
 import { cn } from "@/lib/utils";
+import { AreaPicker, EMPTY_AREA, useAreaNames, useGeoChildren, useScopeKebeles, type AreaSelection } from "@/features/geo";
 
 // Card colours per segment tone: tinted panel, left accent, icon tile and member count.
 const SEGMENT_STYLE: Partial<Record<PillTone, { card: string; tile: string; count: string }>> = {
@@ -66,6 +67,10 @@ interface Row {
   name: string;
   avatar?: string;
   kebele: string;
+  /** The Kebele's geo Master Data code, as the Farmer Beneficiary row stores it; the Kebele filter matches on it. */
+  kebeleCode: string;
+  /** The Woreda's geo code, whose Kebeles the Kebele filter lists for a user without an area of their own. */
+  woredaCode: string;
   woreda: string;
   segment: string;
   linkedAt: string;
@@ -74,10 +79,12 @@ interface Row {
 
 interface BeneficiaryFilters extends FilterSelection {
   farmer: Set<string>;
+  /** Kebele geo Master Data codes. */
   kebele: Set<string>;
   segment: Set<string>;
 }
 const EMPTY: BeneficiaryFilters = { farmer: new Set(), kebele: new Set(), segment: new Set() };
+
 
 type Loaded<T> = { data: T; error: null } | { data: null; error: string };
 const errorText = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
@@ -91,15 +98,19 @@ export function BeneficiariesWorkspace() {
   const [farmerQuery, setFarmerQuery] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [addSegment, setAddSegment] = useState("");
+  // Add form, step 1: the area. Its Kebele lists the farmers to pick from and is sent with them. The levels the
+  // account fixes (/me) are locked: a DA's whole area, a Supervisor's down to the Woreda, an Executive's to the Zone.
+  const [addArea, setAddArea] = useState<AreaSelection>(EMPTY_AREA);
+  // Bumped on each open, so the area picker starts afresh.
+  const [addKey, setAddKey] = useState(0);
   const [adding, setAdding] = useState(false);
   const [notice, setNotice] = useState<{ tone: "success" | "warning" | "error"; text: string } | null>(null);
   const [reload, setReload] = useState(0);
 
   const [segments, setSegments] = useState<Loaded<ApiSegment[]> | null>(null);
   const [links, setLinks] = useState<Loaded<ApiFarmerBeneficiary[]> | null>(null);
-  // The caller's farmers (GET /farmers): their names for the table and the Add picker's list.
+  // The caller's farmers (GET /farmers): their names for the table.
   const [farmers, setFarmers] = useState<Farmer[] | null>(null);
-  const [farmersError, setFarmersError] = useState<string | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -117,16 +128,38 @@ export function BeneficiariesWorkspace() {
   useEffect(() => {
     let current = true;
     listFarmers({ pageSize: 500 })
-      .then(({ items }) => {
-        if (!current) return;
-        setFarmersError(null);
-        setFarmers(items.map(apiFarmerToFarmer));
-      })
-      .catch((err: unknown) => current && setFarmersError(describeFarmerError(err)));
+      .then(({ items }) => current && setFarmers(items.map(apiFarmerToFarmer)))
+      // The table then shows Farmer IDs in place of names.
+      .catch(() => undefined);
     return () => {
       current = false;
     };
   }, []);
+
+  // Farmers of the Kebele picked in the Add form (GET /farmers filtered by kebele_code), keyed by that Kebele.
+  const addKebele = addArea.kebele?.code ?? "";
+  const [kebeleFarmers, setKebeleFarmers] = useState<{ kebele: string; items: Farmer[] | null; error: string | null } | null>(null);
+  useEffect(() => {
+    if (!addOpen || !addKebele) return;
+    let current = true;
+    listFarmers({ pageSize: 500, filterBy: { kebele_code: { eq: addKebele } } })
+      .then(({ items }) => current && setKebeleFarmers({ kebele: addKebele, items: items.map(apiFarmerToFarmer), error: null }))
+      .catch((err: unknown) => current && setKebeleFarmers({ kebele: addKebele, items: [], error: describeFarmerError(err) }));
+    return () => {
+      current = false;
+    };
+  }, [addOpen, addKebele]);
+  const pickerList = kebeleFarmers && kebeleFarmers.kebele === addKebele ? kebeleFarmers : null;
+  const pickerFarmers = addKebele ? pickerList?.items ?? null : null;
+
+  // A new area empties the farmers picked under the previous one.
+  const pickAddArea = (area: AreaSelection) => {
+    setAddArea(area);
+    if ((area.kebele?.code ?? "") !== addKebele) {
+      setAddFarmers(new Set());
+      setPickerOpen(false);
+    }
+  };
 
   const pickerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -155,6 +188,8 @@ export function BeneficiariesWorkspace() {
         name: f?.name ?? b.farmer_id,
         avatar: f?.avatar,
         kebele: f && f.kebele !== "—" ? f.kebele : b.kebele,
+        kebeleCode: b.kebele,
+        woredaCode: b.woreda,
         woreda: f?.woreda || b.woreda,
         segment: b.beneficiary_segment,
         linkedAt: formatDate(b.creation),
@@ -170,9 +205,22 @@ export function BeneficiariesWorkspace() {
     setFilters((prev) => ({ ...prev, segment: prev.segment.size === 1 && prev.segment.has(id) ? new Set() : new Set([id]) }));
   const singleSegment = filters.segment.size === 1 ? [...filters.segment][0] : null;
 
-  const farmerOptions = optionsOf(rows.map((b) => b.name));
-  const kebeleOptions = optionsOf(rows.map((b) => b.kebele));
+  // Filter options for the table's columns, with values from the APIs rather than only those in the rows: every farmer
+  // of GET /farmers, and every Kebele from the geo Master Data (get_master_data, field_name=kebele) of the user's Woreda
+  // (DA, Supervisor) or Zone (Executive), together with every Kebele of the Woredas the rows sit in (all an Admin gets).
+  const farmerOptions = optionsOf(rows.map((b) => b.name), [...new Set([...(farmers ?? []).map((f) => f.name), ...rows.map((b) => b.name)])].sort((a, b) => a.localeCompare(b)));
+  const scopeKebeles = useScopeKebeles();
+  const rowWoredaKebeles = useGeoChildren("kebele", rows.map((b) => b.woredaCode));
+  const apiKebeles = [...(scopeKebeles ?? []), ...(rowWoredaKebeles ?? [])];
+  const rowKebeleNames = useAreaNames(rows.map((b) => b.kebeleCode));
+  const kebeleNames: Record<string, string> = { ...rowKebeleNames, ...Object.fromEntries(apiKebeles.map((k) => [k.code, k.name])) };
+  const kebeleOptions = optionsOf(
+    rows.map((b) => b.kebeleCode),
+    [...new Set([...apiKebeles.map((k) => k.code), ...rows.map((b) => b.kebeleCode)])],
+    (code) => kebeleNames[code] ?? code,
+  );
   const segmentOptions = optionsOf(rows.map((b) => b.segment), segmentList.map((s) => s.name), titleOf);
+
   const filterFields: FilterFieldConfig[] = [
     { key: "farmer", label: "Farmer", allLabel: "All farmers", placeholder: "All Farmers", options: farmerOptions },
     { key: "kebele", label: "Kebele", allLabel: "All kebeles", placeholder: "All Kebeles", options: kebeleOptions },
@@ -181,10 +229,10 @@ export function BeneficiariesWorkspace() {
 
   const visible = rows.filter((b) => {
     const has = (set: Set<string>, value: string) => set.size === 0 || set.has(value);
-    return has(filters.farmer, b.name) && has(filters.kebele, b.kebele) && has(filters.segment, b.segment) && matchesQuery(query, b.name, b.kebele, b.woreda, b.addedBy, titleOf(b.segment));
+    return has(filters.farmer, b.name) && has(filters.kebele, b.kebeleCode) && has(filters.segment, b.segment) && matchesQuery(query, b.name, b.kebele, b.woreda, b.addedBy, titleOf(b.segment));
   });
 
-  const pickerMatches = (farmers ?? []).filter((f) => matchesQuery(farmerQuery, f.name, f.regId, f.kebele, f.woreda, f.phone));
+  const pickerMatches = (pickerFarmers ?? []).filter((f) => matchesQuery(farmerQuery, f.name, f.regId, f.kebele, f.woreda, f.phone));
   const allMatchesPicked = pickerMatches.length > 0 && pickerMatches.every((f) => addFarmers.has(f.id));
 
   const togglePick = (id: string) =>
@@ -206,9 +254,9 @@ export function BeneficiariesWorkspace() {
     });
 
   const selectedFarmersList = useMemo(() => {
-    if (!farmers || addFarmers.size === 0) return [];
-    return farmers.filter((f) => addFarmers.has(f.id));
-  }, [farmers, addFarmers]);
+    if (!pickerFarmers || addFarmers.size === 0) return [];
+    return pickerFarmers.filter((f) => addFarmers.has(f.id));
+  }, [pickerFarmers, addFarmers]);
 
   const activePackageObj = useMemo(() => {
     return segmentList.find((s) => s.name === addSegment) ?? null;
@@ -225,13 +273,16 @@ export function BeneficiariesWorkspace() {
     setFarmerQuery("");
     setPickerOpen(false);
     setAddSegment((prev) => prev || singleSegment || segmentList[0]?.name || "");
+    setAddArea(EMPTY_AREA);
+    setAddKey((k) => k + 1);
     setAddOpen(true);
   };
 
   const add = async () => {
-    if (addFarmers.size === 0 || !addSegment) return;
+    const { region, zone, woreda, kebele } = addArea;
+    if (addFarmers.size === 0 || !addSegment || !region || !zone || !woreda || !kebele) return;
     setAdding(true);
-    const result = await addFarmersToSegment((farmers ?? []).filter((f) => addFarmers.has(f.id)), addSegment);
+    const result = await addFarmersToSegment(selectedFarmersList, addSegment, { region: region.code, zone: zone.code, woreda: woreda.code, kebele: kebele.code });
     setAdding(false);
     setAddOpen(false);
     setNotice(describeAddResult(result, titleOf(addSegment)));
@@ -426,7 +477,7 @@ export function BeneficiariesWorkspace() {
         isOpen={addOpen}
         onClose={() => !adding && setAddOpen(false)}
         title="Add Model Farmer"
-        subtitle="Link farmers from your list to a package"
+        subtitle="Choose the area, then its farmers and the package"
         size="lg"
         bodyClassName="p-4 sm:p-6"
         icon={
@@ -447,7 +498,7 @@ export function BeneficiariesWorkspace() {
             <Button
               variant="brand"
               onClick={() => void add()}
-              disabled={addFarmers.size === 0 || !addSegment || adding}
+              disabled={addFarmers.size === 0 || !addSegment || !addKebele || adding}
               className="gap-2 shadow-sm"
             >
               {adding ? (
@@ -471,18 +522,22 @@ export function BeneficiariesWorkspace() {
         }
       >
         <div className="flex flex-col gap-5">
+          <AreaPicker key={addKey} depth="kebele" required hideLocked idPrefix="ben" onChange={pickAddArea} />
+
           <FormField
             label={`Farmers${addFarmers.size > 0 ? ` (${addFarmers.size} selected)` : ""}`}
             htmlFor="ben-farmer"
             required
-            hint="Only farmers linked to you appear here (Farmer Registry is the source of records)."
+            hint={addKebele ? "Farmers of the chosen Kebele (Farmer Registry is the source of records)." : "Choose the Kebele first."}
           >
             <div ref={pickerRef} className="relative flex flex-col gap-2">
               <button
                 type="button"
                 aria-expanded={pickerOpen}
                 onClick={() => setPickerOpen((open) => !open)}
+                disabled={!addKebele}
                 className={cn(
+                  "disabled:cursor-not-allowed disabled:opacity-60",
                   "flex min-h-[44px] w-full items-center justify-between gap-2 rounded-xl border bg-white px-3.5 py-2 text-left text-sm transition-all shadow-xs",
                   pickerOpen
                     ? "border-brand-green ring-2 ring-brand-green/15"
@@ -642,7 +697,7 @@ export function BeneficiariesWorkspace() {
                           </svg>
                           <p className="font-medium text-slate-600">No farmers found</p>
                           <p className="text-xs text-muted">
-                            {farmersError ?? (!farmers ? "Loading farmers…" : farmers.length === 0 ? "No farmers assigned" : `No matches for “${farmerQuery.trim()}”`)}
+                            {pickerList?.error ?? (!pickerFarmers ? "Loading farmers…" : pickerFarmers.length === 0 ? "No farmers in this Kebele" : `No matches for “${farmerQuery.trim()}”`)}
                           </p>
                         </div>
                       </li>
@@ -698,7 +753,7 @@ export function BeneficiariesWorkspace() {
             label="Package"
             htmlFor="ben-segment"
             required
-            hint="The farmer's kebele, woreda, zone and region are taken from their Farmer Registry record."
+            hint="The farmers are added with the Region, Zone, Woreda and Kebele chosen above."
           >
             <div className="flex flex-col gap-2.5">
               <Select id="ben-segment" value={addSegment} onChange={(e) => setAddSegment(e.target.value)}>

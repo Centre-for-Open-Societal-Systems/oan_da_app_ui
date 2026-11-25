@@ -7,7 +7,6 @@ import {
   fetchGrievanceSummary,
   fetchGrievanceTimeline,
   listGrievances,
-  grievanceAreaPreset,
   selfSubmitter,
   toEthiopianMobile,
   submitGrievance,
@@ -153,32 +152,6 @@ describe("mapping", () => {
     expect(c.grievance).toMatchObject({ status: "In Progress", type: "Canal maintenance problems" });
     expect(c.submitter).toMatchObject({ name: "Abebe Bikila", kind: "Individual Farmer" });
     expect(c.sla.consumedPct).toBe(40);
-  });
-});
-
-describe("grievanceAreaPreset", () => {
-  const at = { region: { id: "ET01", name: "Tigray" }, zone: { id: "ET0101", name: "North West" }, woreda: { id: "ET010108", name: "Shire" }, kebele: { id: "ET01010805", name: "Lekatit" } };
-
-  it("fixes a DA's area down to their Kebele", () => {
-    expect(grievanceAreaPreset("DA", at)).toEqual({
-      region: { code: "ET01", name: "Tigray" },
-      zone: { code: "ET0101", name: "North West" },
-      woreda: { code: "ET010108", name: "Shire" },
-      kebele: { code: "ET01010805", name: "Lekatit" },
-    });
-  });
-
-  it("fixes a Supervisor's area down to the Woreda, leaving the Kebele to pick", () => {
-    expect(grievanceAreaPreset("Supervisor", at)).toEqual({ region: { code: "ET01", name: "Tigray" }, zone: { code: "ET0101", name: "North West" }, woreda: { code: "ET010108", name: "Shire" } });
-  });
-
-  it("derives Region and Zone from a scope Woreda code", () => {
-    expect(grievanceAreaPreset("Supervisor", null, "ET040101")).toEqual({ region: { code: "ET04", name: "" }, zone: { code: "ET0401", name: "" }, woreda: { code: "ET040101", name: "" } });
-  });
-
-  it("leaves other roles, and users without a Woreda, to pick every level", () => {
-    expect(grievanceAreaPreset("Admin", at)).toEqual({});
-    expect(grievanceAreaPreset("DA", { region: null, zone: null, woreda: null, kebele: null })).toEqual({});
   });
 });
 

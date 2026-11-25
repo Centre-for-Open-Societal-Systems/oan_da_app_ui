@@ -235,42 +235,7 @@ export async function submitGrievance(body: SubmitGrievanceRequest): Promise<Sub
 
 // --- administrative area ----------------------------------------------------
 // The create endpoint takes administrative_area as `kebele-<code>` (e.g. "kebele-ET140108101008"). The pickers
-// read Region > Zone > Woreda > Kebele from the geo Master Data (listKbGeo → GET /da-services/get_master_data).
-
-/** One area of the picker: its geo code and display name ("" when only the code is known). */
-export interface AreaPick {
-  code: string;
-  name: string;
-}
-
-export type AreaLevel = "region" | "zone" | "woreda" | "kebele";
-/** The levels fixed by the signed-in user's own area; the levels left out are picked. */
-export type AreaPreset = Partial<Record<AreaLevel, AreaPick>>;
-
-type Ref = { id: string; name: string } | null | undefined;
-const WOREDA_CODE = /^ET\d{6}$/;
-const toPick = (ref: Ref): AreaPick | undefined => (ref?.id ? { code: ref.id, name: ref.name ?? "" } : undefined);
-
-/**
- * The area a grievance is pre-filled with, from the user's own location (/me): a DA's down to their Kebele, a
- * Supervisor's down to their Woreda (the Kebele is then picked). Other roles pick every level. A Region or Zone
- * /me leaves out comes from the Woreda's P-code prefix (Region ET04 > Zone ET0401 > Woreda ET040101).
- */
-export function grievanceAreaPreset(
-  role: string | null | undefined,
-  location: { region: Ref; zone: Ref; woreda: Ref; kebele: Ref } | null | undefined,
-  scopeWoreda?: string | null,
-): AreaPreset {
-  if (role !== "DA" && role !== "Supervisor") return {};
-  const woreda = toPick(location?.woreda) ?? (scopeWoreda ? { code: scopeWoreda, name: "" } : undefined);
-  if (!woreda) return {};
-  const fromCode = WOREDA_CODE.test(woreda.code);
-  const region = toPick(location?.region) ?? (fromCode ? { code: woreda.code.slice(0, 4), name: "" } : undefined);
-  const zone = toPick(location?.zone) ?? (fromCode ? { code: woreda.code.slice(0, 6), name: "" } : undefined);
-  if (!region || !zone) return {};
-  const kebele = role === "DA" ? toPick(location?.kebele) : undefined;
-  return kebele ? { region, zone, woreda, kebele } : { region, zone, woreda };
-}
+// read Region > Zone > Woreda > Kebele from the geo Master Data (features/geo AreaPicker).
 
 /** administrative_area the create endpoint expects for a Kebele: `kebele-<geo value_id>`. */
 export const toAdministrativeArea = (kebeleCode: string) => {

@@ -52,6 +52,11 @@ export interface FarmerQuery {
   page?: number;
   /** Default 50, at most 1000. */
   pageSize?: number;
+  /**
+   * Registry filters, sent as filter_by JSON, e.g. `{ kebele_code: { eq: "ET04010105" } }`. The geo keys (region_code,
+   * zone_code, woreda_code, kebele_code) take geo Master Data codes and are checked against the caller's area.
+   */
+  filterBy?: Record<string, unknown>;
 }
 
 /** The search text the list used to send for "every farmer"; kept so callers can tell a real search from none. */
@@ -69,8 +74,9 @@ export interface FarmerPage {
  * GET /farmers?search_text=&current_page=&page_size=: one page of the Farmer Registry register in the caller's scope
  * (a DA's kebele, a supervisor's woreda, all for Admin). Answers `{ data: ApiFarmer[], meta: { number_of_items, number_of_pages } }`.
  */
-export async function listFarmers({ searchText, page = 1, pageSize = 50 }: FarmerQuery = {}): Promise<FarmerPage> {
+export async function listFarmers({ searchText, page = 1, pageSize = 50, filterBy }: FarmerQuery = {}): Promise<FarmerPage> {
   const query = new URLSearchParams({ search_text: searchText?.trim() ?? "", current_page: String(page), page_size: String(pageSize) });
+  if (filterBy && Object.keys(filterBy).length > 0) query.set("filter_by", JSON.stringify(filterBy));
   const res = await authRequest<{ data: ApiFarmer[] | null; meta?: { number_of_items?: number; number_of_pages?: number } }>(`/da-services/farmers?${query}`);
   const items = res.data ?? [];
   const total = res.meta?.number_of_items ?? items.length;

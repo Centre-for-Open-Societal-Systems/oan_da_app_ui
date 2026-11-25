@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { DropdownOption } from "@/components/ui/Dropdown";
 import { APPROVAL_TABS, type ApprovalTab } from "@/features/agents";
-import { areaNameMap, loadScopeAreas } from "@/features/assignments";
+import { useAreaNames } from "@/features/geo";
 import { decideChangeRequest, describeProfileError, fetchAgent, listChangeRequests, type ChangeRequest } from "@/features/profile";
 import { useAuthStore } from "@/store/useAuthStore";
 import { approvalResult, DECISION_API, describeDecisionError, isOpen, MIN_NOTE, outcomeFor, toApprovalRequest, type ApprovalResult, type Decision, type Outcome } from "./approvals";
@@ -17,7 +17,6 @@ export function useApprovals() {
   const [rows, setRows] = useState<ChangeRequest[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const [areaNames, setAreaNames] = useState<Record<string, string>>({});
   const [agentNames, setAgentNames] = useState<Record<string, string>>({});
 
   const [tab, setTab] = useState<ApprovalTab>("all");
@@ -44,14 +43,13 @@ export function useApprovals() {
         setLoadError(null);
       })
       .catch((err: unknown) => !cancelled && setLoadError(describeProfileError(err)));
-    loadScopeAreas()
-      .then((areas) => !cancelled && setAreaNames(areaNameMap(areas)))
-      .catch(() => {});
     return () => {
       cancelled = true;
     };
   }, [attempt]);
 
+  // Woreda names from the geo Master Data; a request shows its code until (or if not) it is read.
+  const areaNames = useAreaNames((rows ?? []).map((r) => r.woreda));
   const requests = useMemo(() => (rows ?? []).map((r) => toApprovalRequest(r, areaNames, agentNames)), [rows, areaNames, agentNames]);
 
   const kinds = APPROVAL_TABS.find((t) => t.key === tab)?.kinds ?? null;

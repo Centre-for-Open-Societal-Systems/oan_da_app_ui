@@ -47,10 +47,6 @@ export const valueKey = (sectionId: string, fieldKey: string) => `${sectionId}.$
 
 const YES_NO = ["Yes", "No"];
 const SEASONS = ["Meher", "Belg", "Bega"];
-const REGIONS = ["Oromia", "Amhara", "SNNP", "Sidama", "Tigray", "Afar", "Somali"];
-const ZONES = ["West Shewa", "East Shewa", "North Shewa", "Arsi", "Jimma"];
-const WOREDAS = [...new Set(FARMERS.map((f) => f.woreda.replace(/ woreda$/i, "")))];
-const KEBELES = [...new Set(FARMERS.map((f) => f.kebele))];
 const CROP_CATEGORIES = ["Cereal", "Pulse", "Oilseed", "Vegetable", "Root & tuber", "Fruit"];
 const CROPPING_SYSTEMS = ["Sole cropping", "Intercropping", "Mixed cropping", "Relay cropping"];
 const SEED_CLASSES = ["Certified", "Basic", "Pre-basic", "Local / farm-saved"];
@@ -140,10 +136,11 @@ const WATER: Def[] = [
   ["water_source_frequency", "Frequency", "select", FREQUENCIES],
 ];
 const LOCATION: Def[] = [
-  ["region", "Region", "select", REGIONS],
-  ["zone", "Zone", "select", ZONES],
-  ["woreda", "Woreda", "select", WOREDAS],
-  ["kebele", "Kebele", "select", KEBELES],
+  // The area lists come from the registry places API (useGeoLevels in CropSownSectionFields), not from here.
+  ["region", "Region", "select", []],
+  ["zone", "Zone", "select", []],
+  ["woreda", "Woreda", "select", []],
+  ["kebele", "Kebele", "select", []],
 ];
 // Planning and Cultivation each carry a cluster section with the same shape; only the plan/collected labels differ.
 const clusterDefs = (actual: boolean): Def[] => [

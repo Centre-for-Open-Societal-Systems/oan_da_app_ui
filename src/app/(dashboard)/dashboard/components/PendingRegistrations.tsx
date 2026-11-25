@@ -15,11 +15,11 @@ import {
   PENDING_REGISTRATIONS,
   REGISTRATION_AGENT_OPTIONS,
   REGISTRATION_FILTER_FIELDS,
-  REGISTRATION_KEBELE_OPTIONS,
   REGISTRATION_STATUS_OPTIONS,
   REGISTRATION_STATUS_TONE,
   REGISTRATION_TYPE_OPTIONS,
 } from "@/features/dashboard";
+import { useAreaFilterOptions, withFieldOptions } from "@/features/geo";
 
 const SEARCH_PLACEHOLDER = searchPlaceholder(["Agent", "Type", "Kebele", "Last Updated", "Status"]);
 
@@ -35,6 +35,9 @@ const EMPTY: RegistrationFilters = { agent: new Set(), type: new Set(), kebele: 
 export function PendingRegistrations() {
   const [filters, setFilters] = useState<RegistrationFilters>(EMPTY);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+  // Every Kebele of the user's own area from the geo Master Data, then those the rows hold.
+  const kebeleOptions = useAreaFilterOptions("kebele", PENDING_REGISTRATIONS.map((r) => r.kebele));
+  const filterFields = withFieldOptions(REGISTRATION_FILTER_FIELDS, { kebele: kebeleOptions });
   const [query, setQuery] = useState("");
   const activeFilterCount = Object.values(filters).filter((set) => set.size > 0).length;
 
@@ -73,7 +76,7 @@ export function PendingRegistrations() {
                 <FilterDropdown label="Type" allLabel="All types" options={REGISTRATION_TYPE_OPTIONS} selected={filters.type} onApply={setFilter("type")} />
               </th>
               <th className="px-4 py-3 font-semibold">
-                <FilterDropdown label="Kebele" allLabel="All kebeles" options={REGISTRATION_KEBELE_OPTIONS} selected={filters.kebele} onApply={setFilter("kebele")} />
+                <FilterDropdown label="Kebele" allLabel="All kebeles" options={kebeleOptions} selected={filters.kebele} onApply={setFilter("kebele")} />
               </th>
               <th className="px-4 py-3 font-semibold">Last Updated</th>
               <th className="px-4 py-3 text-center font-semibold">
@@ -111,7 +114,7 @@ export function PendingRegistrations() {
       <AdvancedFiltersDrawer
         isOpen={isFiltersOpen}
         onClose={() => setIsFiltersOpen(false)}
-        fields={REGISTRATION_FILTER_FIELDS}
+        fields={filterFields}
         filters={filters}
         onApply={(next) =>
           setFilters({
