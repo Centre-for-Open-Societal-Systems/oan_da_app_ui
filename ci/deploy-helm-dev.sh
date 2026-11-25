@@ -22,12 +22,30 @@ test -f "${CHART_TGZ}" || { echo "${CHART_TGZ} is missing: run package_chart.py 
 
 echo "=== Deploying to ${DEPLOY_ENV}: release ${RELEASE}, namespace ${NS}, image tag ${IMMUTABLE_TAG} ==="
 
+# 12m, not 5m: when the base image (node:24-alpine) moves, every layer of the new image is new and the node pulls it
+# whole before the container starts. Build 66 failed this way: the new Pod was Running, not yet Ready, at 5m.
+HELM_TIMEOUT="${HELM_TIMEOUT:-12m}"
+
+# Why the new Pods are not Ready, printed into the Jenkins log: their state, conditions and events (image pull,
+# probe failures), and the container's output.
+diagnose() {
+  local selector="app.kubernetes.io/instance=${RELEASE}"
+  kubectl -n "${NS}" get pods -l "${selector}" -o wide || true
+  for pod in $(kubectl -n "${NS}" get pods -l "${selector}" \
+                 -o jsonpath='{range .items[?(@.status.containerStatuses[0].ready==false)]}{.metadata.name}{" "}{end}' 2>/dev/null); do
+    echo "----- ${pod}: describe (conditions and events)"
+    kubectl -n "${NS}" describe pod "${pod}" | sed -n '/^Conditions:/,$p' || true
+    echo "----- ${pod}: log"
+    kubectl -n "${NS}" logs "${pod}" --tail=100 || true
+  done
+}
+
 if ! helm upgrade --install "${RELEASE}" "${CHART_TGZ}" --namespace "${NS}" -f "${VALUES}" \
   --set ui.image.tag="${IMMUTABLE_TAG}" \
-  --wait --timeout 5m; then
+  --wait --timeout "${HELM_TIMEOUT}"; then
   echo "=== helm upgrade failed ==="
   helm -n "${NS}" history "${RELEASE}" --max 3 || true
-  kubectl -n "${NS}" get pods || true
+  diagnose
   exit 1
 fi
 

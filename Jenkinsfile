@@ -233,7 +233,7 @@ ENDSSH
         stage('develop → oan_dev (helm)') {
             when { beforeAgent true; branch 'develop' }
             agent { label 'oan-ci-deploy' }   // VPN agent with helm and kubectl that reaches the oan_dev API
-            options { timeout(time: 15, unit: 'MINUTES') }
+            options { timeout(time: 20, unit: 'MINUTES') }
             steps {
                 checkout scm
                 unstash 'built-chart'
@@ -270,7 +270,7 @@ ENDSSH
         stage('staging → QA cluster (helm)') {
             when { beforeAgent true; branch 'staging' }
             agent { label 'oan-ci-deploy' }   // VPN agent with helm and kubectl; must reach the QA API
-            options { timeout(time: 15, unit: 'MINUTES') }
+            options { timeout(time: 20, unit: 'MINUTES') }
             steps {
                 checkout scm
                 unstash 'built-chart'
