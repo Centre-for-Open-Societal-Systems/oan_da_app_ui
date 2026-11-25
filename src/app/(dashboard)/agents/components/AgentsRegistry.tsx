@@ -16,17 +16,13 @@ import { FilterDropdown, type FilterOption } from "@/components/ui/FilterDropdow
 import { AdvancedFiltersDrawer, type FilterFieldConfig, type FilterSelection } from "@/components/ui/AdvancedFiltersDrawer";
 import { PAGE_SIZES, TablePagination } from "@/components/ui/TablePagination";
 import { useAuthStore } from "@/store/useAuthStore";
-import { ACTIVE_TONE, APPROVAL_TONE, BulkImportsPanel, apiAgentToAgent, describeAgentError, importStatusLabel, listAgents, type Agent, type AgentImport } from "@/features/agents";
+import { ACTIVE_TONE, APPROVAL_TONE, BulkImportsPanel, apiAgentToAgent, describeAgentError, importStatusLabel, listMyTeam, type Agent, type AgentFacets, type AgentFilterField, type AgentFilters, type AgentImport, type TeamScope } from "@/features/agents";
 import { searchPlaceholder } from "@/lib/search";
 import { fileDate, type CsvColumn } from "@/lib/download";
 import { downloadTable, formatLabel } from "@/lib/export";
 import { ImportAgentsModal } from "./ImportAgentsModal";
-import { useScopeAreaNames } from "@/features/geo";
 
 const SEARCH_DEBOUNCE_MS = 400;
-const ACTIVE = ["Active", "On-leave", "Separated", "Unassigned"];
-const TIERS = ["Certificate", "Diploma", "Degree", "Masters", "MSc", "PhD"];
-const APPROVALS = ["Draft", "Awaiting review", "Changes requested", "Approved", "Published", "Rejected"];
 const UNASSIGNED = "—";
 
 // The registry columns in table order — used by Export.
@@ -46,22 +42,41 @@ const CSV_COLUMNS: CsvColumn<Agent>[] = [
 const importNotice = (imported: AgentImport) =>
   `${imported.file_name ?? "The file"} was handed to the DA Registry (${imported.rows ?? "?"} agents, ${importStatusLabel(imported.status).toLowerCase()}${imported.registry_import_id ? `, registry import ${imported.registry_import_id}` : ""}). Rows it accepts wait for its two-stage approval; rows it refuses appear under Import exceptions.`;
 
-// The backend searches DA-ID and name; the column filters narrow the loaded page on screen.
+// The backend searches DA-ID and name and applies every filter, so filters reach every page, not just this one.
 const SEARCH_PLACEHOLDER = searchPlaceholder(["DA-ID", "Full Name"]);
 
-const unique = (values: string[]) => [...new Set(values.filter((v) => v !== ""))].sort();
-
-const optionsOf = (values: string[], order: readonly string[], label?: (v: string) => string): FilterOption[] =>
-  order.map((value) => ({ value, label: label ? label(value) : value, count: values.filter((v) => v === value).length }));
-
 interface Filters extends FilterSelection {
+  region: Set<string>;
   woreda: Set<string>;
   kebele: Set<string>;
   active: Set<string>;
   tier: Set<string>;
+  fayda: Set<string>;
   approval: Set<string>;
 }
-const EMPTY: Filters = { woreda: new Set(), kebele: new Set(), active: new Set(), tier: new Set(), approval: new Set() };
+const EMPTY: Filters = { region: new Set(), woreda: new Set(), kebele: new Set(), active: new Set(), tier: new Set(), fayda: new Set(), approval: new Set() };
+// The API field each filter sends.
+const FIELD: Record<keyof Filters, AgentFilterField> = {
+  region: "region",
+  woreda: "woreda",
+  kebele: "kebele",
+  active: "active_status",
+  tier: "education_tier",
+  fayda: "fayda_status",
+  approval: "approval_status",
+};
+// Picking a Region resets the Woredas and Kebeles under it; picking a Woreda resets the Kebeles.
+const DEPENDENTS: Partial<Record<keyof Filters, (keyof Filters)[]>> = { region: ["woreda", "kebele"], woreda: ["kebele"] };
+
+const toApiFilters = (filters: Filters): AgentFilters =>
+  Object.fromEntries((Object.keys(FIELD) as (keyof Filters)[]).map((key) => [FIELD[key], [...filters[key]].sort()]));
+
+/** A filter's options from the facets; a chosen value the facets no longer list stays, with a count of 0. */
+const optionsFor = (facets: AgentFacets, key: keyof Filters, selected: Set<string>): FilterOption[] => {
+  const options: FilterOption[] = (facets[FIELD[key]] ?? []).map(({ value, label, count }) => ({ value, label, count }));
+  for (const value of selected) if (!options.some((o) => o.value === value)) options.push({ value, label: value, count: 0 });
+  return options;
+};
 
 // "14 Sep 2026, 09:12" → ["14 Sep 2026,", "09:12 AM"] for the two-line Last Updated cell.
 const splitStamp = (stamp: string): [string, string] => {
@@ -72,8 +87,9 @@ const splitStamp = (stamp: string): [string, string] => {
 };
 
 // FR-02 §3.2.1–3.2.2: 11 literal columns, combinable/resettable filters, search by DA-ID or name. Rows come from
-// the DA Registry through GET /da-services/agents, already limited to the caller's scope (Supervisor: Woreda,
-// Executive: Region, Admin: all); search and paging run on the server.
+// the DA Registry through GET /da-services/agents/my-team, scoped by role on the backend (Admin: every DA, Executive:
+// their Region, Supervisor: their Woreda). Search, filters and paging run on the server; the filter menus list the
+// backend's facets, counted over the whole team.
 export function AgentsRegistry() {
   const router = useRouter();
   const role = useAuthStore((s) => s.role);
@@ -86,6 +102,10 @@ export function AgentsRegistry() {
   const [pageSize, setPageSize] = useState(PAGE_SIZES[PAGE_SIZES.length - 1]);
   const [attempt, setAttempt] = useState(0);
   const [loaded, setLoaded] = useState<{ key: string; rows: Agent[]; total: number; error: string | null } | null>(null);
+  // The last facets the backend sent; kept while the next page loads so the filter menus do not empty.
+  const [facets, setFacets] = useState<AgentFacets>({});
+  // The team scope the backend chose for the signed-in role; "all" until the first answer.
+  const [scope, setScope] = useState<TeamScope>("all");
   const [filters, setFilters] = useState<Filters>(EMPTY);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -104,16 +124,25 @@ export function AgentsRegistry() {
     return () => clearTimeout(timer);
   }, [query]);
 
-  const requestKey = `${searchText}|${page}|${pageSize}|${attempt}`;
+  const apiFilters = useMemo(() => toApiFilters(filters), [filters]);
+  const filterKey = JSON.stringify(apiFilters);
+  const requestKey = `${searchText}|${page}|${pageSize}|${attempt}|${filterKey}`;
   useEffect(() => {
     let current = true;
-    listAgents({ search: searchText || undefined, limit: pageSize, start: (page - 1) * pageSize })
-      .then(({ agents, total }) => current && setLoaded({ key: requestKey, rows: agents.map(apiAgentToAgent), total, error: null }))
+    // One call for every officer (GET /agents/my-team): the backend scopes it by role (Admin every DA, Executive their
+    // Region, Supervisor their Woreda), applies the filters and sends the facets for the filter menus.
+    listMyTeam({ search: searchText || undefined, filters: JSON.parse(filterKey) as AgentFilters, limit: pageSize, start: (page - 1) * pageSize })
+      .then(({ agents, total, facets: next, scope: nextScope }) => {
+        if (!current) return;
+        setLoaded({ key: requestKey, rows: agents.map(apiAgentToAgent), total, error: null });
+        setFacets(next);
+        setScope(nextScope);
+      })
       .catch((err: unknown) => current && setLoaded({ key: requestKey, rows: [], total: 0, error: describeAgentError(err) }));
     return () => {
       current = false;
     };
-  }, [searchText, page, pageSize, attempt, requestKey]);
+  }, [searchText, page, pageSize, attempt, requestKey, filterKey]);
 
   // The registry reads every DA's record, so a page can take a few seconds on the first load.
   const loading = loaded === null || loaded.key !== requestKey;
@@ -121,46 +150,34 @@ export function AgentsRegistry() {
 
   const activeFilterCount = Object.values(filters).filter((set) => set.size > 0).length;
 
-  // Kebeles under the selected woredas (every kebele when no woreda is picked), from the loaded rows.
-  // Kebele and Woreda options: the areas of the user's own area from the geo Master Data, then those the rows hold.
-  const scopeKebeleNames = useScopeAreaNames("kebele", []);
-  const woredaNames = useScopeAreaNames("woreda", source.map((a) => a.woreda));
-  const kebelesFor = (woredas: Set<string>) => [
-    ...unique([...(woredas.size === 0 ? scopeKebeleNames : []), ...source.filter((a) => woredas.size === 0 || woredas.has(a.woreda)).map((a) => a.kebele)]).filter((k) => k !== UNASSIGNED),
-    UNASSIGNED,
-  ];
-  // Drops kebele selections that no longer belong to the chosen woredas.
-  const pruneKebeles = (next: Filters): Filters => {
-    const allowed = new Set(kebelesFor(next.woreda));
-    return { ...next, kebele: new Set([...next.kebele].filter((k) => allowed.has(k))) };
+  // Any filter change starts again from page 1; a Region or Woreda change resets the areas under it.
+  const applyFilters = (next: Filters, changed: (keyof Filters)[]) => {
+    const reset = changed.flatMap((key) => DEPENDENTS[key] ?? []).filter((key) => !changed.includes(key));
+    setFilters({ ...next, ...Object.fromEntries(reset.map((key) => [key, new Set<string>()])) });
+    setPage(1);
   };
-  const setFilter = (key: keyof Filters) => (next: Set<string>) => setFilters((prev) => pruneKebeles({ ...prev, [key]: next }));
+  const setFilter = (key: keyof Filters) => (next: Set<string>) => applyFilters({ ...filters, [key]: next }, [key]);
 
-  const woredaOptions = optionsOf(source.map((a) => a.woreda), woredaNames);
-  const activeOptions = optionsOf(source.map((a) => a.activeStatus), ACTIVE);
-  const tierOptions = optionsOf(source.map((a) => a.educationTier), unique([...TIERS, ...source.map((a) => a.educationTier)]));
-  const approvalOptions = optionsOf(source.map((a) => a.approvalStatus), APPROVALS);
-  const inWoredas = source.filter((a) => filters.woreda.size === 0 || filters.woreda.has(a.woreda));
-  const kebeleOptions = optionsOf(inWoredas.map((a) => a.kebele), kebelesFor(filters.woreda), (k) => (k === UNASSIGNED ? "Unassigned" : k));
+  const options = (key: keyof Filters) => optionsFor(facets, key, filters[key]);
+  const activeOptions = options("active");
+  const tierOptions = options("tier");
+  const kebeleOptions = options("kebele");
+  const approvalOptions = options("approval");
+  const woredaOptions = options("woreda");
   const filterFields: FilterFieldConfig[] = [
-    { key: "woreda", label: "Woreda", allLabel: "All woredas", placeholder: "All Woredas", options: woredaOptions },
+    // A narrower team hides the levels above it: a Region filter only for every DA (or several Regions), a Woreda
+    // filter unless the team is a single Woreda.
+    ...(scope === "all" || (scope === "region" && options("region").length > 1) ? [{ key: "region", label: "Region", allLabel: "All regions", placeholder: "All Regions", options: options("region") }] : []),
+    ...(scope === "all" || scope === "region" || woredaOptions.length > 1 ? [{ key: "woreda", label: "Woreda", allLabel: "All woredas", placeholder: "All Woredas", options: woredaOptions }] : []),
     { key: "kebele", label: "Kebele", allLabel: "All kebeles", placeholder: "All Kebeles", options: kebeleOptions },
     { key: "active", label: "Active status", allLabel: "All active statuses", placeholder: "All", options: activeOptions },
     { key: "tier", label: "Education tier", allLabel: "All tiers", placeholder: "All", options: tierOptions },
+    { key: "fayda", label: "Fayda status", allLabel: "All Fayda statuses", placeholder: "All", options: options("fayda") },
     { key: "approval", label: "Approval status", allLabel: "All approval statuses", placeholder: "All", options: approvalOptions },
   ];
 
-  const rows = useMemo(() => {
-    const has = (set: Set<string>, value: string) => set.size === 0 || set.has(value);
-    return source.filter(
-      (a) =>
-        has(filters.woreda, a.woreda) &&
-        has(filters.kebele, a.kebele) &&
-        has(filters.active, a.activeStatus) &&
-        has(filters.tier, a.educationTier) &&
-        has(filters.approval, a.approvalStatus),
-    );
-  }, [source, filters]);
+  // The backend has already applied the filters.
+  const rows = source;
 
   const columns: Column<Agent>[] = [
     { key: "daId", header: "DA-ID", cell: (a) => <span className="font-semibold text-ink">{a.daId.replace(/-(?=d+$)/, "-​")}</span> },
@@ -279,17 +296,11 @@ export function AgentsRegistry() {
           onClose={() => setIsFiltersOpen(false)}
           fields={filterFields}
           filters={filters}
-          onApply={(next) =>
-            setFilters(
-              pruneKebeles({
-                woreda: next.woreda ?? new Set(),
-                kebele: next.kebele ?? new Set(),
-                active: next.active ?? new Set(),
-                tier: next.tier ?? new Set(),
-                approval: next.approval ?? new Set(),
-              }),
-            )
-          }
+          onApply={(next) => {
+            const picked = Object.fromEntries((Object.keys(EMPTY) as (keyof Filters)[]).map((key) => [key, next[key] ?? new Set<string>()])) as Filters;
+            const sameSet = (a: Set<string>, b: Set<string>) => a.size === b.size && [...a].every((v) => b.has(v));
+            applyFilters(picked, (Object.keys(EMPTY) as (keyof Filters)[]).filter((key) => !sameSet(picked[key], filters[key])));
+          }}
         />
       </Card>
 

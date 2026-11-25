@@ -37,6 +37,19 @@ export interface ApiAgent {
   [field: string]: unknown;
 }
 
+/** The filters of GET /agents and /agents/my-team; the backend names them the same. */
+export const AGENT_FILTER_FIELDS = ["region", "woreda", "kebele", "active_status", "education_tier", "fayda_status", "approval_status"] as const;
+export type AgentFilterField = (typeof AGENT_FILTER_FIELDS)[number];
+/** Values per filter; a DA matches any value of a filter, and every filter given. "unassigned" = no area at that level. */
+export type AgentFilters = Partial<Record<AgentFilterField, string[]>>;
+/** One option of a filter with how many DAs it shows, counted over the whole list (not just the page). */
+export interface AgentFacet {
+  value: string;
+  label: string;
+  count: number;
+}
+export type AgentFacets = Partial<Record<AgentFilterField, AgentFacet[]>>;
+
 export interface ListAgentsParams {
   /** Part of a DA-ID or name. */
   search?: string;
@@ -46,6 +59,8 @@ export interface ListAgentsParams {
   kebele?: string;
   activeStatus?: string;
   educationTier?: string;
+  /** Several values per filter; wins over the single-value fields above. */
+  filters?: AgentFilters;
   limit?: number;
   start?: number;
 }
@@ -53,12 +68,51 @@ export interface ListAgentsParams {
 const query = (params: Record<string, string | number | undefined>) =>
   new URLSearchParams(Object.entries(params).flatMap(([k, v]) => (v === undefined || v === "" ? [] : [[k, String(v)]]))).toString();
 
-/** GET /da-services/agents: the DAs in the caller's scope (Supervisor: Woreda, Executive: Region, Admin: all). */
-export async function listAgents({ search, region, woreda, kebele, activeStatus, educationTier, limit = 50, start = 0 }: ListAgentsParams = {}): Promise<{ agents: ApiAgent[]; total: number }> {
-  const res = await authRequest<{ data: { agents: ApiAgent[]; total: number } }>(
-    `/da-services/agents?${query({ search, region, woreda, kebele, active_status: activeStatus, education_tier: educationTier, limit, start })}`,
+/** The filters as query parameters: each one's values comma-separated, empty ones left out. */
+const filterParams = (filters: AgentFilters = {}): Record<string, string | undefined> =>
+  Object.fromEntries(AGENT_FILTER_FIELDS.map((f) => [f, filters[f]?.length ? filters[f].join(",") : undefined]));
+
+/** GET /da-services/agents: every DA the registry returns (the Admin's view), filtered and paged, with filter facets. */
+export async function listAgents({ search, region, woreda, kebele, activeStatus, educationTier, filters, limit = 50, start = 0 }: ListAgentsParams = {}): Promise<{ agents: ApiAgent[]; total: number; facets: AgentFacets }> {
+  const single = { region, woreda, kebele, active_status: activeStatus, education_tier: educationTier };
+  const many = filterParams(filters);
+  const params = Object.fromEntries(AGENT_FILTER_FIELDS.map((f) => [f, many[f] ?? (single as Record<string, string | undefined>)[f]]));
+  const res = await authRequest<{ data: { agents: ApiAgent[]; total: number; facets?: AgentFacets } }>(`/da-services/agents?${query({ search, ...params, limit, start })}`);
+  return { agents: res.data.agents ?? [], total: res.data.total ?? 0, facets: res.data.facets ?? {} };
+}
+
+/** Whose DAs a team holds: every DA (Admin), a Region (Executive), a Woreda (Supervisor), a Kebele (DA), or none. */
+export type TeamScope = "all" | "region" | "woreda" | "kebele" | "none";
+
+export interface ListMyTeamParams {
+  /** Part of a DA-ID or name. */
+  search?: string;
+  /** Narrow within the team, e.g. { kebele: ["ET04-W01-K03"] }; never widens it. */
+  filters?: AgentFilters;
+  limit?: number;
+  start?: number;
+}
+
+export interface MyTeam {
+  scope: TeamScope;
+  /** The area codes the scope covers ([] for "all" and "none"). */
+  areas: string[];
+  agents: ApiAgent[];
+  total: number;
+  facets: AgentFacets;
+}
+
+/**
+ * GET /da-services/agents/my-team: the signed-in user's team, scoped by their role on the backend (a user with
+ * several roles gets the widest): Admin every DA, Executive their Region, Supervisor their Woreda, DA their Kebele
+ * (the caller included). Filters, search and paging run on the server; facets count the whole team.
+ */
+export async function listMyTeam({ search, filters, limit = 50, start = 0 }: ListMyTeamParams = {}): Promise<MyTeam> {
+  const res = await authRequest<{ data: { scope?: TeamScope; areas?: string[]; agents?: ApiAgent[]; total?: number; facets?: AgentFacets } }>(
+    `/da-services/agents/my-team?${query({ search, ...filterParams(filters), limit, start })}`,
   );
-  return { agents: res.data.agents ?? [], total: res.data.total ?? 0 };
+  const d = res.data;
+  return { scope: d.scope ?? "none", areas: d.areas ?? [], agents: d.agents ?? [], total: d.total ?? 0, facets: d.facets ?? {} };
 }
 
 /** GET /da-services/agents/{da_id}: one DA, read live from the registry; 403 outside the caller's scope. */

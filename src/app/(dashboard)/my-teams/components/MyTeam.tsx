@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Banner } from "@/components/ui/Banner";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { agentToTeamMember, describeAgentError, expertToTeamMember, listExperts, type ApiAgent, type TeamMember } from "@/features/agents";
+import { agentToTeamMember, describeAgentError, listMyTeam, type ApiAgent, type TeamMember } from "@/features/agents";
 import { useAuthStore } from "@/store/useAuthStore";
 import { TeamTable } from "./TeamTable";
 
@@ -12,34 +12,36 @@ import { TeamTable } from "./TeamTable";
 const asApiAgent = (value: Record<string, unknown> | null | undefined): ApiAgent | null =>
   value && typeof value.da_id === "string" ? (value as unknown as ApiAgent) : null;
 
-// A DA's team is the other Development Agents in their Kebele (GET /da-services/experts is scoped to the Woreda by the
-// backend, so the Kebele is narrowed here), with the DA's own registry record (from /me) first.
+// A DA's team is the Development Agents in their Kebele (GET /da-services/agents/my-team: for a DA the backend
+// scopes it to their Kebele), with the DA's own registry record (from /me) first.
 export function MyTeam() {
   const profile = useAuthStore((s) => s.profile);
   const me = useMemo(() => {
     const record = asApiAgent(profile?.agent);
     return record ? agentToTeamMember(record) : null;
   }, [profile?.agent]);
-  const [loaded, setLoaded] = useState<{ items: TeamMember[]; error: string | null } | null>(null);
+  const [loaded, setLoaded] = useState<{ items: TeamMember[]; kebeles: string[]; error: string | null } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    listExperts()
-      .then(({ items }) => !cancelled && setLoaded({ items: items.map(expertToTeamMember), error: null }))
-      .catch((err: unknown) => !cancelled && setLoaded({ items: [], error: describeAgentError(err) }));
+    listMyTeam({ limit: 200 })
+      .then(({ areas, agents }) => !cancelled && setLoaded({ items: agents.map(agentToTeamMember), kebeles: areas, error: null }))
+      .catch((err: unknown) => !cancelled && setLoaded({ items: [], kebeles: [], error: describeAgentError(err) }));
     return () => {
       cancelled = true;
     };
   }, []);
 
-  // The registry may give a Kebele as its code or its name. A DA with no Kebele on record sees their Woreda.
-  const record = asApiAgent(profile?.agent);
-  const myKebeles = [record?.kebele, record?.kebele_name].filter((k): k is string => !!k);
-  const colleagues = (loaded?.items ?? []).filter((m) => myKebeles.length === 0 || myKebeles.includes(m.kebele));
+  const colleagues = loaded?.items ?? [];
   const team = me ? [me, ...colleagues.filter((m) => m.daId !== me.daId)] : colleagues;
-  const description = myKebeles.length > 0 && me
-    ? `Development Agents in ${me.kebele} Kebele, ${me.woreda} Woreda`
-    : "The Development Agents in your Kebele, from the DA Registry.";
+  // Name the Kebele as the rows show it (its name where the registry gave one), else the code the backend resolved.
+  const kebeleLabel = (me && me.kebele !== "—" ? me.kebele : colleagues[0]?.kebele) || loaded?.kebeles.join(", ");
+  const woreda = me?.woreda || colleagues[0]?.woreda;
+  const description = loaded && loaded.kebeles.length === 0 && !loaded.error
+    ? "No Kebele posting was found for you, so there is no team to show yet."
+    : kebeleLabel
+      ? `Development Agents in ${kebeleLabel} Kebele${woreda ? `, ${woreda} Woreda` : ""}`
+      : "The Development Agents in your Kebele, from the DA Registry.";
 
   return (
     <div className="flex w-full flex-col gap-4">
