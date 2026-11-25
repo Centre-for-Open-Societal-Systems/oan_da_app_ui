@@ -18,12 +18,14 @@ pipeline {
         OAN_DEV_EDGE_IP = '10.0.1.131'
         IMAGE_REPO      = "${IMAGE_REGISTRY}/${IMAGE_NAME}"
         // The DA cluster node (different from the grievance node). Jenkins SSHes in and runs helm there.
+        // develop only: staging no longer deploys here, it goes to the QA cluster (stage "staging → QA cluster (helm)").
         DA_NODE         = '65.0.132.192'
         HELM_RELEASE    = 'registry-frontend'
         CHART_DIR       = '/home/ubuntu/da/helm/charts/da-app'
-        // Per-branch target (namespace, public URL) is chosen in the Checkout stage:
-        //   develop -> namespace develop, image tag develop-<build>-<sha>
-        //   staging -> namespace staging, image tag staging-<build>-<sha>
+        // develop -> DA node namespace develop, image tag develop-<build>-<sha>.
+        // staging builds nothing: it promotes what develop built from the same source tree to the QA cluster
+        // (13.127.77.101, https://da-app.qa.oanstaging.com), as oan_grievance_ui.
+        QA_VERIFY_URL   = 'https://da-app.qa.oanstaging.com/login'
     }
 
     stages {
@@ -32,24 +34,11 @@ pipeline {
             steps {
                 checkout scm
                 script {
-                    def targets = [
-                        develop: [
-                            namespace: 'develop',
-                            verifyUrl: 'https://da-registry-development.oanstaging.com/login',
-                            apiBaseUrl: 'http://da-backend-development.oanstaging.com'
-                        ],
-                        staging: [
-                            namespace: 'staging',
-                            verifyUrl: 'https://da-registry-staging.oanstaging.com/login',
-                            apiBaseUrl: 'http://da-backend-staging.oanstaging.com'
-                        ]
-                    ]
-                    def target = targets[env.BRANCH_NAME]
-                    env.TARGET_ENV    = target ? env.BRANCH_NAME : 'develop'
-                    def t = target ?: targets.develop
-                    env.K8S_NAMESPACE = t.namespace
-                    env.VERIFY_URL    = t.verifyUrl
-                    env.API_BASE_URL  = t.apiBaseUrl
+                    // The DA node target (develop only; PR builds run checkout + install/test).
+                    env.TARGET_ENV    = 'develop'
+                    env.K8S_NAMESPACE = 'develop'
+                    env.VERIFY_URL    = 'https://da-registry-development.oanstaging.com/login'
+                    env.API_BASE_URL  = 'http://da-backend-development.oanstaging.com'
 
                     def sha = sh(returnStdout: true, script: 'git rev-parse --short=7 HEAD').trim()
                     env.IMAGE_TAG_BUILD = "${env.TARGET_ENV}-${env.BUILD_NUMBER}-${sha}"
@@ -80,7 +69,7 @@ pipeline {
         }
 
         stage('Build image') {
-            when { anyOf { branch 'develop'; branch 'staging' } }
+            when { branch 'develop' }
             steps {
                 // API_BASE_URL is baked into the /api/v1 proxy at build time (see Dockerfile).
                 sh '''
@@ -94,7 +83,7 @@ pipeline {
         }
 
         stage('Push image') {
-            when { anyOf { branch 'develop'; branch 'staging' } }
+            when { branch 'develop' }
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
@@ -111,7 +100,7 @@ pipeline {
         }
 
         stage('Deploy (helm)') {
-            when { anyOf { branch 'develop'; branch 'staging' } }
+            when { branch 'develop' }
             steps {
                 withCredentials([sshUserPrivateKey(
                     credentialsId: 'da-node-ssh-key',
@@ -147,7 +136,7 @@ ENDSSH
         }
 
         stage('Verify') {
-            when { anyOf { branch 'develop'; branch 'staging' } }
+            when { branch 'develop' }
             steps {
                 sh '''
                     for i in $(seq 1 10); do
@@ -263,8 +252,8 @@ ENDSSH
             }
         }
 
-        // ---- staging -> Helm release `da-app-ui` on the QA cluster (qa.oanstaging.com), as oan_a2c ----
-        // Runs after the DA node staging deploy above, so a problem here never blocks it. Installs the promoted
+        // ---- staging -> Helm release `da-app-ui` on the QA cluster (qa.oanstaging.com), as oan_grievance_ui ----
+        // The only staging deploy (the DA node 65.0.132.192 is develop only). Installs the promoted
         // archive with helm/environments/staging; the kubeconfig is the jenkins-qa-deployer ServiceAccount
         // (oan-helm docs/qa-cluster.md), whose oan-cluster-access lists namespace da-app.
         stage('staging → QA cluster (helm)') {
@@ -277,6 +266,24 @@ ENDSSH
                 withCredentials([file(credentialsId: 'oan-qa-kubeconfig', variable: 'KUBECONFIG')]) {
                     sh 'DEPLOY_ENV=staging bash ci/deploy-helm-dev.sh'
                 }
+            }
+        }
+
+        // Through APISIX on the QA node by public DNS (*.qa.oanstaging.com -> 13.127.77.101), as oan_grievance_ui.
+        stage('Verify (QA)') {
+            when { beforeAgent true; branch 'staging' }
+            agent { label 'oan-ci-deploy' }
+            steps {
+                sh '''
+                    for i in $(seq 1 10); do
+                        code=$(curl -sL -o /dev/null -w "%{http_code}" -m 10 "$QA_VERIFY_URL" || true)
+                        echo "attempt $i: $QA_VERIFY_URL -> $code"
+                        [ "$code" = "200" ] && exit 0
+                        sleep 6
+                    done
+                    echo "da-app-ui did not return 200 at $QA_VERIFY_URL"
+                    exit 1
+                '''
             }
         }
 
@@ -297,7 +304,13 @@ ENDSSH
 
     post {
         failure {
-            echo "da-registry-frontend ${env.BRANCH_NAME} deploy failed (namespace ${env.K8S_NAMESPACE}). Check the stage logs above; 'helm history ${env.HELM_RELEASE} -n ${env.K8S_NAMESPACE}' shows whether Helm rolled back."
+            script {
+                if (env.BRANCH_NAME == 'staging') {
+                    echo "da-app-ui staging (QA cluster) deploy failed. Check the stage logs above; 'helm history da-app-ui -n da-app' on QA shows whether Helm rolled back."
+                } else {
+                    echo "da-registry-frontend ${env.BRANCH_NAME} deploy failed (namespace ${env.K8S_NAMESPACE}). Check the stage logs above; 'helm history ${env.HELM_RELEASE} -n ${env.K8S_NAMESPACE}' shows whether Helm rolled back."
+                }
+            }
         }
     }
 }
