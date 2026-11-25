@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuthStore } from "@/store/useAuthStore";
 import type { Farmer } from "../types";
-import { joinNames, MAX_BATCH_FARMERS, mergeBatchRows, planFarmers, toggleFarmer } from "./planVisit";
+import { joinNames, MAX_BATCH_FARMERS, mergeBatchRows, parseLocation, planFarmers, toggleFarmer } from "./planVisit";
 
 // Minimal in-memory Storage so the persisted auth store runs under Node.
 class MemoryStorage implements Storage {
@@ -99,5 +99,25 @@ describe("mergeBatchRows", () => {
     expect(first.map((r) => [r.farmer.id, r.visitId ?? r.reason])).toEqual([["a", "V-a"], ["b", "Already has an active visit"]]);
     const retried = mergeBatchRows(first, [{ farmer: farmer("b"), visitId: "V-b" }], []);
     expect(retried.map((r) => [r.farmer.id, r.visitId, r.reason])).toEqual([["a", "V-a", undefined], ["b", "V-b", undefined]]);
+  });
+});
+
+describe("parseLocation", () => {
+  it("sends nothing when both are empty", () => {
+    expect(parseLocation({ lat: "", lng: " " })).toEqual({});
+  });
+
+  it("reads the typed latitude and longitude as numbers", () => {
+    expect(parseLocation({ lat: " 9.1234", lng: "37.5678 " })).toEqual({ location: { lat: 9.1234, lng: 37.5678 } });
+  });
+
+  it("asks for both when only one is given", () => {
+    expect(parseLocation({ lat: "9.1", lng: "" }).error).toMatch(/both/);
+  });
+
+  it("rejects text and out-of-range values", () => {
+    expect(parseLocation({ lat: "abc", lng: "37" }).error).toMatch(/Latitude/);
+    expect(parseLocation({ lat: "91", lng: "37" }).error).toMatch(/Latitude/);
+    expect(parseLocation({ lat: "9", lng: "181" }).error).toMatch(/Longitude/);
   });
 });

@@ -13,7 +13,7 @@ import { SegmentTabs } from "@/components/ui/SegmentTabs";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { KEBELES, WOREDAS } from "@/features/agents";
+import { AreaPicker, EMPTY_AREA, useGeoChildren, type AreaSelection } from "@/features/geo";
 
 const AUDIT_LOG = [
   ["16 Sep 2026, 09:02", "Yonas Haile (Admin)", "Updated sync schedule → Every 6 hours"],
@@ -36,6 +36,11 @@ const TABS: { key: Tab; label: string }[] = [
 export function SettingsWorkspace() {
   const [tab, setTab] = useState<Tab>("sync");
   const [notice, setNotice] = useState<string | null>(null);
+  // Master data tab: a Zone is picked, then its Woredas and their Kebeles are listed from the geo Master Data.
+  const [masterArea, setMasterArea] = useState<AreaSelection>(EMPTY_AREA);
+  const masterZone = masterArea.zone?.code;
+  const masterWoredas = useGeoChildren("woreda", masterZone ? [masterZone] : []);
+  const masterKebeles = useGeoChildren("kebele", (masterWoredas ?? []).map((w) => w.code));
   const [sync, setSync] = useState({ moaBase: "https://api.moa.gov.et/extension/v2", schedule: "Every 6 hours", batch: "500", retries: "3", faydaFallback: "OTP via registered mobile", conflict: "Merge with review" });
   const [routing, setRouting] = useState({ onboarding: "Woreda Supervisor of proposed kebele", issues: "Woreda Supervisor of reporter", grievances: "External Grievance Service (API)", broadcasts: "Communications Officer — region" });
 
@@ -81,15 +86,29 @@ export function SettingsWorkspace() {
         {tab === "master" && (
           <div className="p-5">
             <p className="text-[13.5px] text-ink-soft">Administrative units used for scope, assignment and geofence validation. Unknown inbound codes (e.g. OR-DN-017) surface as “Invalid Kebele reference” exceptions until mapped here.</p>
-            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-              {WOREDAS.map((w) => (
-                <div key={w} className="rounded-lg border border-line p-4">
-                  <div className="flex items-center justify-between"><h3 className="text-[14px] font-semibold text-ink">{w}</h3><Pill tone="slate">Oromia · West Shewa</Pill></div>
-                  <ul className="mt-2 flex flex-wrap gap-1.5">{KEBELES[w].map((k) => <li key={k} className="rounded-full border border-slate-200 bg-surface px-2.5 py-0.5 text-[12.5px] text-slate-600">{k}</li>)}</ul>
-                  <button type="button" onClick={() => setNotice(`Kebele mapping for ${w} opened — add or map inbound MoA codes to master kebeles.`)} className="mt-3 text-[12.5px] font-semibold text-brand-green hover:underline">Manage kebeles</button>
-                </div>
-              ))}
-            </div>
+            <AreaPicker depth="zone" idPrefix="master" showCountry={false} onChange={setMasterArea} className="mt-4" />
+            {!masterZone ? (
+              <p className="mt-4 text-[13px] text-muted">Choose a Region and Zone to see its Woredas and Kebeles.</p>
+            ) : !masterWoredas ? (
+              <p className="mt-4 text-[13px] text-muted">Loading Woredas…</p>
+            ) : masterWoredas.length === 0 ? (
+              <p className="mt-4 text-[13px] text-muted">No Woredas in this Zone.</p>
+            ) : (
+              <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                {masterWoredas.map((w) => {
+                  const kebeles = (masterKebeles ?? []).filter((k) => k.parent === w.code);
+                  return (
+                    <div key={w.code} className="rounded-lg border border-line p-4">
+                      <div className="flex items-center justify-between gap-2"><h3 className="text-[14px] font-semibold text-ink">{w.name}</h3><Pill tone="slate">{masterArea.region?.name} · {masterArea.zone?.name}</Pill></div>
+                      <ul className="mt-2 flex flex-wrap gap-1.5">
+                        {!masterKebeles ? <li className="text-[12.5px] text-muted">Loading Kebeles…</li> : kebeles.length === 0 ? <li className="text-[12.5px] text-muted">No Kebeles</li> : kebeles.map((k) => <li key={k.code} className="rounded-full border border-slate-200 bg-surface px-2.5 py-0.5 text-[12.5px] text-slate-600">{k.name}</li>)}
+                      </ul>
+                      <button type="button" onClick={() => setNotice(`Kebele mapping for ${w.name} opened — add or map inbound MoA codes to master kebeles.`)} className="mt-3 text-[12.5px] font-semibold text-brand-green hover:underline">Manage kebeles</button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 

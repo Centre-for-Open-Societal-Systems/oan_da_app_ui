@@ -26,6 +26,7 @@ import {
 } from "@/features/performance";
 import { FigureEntryModal } from "./FigureEntryModal";
 import { SendReminderModal } from "./SendReminderModal";
+import { areaFilterOptions, useScopeAreaNames } from "@/features/geo";
 
 const SEARCH_PLACEHOLDER = searchPlaceholder(["Agent", "Kebele", "Role", "Tikimt figures"]);
 
@@ -111,8 +112,10 @@ export function SupervisorTeam() {
   const { pageRows, paginationProps } = usePagination(rows);
   const activeFilterCount = Object.values(filters).filter((set) => set.size > 0).length;
 
+  // Every Kebele of the user's own area from the geo Master Data, then those the rows hold.
+  const kebeleNames = useScopeAreaNames("kebele", members.map((m) => m.kebele));
   const filterFields: FilterFieldConfig[] = [
-    { key: "kebele", label: "Kebele", allLabel: "All Kebele", placeholder: "All Kebele", options: optionsOf(members.map((m) => m.kebele)) },
+    { key: "kebele", label: "Kebele", allLabel: "All Kebele", placeholder: "All Kebele", options: areaFilterOptions(members.map((m) => m.kebele), kebeleNames) },
     { key: "role", label: "Role", allLabel: "All Role", placeholder: "All Role", options: optionsOf(members.map((m) => m.role)) },
     { key: "figures", label: TEAM_SUMMARY.figuresMonth, allLabel: `All ${TEAM_SUMMARY.figuresMonth}`, placeholder: `All ${TEAM_SUMMARY.figuresMonth}`, options: optionsOf(members.map((m) => m.figures)) },
   ];

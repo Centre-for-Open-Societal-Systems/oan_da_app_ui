@@ -16,13 +16,15 @@ interface PlanVisitBatchResultProps {
   /** Sends one failed farmer again with the edited details. */
   onResubmit: (farmer: Farmer, request: BatchVisitItem) => Promise<void>;
   submitting?: boolean;
+  /** The farmers were to be told by SMS (notify_farmer_sms). */
+  notifySms?: boolean;
 }
 
 const visits = (n: number) => `${n} visit${n === 1 ? "" : "s"}`;
 
 // Outcome of a batch plan: one row per farmer, planned (visit id) or failed (the backend's reason) with Edit /
 // Discard. Edit opens that farmer's own details in the row; Resubmit sends only them.
-export function PlanVisitBatchResult({ rows, onDiscard, onResubmit, submitting }: PlanVisitBatchResultProps) {
+export function PlanVisitBatchResult({ rows, onDiscard, onResubmit, submitting, notifySms = true }: PlanVisitBatchResultProps) {
   const failed = rows.filter((r) => r.reason);
   const done = rows.length - failed.length;
   const [editing, setEditing] = useState<{ farmerId: string; request: BatchVisitItem } | null>(null);
@@ -39,7 +41,7 @@ export function PlanVisitBatchResult({ rows, onDiscard, onResubmit, submitting }
           </p>
         ) : (
           <p className="mt-1 text-[13px] text-muted">
-            {done === 1 ? "The farmer is" : "Each farmer is"} notified by SMS. The {done === 1 ? "visit is" : "visits are"} on the plan.
+            {notifySms && `${done === 1 ? "The farmer is" : "Each farmer is"} notified by SMS. `}The {done === 1 ? "visit is" : "visits are"} on the plan.
           </p>
         )}
       </div>

@@ -1,4 +1,5 @@
 import { authRequest } from "@/features/auth";
+import { kebeleName, loadKebeleNames } from "./kebeleNames";
 import type { PlannerStatus, VisitRecord, VisitStatus } from "./types";
 
 /** One question a farmer asked and the advice given, on an Advisory visit. */
@@ -15,6 +16,10 @@ export interface ApiVisit {
   /** Visit id, e.g. "DA-VIS-2026-0000123". */
   name: string;
   da_id: string;
+  /** The DA's name, for display; until the backend sends it the DA-ID is shown. */
+  da_name?: string | null;
+  /** Frappe User (email) of the DA the visit belongs to, as sent when it was planned. */
+  user?: string | null;
   farmer_id: string;
   /** The name sent when the visit was planned; older visits may not have one. */
   farmer_name?: string | null;
@@ -23,6 +28,9 @@ export interface ApiVisit {
   /** "2026-10-16T10:30:00", server local time. */
   scheduled_at: string;
   duration_min: number;
+  /** High / Medium / Low, as planned. */
+  priority?: string | null;
+  priority_reason?: string | null;
   kebele: string | null;
   plot_ref: string | null;
   assigned_by: string | null;
@@ -56,11 +64,12 @@ export interface VisitQuery {
   start?: number;
 }
 
-/** GET /api/v1/da-services/visits: visits the caller may see, earliest first. */
+/** GET /api/v1/da-services/visits: visits the caller may see, earliest first. The Kebele names are read too (see kebeleName). */
 export async function listVisits(q: VisitQuery = {}): Promise<{ items: ApiVisit[]; total: number }> {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(q)) if (value !== undefined && value !== "") query.set(key, String(value));
   const res = await authRequest<{ data: ApiVisit[]; meta: { total: number } }>(`/da-services/visits?${query}`);
+  await loadKebeleNames(res.data.map((v) => v.kebele));
   return { items: res.data, total: res.meta.total };
 }
 
@@ -69,32 +78,46 @@ const UI_STATUSES: readonly VisitStatus[] = ["Confirmed", "Planned", "Completed"
 /** The farmer's name on a visit, or their registry id when the visit has no name (planned before names were stored). */
 export const visitFarmerLabel = (v: { farmer_id: string; farmer_name?: string | null }) => v.farmer_name?.trim() || v.farmer_id;
 
-/** An API visit in the table's shape. Cancelled / rescheduled visits show as Missed, the closest pill. */
+/** An API visit in the table's shape. The table shows physical_status; `status` keeps the backend's ui_status grouping. */
 export function toVisitRecord(v: ApiVisit): VisitRecord {
   const at = new Date(v.scheduled_at);
   return {
     id: v.name,
     date: at.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }),
     time: v.scheduled_at.slice(11, 16),
-    agent: v.da_id,
+    agent: v.da_name?.trim() || v.da_id,
+    daId: v.da_id,
+    ownerUser: v.user ?? undefined,
     farmerId: v.farmer_id,
     farmerName: visitFarmerLabel(v),
     farmerEmail: "",
-    kebele: v.kebele ?? "—",
+    kebele: kebeleName(v.kebele) ?? "—",
     purpose: v.purpose || v.visit_type,
     status: (UI_STATUSES as readonly string[]).includes(v.ui_status) ? (v.ui_status as VisitStatus) : "Missed",
     plotRef: v.plot_ref ?? "—",
     durationMin: v.duration_min,
     assignedBy: v.assigned_by ?? undefined,
     physicalStatus: v.physical_status,
+    scheduledDate: v.scheduled_at.slice(0, 10),
     visitType: v.visit_type || undefined,
   };
 }
 
-/** A DA acts only on their own visits; an unknown DA id (/me not read yet) counts as not theirs. Officers are not limited here. */
-export const canActOnVisit = (v: Pick<VisitRecord, "agent">, isDA: boolean, daId: string | null | undefined) => !isDA || v.agent === daId;
+/**
+ * The status every visit screen shows: the backend physical_status. `status` (ui_status, with "Missed" standing in for
+ * any other value) is only a fallback for sample records, which have no physical status.
+ */
+export const visitStatusLabel = (v: Pick<VisitRecord, "physicalStatus" | "status">) => v.physicalStatus ?? v.status;
 
-/** Only these can be checked in; anything else gets "Only a Planned or Confirmed visit can be started." */
+/** A DA acts only on their own visits; an unknown DA id (/me not read yet) counts as not theirs. Officers are not limited here. */
+export const canActOnVisit = (v: Pick<VisitRecord, "daId" | "ownerUser">, isDA: boolean, me: { user?: string | null; daId?: string | null }) => {
+  if (!isDA) return true;
+  // The visit's `user` (the DA's Frappe User) against the signed-in user; the DA-ID when /me sends one.
+  if (v.ownerUser && me.user && v.ownerUser.toLowerCase() === me.user.toLowerCase()) return true;
+  return !!me.daId && v.daId === me.daId;
+};
+
+/** Only a Planned or Confirmed visit can be checked in, on any date (today, overdue, upcoming or future). */
 export const canStartVisit = (v: Pick<VisitRecord, "physicalStatus">) => v.physicalStatus === "Planned" || v.physicalStatus === "Confirmed";
 
 export interface StartVisitRequest {
@@ -171,6 +194,7 @@ export interface ApiVisitDetail extends ApiVisit {
 
 export async function fetchVisit(visitId: string): Promise<ApiVisitDetail> {
   const res = await authRequest<{ data: ApiVisitDetail }>(`/da-services/visits/${encodeURIComponent(visitId)}`);
+  await loadKebeleNames([res.data.kebele]);
   return res.data;
 }
 

@@ -59,8 +59,6 @@ DEPARTMENTS.push(
   }),
 );
 
-export const REGION_OPTIONS = ["Federal", "Oromia", "Amhara", "Tigray", "Afar", "Somali", "SNNP", "Sidama", "Gambela", "Benishangul-Gumuz"];
-
 export const DEFAULT_ROLE_NAMES = ["Development Agent", "Supervisor", "Admin", "Super Admin", "Communication Officer"] as const;
 export type RoleName = (typeof DEFAULT_ROLE_NAMES)[number];
 
@@ -104,20 +102,6 @@ export const REGISTRY_ENTITIES: Record<string, string[]> = {
   "Crop Catalogue": ["Crop", "Variety", "Season"],
   "Input Catalogue": ["Seed", "Fertilizer", "Pesticide"],
 };
-
-/** Region → zone → woredas, for the cascading Coverage dropdowns. Every kebele is "Kebele 01" … "Kebele 12". */
-export const GEOGRAPHY: Record<string, Record<string, string[]>> = {
-  Oromia: { Shewa: ["Bako"], "West Shewa": ["Ambo", "Dendi", "Bako Tibe"], "East Shewa": ["Adama"], Jimma: ["Dedo"] },
-  Amhara: { "North Wollo": ["Kobo"], "East Gojjam": ["Debre Markos"] },
-  Afar: { "Zone 1": ["Dubti"] },
-  Somali: { Fafan: ["Awbare"], Shabelle: ["Gode"] },
-  Gambela: { Anywaa: ["Abobo"] },
-  "Benishangul-Gumuz": { Metekel: ["Bullen"] },
-  Tigray: { "Central Tigray": ["Axum"] },
-  SNNP: { Gurage: ["Wolkite"] },
-  Sidama: { "Sidama Zone": ["Hawassa"] },
-};
-export const KEBELES = Array.from({ length: 12 }, (_, i) => `Kebele ${String(i + 1).padStart(2, "0")}`);
 
 /** "Oromia → West Shewa → Ambo → Kebele 01": the area a user acts within, widest first. */
 export const coverageOf = (u: Pick<SuperAdminUser, "region" | "zone" | "woreda" | "kebele">) =>

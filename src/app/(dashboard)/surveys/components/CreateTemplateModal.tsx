@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Banner } from "@/components/ui/Banner";
@@ -11,8 +11,7 @@ import { Textarea } from "@/components/ui/Textarea";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { MultiSelectDropdown } from "@/components/ui/MultiSelectDropdown";
 import { todayIso } from "@/lib/utils";
-import { useAuthStore } from "@/store/useAuthStore";
-import { listAreas, type AdminArea } from "@/features/assignments";
+import { AreaPicker, type AreaSelection } from "@/features/geo";
 import { listAgents, type ApiAgent } from "@/features/agents";
 import {
   DEFAULT_TARGET_FARMERS,
@@ -46,8 +45,6 @@ interface CreateTemplateModalProps {
 
 const blankQuestion = (id: number): TemplateQuestion => ({ id, prompt: "", type: "rating", options: "", required: true, translations: {} });
 
-const NO_WOREDAS: string[] = [];
-
 /** Answer boxes shown for a choice question. */
 const CHOICE_SLOTS = 4;
 /** The choices of a question as one box each (kept comma-separated in the draft), padded to CHOICE_SLOTS. */
@@ -60,10 +57,6 @@ const agentLabel =(a: ApiAgent) => `${a.full_name} · ${a.da_id}`;
 
 // Supervisor / Admin: create = publish (POST /surveys/templates), or edit an existing template (PATCH).
 export function CreateTemplateModal({ onClose, onSaved, template }: CreateTemplateModalProps) {
-  const role = useAuthStore((s) => s.role);
-  const scopeWoredas = useAuthStore((s) => s.profile?.scope?.woredas ?? NO_WOREDAS);
-  // The Woreda as the Supervisor's own profile page shows it (the /me scope label).
-  const scopeLabel = useAuthStore((s) => s.profile?.scopeLabel ?? "");
   const editing = Boolean(template);
   const initial = useMemo<TemplateInput>(
     () =>
@@ -78,12 +71,11 @@ export function CreateTemplateModal({ onClose, onSaved, template }: CreateTempla
             languages: ["English"],
             targetFarmers: DEFAULT_TARGET_FARMERS,
             questions: [blankQuestion(1)],
-            // A Supervisor with one Woreda publishes there; others pick one.
-            woreda: role === "Supervisor" && scopeWoredas.length === 1 ? scopeWoredas[0] : "",
+            // Set by the area picker: a Supervisor's own Woreda (from /me), else the one picked.
+            woreda: "",
             assignmentMode: "Woreda",
             assignedDaIds: [],
           },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [template],
   );
   const [draft, setDraft] = useState<TemplateInput>(initial);
@@ -93,29 +85,14 @@ export function CreateTemplateModal({ onClose, onSaved, template }: CreateTempla
   // One id per form: a retry after a network error returns the template already created.
   const [opId] = useState(() => newOpId("srv"));
 
-  const [woredas, setWoredas] = useState<AdminArea[] | null>(null);
   // DAs of the Woreda for Selected mode, keyed by Woreda so a change shows "Loading" until its list arrives.
   const [agentList, setAgentList] = useState<{ woreda: string; rows?: ApiAgent[]; error?: string } | null>(null);
 
-  const woredaRequired = !editing && !(role === "Supervisor" && scopeWoredas.length === 1);
+  // A new template names its Woreda; an existing one keeps it.
+  const woredaRequired = !editing;
   const errors = templateErrors(draft, { woredaRequired });
 
-  useEffect(() => {
-    if (editing) return;
-    let current = true;
-    listAreas({ level: "Woreda" })
-      .then((rows) => {
-        if (!current) return;
-        // A Supervisor with Woreda grants only picks among them; a Region / Zone grant is checked by the server.
-        setWoredas(role === "Supervisor" && scopeWoredas.length > 0 ? rows.filter((w) => scopeWoredas.includes(w.code)) : rows);
-      })
-      .catch(() => current && setWoredas([]));
-    return () => {
-      current = false;
-    };
-  }, [editing, role, scopeWoredas]);
-
-  const agentWoreda = draft.woreda || (scopeWoredas.length === 1 ? scopeWoredas[0] : "");
+  const agentWoreda = draft.woreda ?? "";
   const agents = agentList?.woreda === agentWoreda ? agentList.rows ?? null : null;
   const agentsError = agentList?.woreda === agentWoreda ? agentList.error ?? null : null;
   useEffect(() => {
@@ -130,6 +107,11 @@ export function CreateTemplateModal({ onClose, onSaved, template }: CreateTempla
   }, [draft.assignmentMode, agentWoreda]);
 
   const patch = (next: Partial<TemplateInput>) => setDraft((d) => ({ ...d, ...next }));
+  // The area picker reports its Woreda (a Supervisor's own from /me, else the one picked); DAs picked for another go.
+  const pickArea = useCallback((area: AreaSelection) => {
+    const woreda = area.woreda?.code ?? "";
+    setDraft((d) => (d.woreda === woreda ? d : { ...d, woreda, assignedDaIds: [] }));
+  }, []);
   const patchQuestion = (id: number, next: Partial<TemplateQuestion>) =>
     setDraft((d) => ({ ...d, questions: d.questions.map((q) => (q.id === id ? { ...q, ...next } : q)) }));
 
@@ -212,17 +194,22 @@ export function CreateTemplateModal({ onClose, onSaved, template }: CreateTempla
           </FormField>
         </div>
 
+        {!editing && (
+          <AreaPicker
+            depth="woreda"
+            required
+            idPrefix="tpl"
+            onChange={pickArea}
+            error={showErrors && woredaRequired && !draft.woreda ? "Pick the Woreda the survey is for." : undefined}
+          />
+        )}
+
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <FormField label="Woreda" htmlFor="tpl-woreda" required={woredaRequired} hint={editing ? "Can't be changed after publishing." : !woredaRequired ? "From your profile." : undefined}>
-            {editing || !woredaRequired ? (
-              <Input id="tpl-woreda" className="h-10" value={(!editing && scopeLabel) || draft.woreda || "Your assigned Woreda"} disabled readOnly />
-            ) : (
-              <Select id="tpl-woreda" className="h-10" value={draft.woreda} onChange={(e) => patch({ woreda: e.target.value, assignedDaIds: [] })}>
-                <option value="">{woredas ? (woredas.length ? "Select Woreda…" : "No Woreda available") : "Loading…"}</option>
-                {woredas?.map((w) => <option key={w.code} value={w.code}>{w.name_en} ({w.code})</option>)}
-              </Select>
-            )}
-          </FormField>
+          {editing && (
+            <FormField label="Woreda" htmlFor="tpl-woreda" hint="Can't be changed after publishing.">
+              <Input id="tpl-woreda" className="h-10" value={draft.woreda || "—"} disabled readOnly />
+            </FormField>
+          )}
           <FormField label="Assign to" htmlFor="tpl-mode" required>
             <Select id="tpl-mode" className="h-10" value={draft.assignmentMode} onChange={(e) => patch({ assignmentMode: e.target.value as TemplateInput["assignmentMode"] })}>
               <option value="Woreda">Every DA in the Woreda</option>

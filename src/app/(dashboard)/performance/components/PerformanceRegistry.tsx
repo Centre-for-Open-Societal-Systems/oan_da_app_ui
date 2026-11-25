@@ -22,7 +22,6 @@ import {
   AGENT_PERFORMANCE,
   PERFORMANCE_AGENT_OPTIONS,
   PERFORMANCE_FILTER_FIELDS,
-  PERFORMANCE_KEBELE_OPTIONS,
   PERFORMANCE_STATUS_OPTIONS,
   PERFORMANCE_STATUS_TONE,
   PERFORMANCE_TIER_OPTIONS,
@@ -30,6 +29,7 @@ import {
   type AgentPerformanceRow,
   type PerformanceTier,
 } from "@/features/performance";
+import { useAreaFilterOptions, withFieldOptions } from "@/features/geo";
 
 const SEARCH_PLACEHOLDER = searchPlaceholder(["Agent", "Kebele", "Tier", "Visits", "Quality score", "Training completion", "Status"]);
 
@@ -68,6 +68,9 @@ export function PerformanceRegistry({ tierFilter, onTierFilterChange }: Performa
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<RegistryFilters>(EMPTY);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+  // Every Kebele of the user's own area from the geo Master Data, then those the rows hold.
+  const kebeleOptions = useAreaFilterOptions("kebele", AGENT_PERFORMANCE.map((r) => r.kebele));
+  const filterFields = withFieldOptions(PERFORMANCE_FILTER_FIELDS, { kebele: kebeleOptions });
   const [viewing, setViewing] = useState<AgentPerformanceRow | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const activeFilterCount = Object.values(filters).filter((set) => set.size > 0).length + (tierFilter.size > 0 ? 1 : 0);
@@ -136,7 +139,7 @@ export function PerformanceRegistry({ tierFilter, onTierFilterChange }: Performa
                 <FilterDropdown label="Agent" allLabel="All agents" options={PERFORMANCE_AGENT_OPTIONS} selected={filters.agent} onApply={setFilter("agent")} />
               </th>
               <th className="px-4 py-3 font-semibold">
-                <FilterDropdown label="Kebele" allLabel="All kebeles" options={PERFORMANCE_KEBELE_OPTIONS} selected={filters.kebele} onApply={setFilter("kebele")} />
+                <FilterDropdown label="Kebele" allLabel="All kebeles" options={kebeleOptions} selected={filters.kebele} onApply={setFilter("kebele")} />
               </th>
               <th className="px-4 py-3 font-semibold">
                 <FilterDropdown label="Tier" allLabel="All tiers" options={PERFORMANCE_TIER_OPTIONS} selected={tierFilter} onApply={onTierFilterChange} />
@@ -184,7 +187,7 @@ export function PerformanceRegistry({ tierFilter, onTierFilterChange }: Performa
       <AdvancedFiltersDrawer
         isOpen={isFiltersOpen}
         onClose={() => setIsFiltersOpen(false)}
-        fields={PERFORMANCE_FILTER_FIELDS}
+        fields={filterFields}
         filters={{ ...filters, tier: tierFilter }}
         onApply={(next) => {
           setFilters({

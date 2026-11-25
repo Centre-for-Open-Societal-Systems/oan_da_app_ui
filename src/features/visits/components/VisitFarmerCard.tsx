@@ -9,12 +9,14 @@ export function VisitFarmerCard({ visit, phone }: { visit: VisitRecord; phone?: 
       <div className="min-w-0">
         <p className="text-[14.5px] font-semibold text-ink">{visit.farmerName}</p>
         <div className="mt-1 flex flex-wrap items-center gap-x-5 gap-y-1 text-[13px] text-slate-600">
-          <span className="inline-flex items-center gap-1.5">
-            <svg className="h-3.5 w-3.5 text-subtle" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" />
-            </svg>
-            {visit.farmerEmail}
-          </span>
+          {visit.farmerEmail && (
+            <span className="inline-flex items-center gap-1.5">
+              <svg className="h-3.5 w-3.5 text-subtle" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" />
+              </svg>
+              {visit.farmerEmail}
+            </span>
+          )}
           {phone && (
             <span className="inline-flex items-center gap-1.5">
               <svg className="h-3.5 w-3.5 text-subtle" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

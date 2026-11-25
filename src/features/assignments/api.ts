@@ -32,15 +32,6 @@ export interface AssignmentSummary {
   flagged: number;
 }
 
-/** A Region / Zone / Woreda / Kebele from the administrative-area master. */
-export interface AdminArea {
-  code: string;
-  level: "Region" | "Zone" | "Woreda" | "Kebele";
-  parent_area: string | null;
-  name_en: string;
-  name_am: string | null;
-}
-
 /** A level of the Master Data geography that the Broadcast form walks down. */
 export type GeoField = "region" | "zone" | "woreda";
 
@@ -120,18 +111,6 @@ export async function fetchMyAssignment(): Promise<MyAssignment> {
   return res.data;
 }
 
-/** GET /master/areas: administrative areas for dropdowns, by level and/or parent. */
-export async function listAreas(p: { level?: AdminArea["level"]; parent?: string; q?: string } = {}): Promise<AdminArea[]> {
-  const res = await authRequest<{ data: AdminArea[] }>(`/da-services/master/areas${query(p)}`);
-  return res.data;
-}
-
-/** GET /master/kebeles: the Kebeles of one Woreda (code), for the assign form. */
-export async function listKebeles(woreda: string): Promise<AdminArea[]> {
-  const res = await authRequest<{ data: AdminArea[] }>(`/da-services/master/kebeles${query({ woreda })}`);
-  return res.data;
-}
-
 /**
  * GET /get_master_data: the areas of one geo level under a parent's code. Geo calls ignore search and current_page
  * (page 2 repeats page 1), so one call gets the whole list.
@@ -169,7 +148,7 @@ export const formatAssignmentDate = (iso: string | null) =>
   iso ? new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
 /**
- * An API row in the table's shape. Kebele and Woreda show by name (`woredaNames` from the area master), and keep
+ * An API row in the table's shape. Kebele and Woreda show by name (`woredaNames` from the geo Master Data), and keep
  * their codes for the assign form.
  */
 export function toAgentAssignment(r: ApiAssignmentRow, woredaNames: Record<string, string> = {}): AgentAssignment {
@@ -194,38 +173,7 @@ export function toAgentAssignment(r: ApiAssignmentRow, woredaNames: Record<strin
 /** Id for one device operation (client_op_id). randomUUID needs https or localhost; plain http falls back to time + random. */
 export const newClientOpId = () => (typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`);
 
-// ---- Scope pickers (Users & Roles) ------------------------------------------------------------------------------
-
-/** The Regions and Woredas of the area master, each sorted by English name, for the RBAC scope dropdowns. */
-export interface ScopeAreas {
-  regions: AdminArea[];
-  woredas: AdminArea[];
-}
-
-const byName = (a: AdminArea, b: AdminArea) => a.name_en.localeCompare(b.name_en);
-
-let scopeAreasCache: Promise<ScopeAreas> | null = null;
-
-/**
- * Regions and Woredas in one go, loaded once per page load and shared by the Users table and its form. The
- * tree rarely changes (synced daily from Master Data), and a dropdown over ~1,400 Woredas is fine.
- */
-export function loadScopeAreas(): Promise<ScopeAreas> {
-  scopeAreasCache ??= Promise.all([listAreas({ level: "Region" }), listAreas({ level: "Woreda" })])
-    .then(([regions, woredas]) => ({ regions: [...regions].sort(byName), woredas: [...woredas].sort(byName) }))
-    .catch((err: unknown) => {
-      scopeAreasCache = null;
-      throw err;
-    });
-  return scopeAreasCache;
-}
-
-/**
- * The Woredas of one Region. P-codes nest by prefix (Region ET01 → Zone ET0101 → Woreda ET010101), and the
- * master only links a Woreda to its Zone, so the prefix is the way to go from a Region straight to its Woredas.
- */
-export const woredasInRegion = (woredas: AdminArea[], regionCode: string): AdminArea[] =>
-  regionCode ? woredas.filter((w) => w.code.startsWith(regionCode)) : [];
+// ---- Scope labels (Users & Roles) -----------------------------------------------------------------------------
 
 /** "Oromia (ET04)" for a known code; the value itself otherwise (older rows hold names); "—" for none. */
 export function areaLabel(names: Record<string, string>, code: string | null | undefined): string {
@@ -234,6 +182,3 @@ export function areaLabel(names: Record<string, string>, code: string | null | u
   return name ? `${name} (${code})` : code;
 }
 
-/** code → English name, for showing stored scopes. */
-export const areaNameMap = (areas?: Partial<ScopeAreas> | null): Record<string, string> =>
-  Object.fromEntries([...(areas?.regions ?? []), ...(areas?.woredas ?? [])].map((a) => [a.code, a.name_en]));

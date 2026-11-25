@@ -21,6 +21,7 @@ import { searchPlaceholder } from "@/lib/search";
 import { fileDate, type CsvColumn } from "@/lib/download";
 import { downloadTable, formatLabel } from "@/lib/export";
 import { ImportAgentsModal } from "./ImportAgentsModal";
+import { useScopeAreaNames } from "@/features/geo";
 
 const SEARCH_DEBOUNCE_MS = 400;
 const ACTIVE = ["Active", "On-leave", "Separated", "Unassigned"];
@@ -121,8 +122,11 @@ export function AgentsRegistry() {
   const activeFilterCount = Object.values(filters).filter((set) => set.size > 0).length;
 
   // Kebeles under the selected woredas (every kebele when no woreda is picked), from the loaded rows.
+  // Kebele and Woreda options: the areas of the user's own area from the geo Master Data, then those the rows hold.
+  const scopeKebeleNames = useScopeAreaNames("kebele", []);
+  const woredaNames = useScopeAreaNames("woreda", source.map((a) => a.woreda));
   const kebelesFor = (woredas: Set<string>) => [
-    ...unique(source.filter((a) => woredas.size === 0 || woredas.has(a.woreda)).map((a) => a.kebele)).filter((k) => k !== UNASSIGNED),
+    ...unique([...(woredas.size === 0 ? scopeKebeleNames : []), ...source.filter((a) => woredas.size === 0 || woredas.has(a.woreda)).map((a) => a.kebele)]).filter((k) => k !== UNASSIGNED),
     UNASSIGNED,
   ];
   // Drops kebele selections that no longer belong to the chosen woredas.
@@ -132,7 +136,7 @@ export function AgentsRegistry() {
   };
   const setFilter = (key: keyof Filters) => (next: Set<string>) => setFilters((prev) => pruneKebeles({ ...prev, [key]: next }));
 
-  const woredaOptions = optionsOf(source.map((a) => a.woreda), unique(source.map((a) => a.woreda)));
+  const woredaOptions = optionsOf(source.map((a) => a.woreda), woredaNames);
   const activeOptions = optionsOf(source.map((a) => a.activeStatus), ACTIVE);
   const tierOptions = optionsOf(source.map((a) => a.educationTier), unique([...TIERS, ...source.map((a) => a.educationTier)]));
   const approvalOptions = optionsOf(source.map((a) => a.approvalStatus), APPROVALS);

@@ -14,7 +14,8 @@ import { AdvancedFiltersDrawer, type FilterFieldConfig } from "@/components/ui/A
 import { matchesQuery, searchPlaceholder } from "@/lib/search";
 import { TablePagination, usePagination } from "@/components/ui/TablePagination";
 import { cn } from "@/lib/utils";
-import { fetchCoverage, loadScopeAreas, type CoverageResponse, type KebeleCoverage } from "@/features/assignments";
+import { fetchCoverage, type CoverageResponse, type KebeleCoverage } from "@/features/assignments";
+import { useAreaNames } from "@/features/geo";
 import { STATUS_TONE, fetchWoredaHealth, formatDate, formatDateTime, rangeFor, type KebeleStatus, type WoredaFilters, type WoredaProgrammeHealth } from "@/features/dashboard";
 import { DateRangeDropdown } from "./DateRangeDropdown";
 
@@ -90,7 +91,6 @@ export function SupervisorDashboard() {
   // The last answer of each source; the screen keeps showing it while a newer request loads.
   const [healthAnswer, setHealthAnswer] = useState<Answer<WoredaProgrammeHealth> | null>(null);
   const [coverageAnswer, setCoverageAnswer] = useState<Answer<CoverageResponse> | null>(null);
-  const [areaNames, setAreaNames] = useState<Map<string, string> | null>(null);
   // The kebeles of the last request that had no filters: the filter dropdowns list these, whatever the table shows now.
   const [baseline, setBaseline] = useState<WoredaProgrammeHealth["kebeles"] | null>(null);
 
@@ -148,17 +148,6 @@ export function SupervisorDashboard() {
     };
   }, [coverageKey]);
 
-  // Display names are a nicety: without the area master the screen falls back to the codes.
-  useEffect(() => {
-    let current = true;
-    loadScopeAreas()
-      .then((areas) => current && setAreaNames(new Map((areas?.woredas ?? []).map((w) => [w.code, w.name_en]))))
-      .catch(() => undefined);
-    return () => {
-      current = false;
-    };
-  }, []);
-
   const health = healthAnswer?.data ?? null;
   const coverage = coverageAnswer?.data ?? null;
   const healthLoading = healthAnswer?.key !== healthKey;
@@ -169,7 +158,9 @@ export function SupervisorDashboard() {
   const placeholder = healthError ? "—" : <Pending />;
 
   const woredaCode = health?.code ?? coverage?.woreda ?? "";
-  const woredaName = health?.name && health.name !== health.code ? health.name : areaNames?.get(woredaCode) ?? woredaCode;
+  // Display names are a nicety: without the geo Master Data the screen falls back to the codes.
+  const areaNames = useAreaNames([woredaCode]);
+  const woredaName = health?.name && health.name !== health.code ? health.name : areaNames[woredaCode] ?? woredaCode;
   const woredaTitle = woredaName ? `${woredaName} Woreda` : "Your Woreda";
 
   const allRows = useMemo(() => joinRows(health, coverage), [health, coverage]);
@@ -272,7 +263,7 @@ export function SupervisorDashboard() {
                 <tr><td colSpan={8} className="px-4 py-8 text-center text-[13.5px] text-muted">Loading kebeles…</td></tr>
               )}
               {!loading && allRows.length === 0 && !hasFilter && !healthError && !coverageError && (
-                <tr><td colSpan={8} className="px-4 py-6"><EmptyState title="No kebeles in your Woreda yet" hint="Kebeles appear here once the area master lists them." /></td></tr>
+                <tr><td colSpan={8} className="px-4 py-6"><EmptyState title="No kebeles in your Woreda yet" hint="Kebeles appear here once the Master Data lists them." /></td></tr>
               )}
               {!loading && rows.length === 0 && hasFilter && (
                 <tr><td colSpan={8} className="px-4 py-6"><EmptyState title="No kebeles match the selected filters" hint="Clear a filter or try a different search." /></td></tr>

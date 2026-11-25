@@ -57,12 +57,18 @@ describe("listVisits", () => {
 });
 
 describe("canActOnVisit", () => {
-  it("lets a DA act only on their own visit and leaves officers alone", () => {
-    const visit = { agent: "DA-000003" };
-    expect(canActOnVisit(visit, true, "DA-000003")).toBe(true);
-    expect(canActOnVisit(visit, true, "DA-000009")).toBe(false);
-    expect(canActOnVisit(visit, true, null)).toBe(false);
-    expect(canActOnVisit(visit, false, null)).toBe(true);
+  it("lets a DA act on a visit planned for their own user", () => {
+    const visit = { daId: "DA-000003", ownerUser: "Da.User@example.com" };
+    expect(canActOnVisit(visit, true, { user: "da.user@example.com" })).toBe(true);
+    expect(canActOnVisit(visit, true, { user: "other@example.com" })).toBe(false);
+  });
+
+  it("falls back to the DA-ID and leaves officers alone", () => {
+    const visit = { daId: "DA-000003" };
+    expect(canActOnVisit(visit, true, { user: "da.user@example.com", daId: "DA-000003" })).toBe(true);
+    expect(canActOnVisit(visit, true, { daId: "DA-000009" })).toBe(false);
+    expect(canActOnVisit(visit, true, {})).toBe(false);
+    expect(canActOnVisit(visit, false, {})).toBe(true);
   });
 });
 
@@ -73,6 +79,8 @@ describe("toVisitRecord", () => {
       date: "Oct 16, 2026",
       time: "10:30",
       agent: "DA-000003",
+      daId: "DA-000003",
+      ownerUser: undefined,
       farmerId: "FRM-000103",
       farmerName: "FRM-000103",
       farmerEmail: "",
@@ -83,6 +91,7 @@ describe("toVisitRecord", () => {
       durationMin: 60,
       assignedBy: undefined,
       physicalStatus: "Planned",
+      scheduledDate: "2026-10-16",
       visitType: "Advisory",
     });
   });
@@ -110,6 +119,12 @@ describe("startVisit", () => {
     expect(canStartVisit({ physicalStatus: "Confirmed" })).toBe(true);
     expect(canStartVisit({ physicalStatus: "In progress" })).toBe(false);
     expect(canStartVisit({})).toBe(false);
+  });
+
+  it("offers Start for a future or upcoming visit too", () => {
+    const future = { physicalStatus: "Planned", scheduledDate: "2099-01-01" };
+    expect(canStartVisit(future)).toBe(true);
+    expect(canStartVisit({ ...future, physicalStatus: "Confirmed" })).toBe(true);
   });
 });
 

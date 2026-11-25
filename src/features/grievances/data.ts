@@ -77,12 +77,10 @@ function toOptions<T extends string>(values: T[]): FilterOption[] {
 export const GRIEVANCE_CATEGORY_OPTIONS = toOptions(GRIEVANCES.map((g) => g.category));
 export const GRIEVANCE_STATUS_OPTIONS: FilterOption[] = GRIEVANCE_BUCKETS.map((b) => ({ value: b, label: b, count: GRIEVANCE_STATS[b] }));
 
-export const GRIEVANCE_REGION_OPTIONS = toOptions(GRIEVANCES.map((g) => g.region));
 
 export const GRIEVANCE_FILTER_FIELDS: FilterFieldConfig[] = [
   { key: "category", label: "Category", allLabel: "All categories", placeholder: "All Categories", options: GRIEVANCE_CATEGORY_OPTIONS },
   { key: "status", label: "Status", allLabel: "All statuses", placeholder: "All Statuses", options: GRIEVANCE_STATUS_OPTIONS },
-  { key: "region", label: "Region", allLabel: "All regions", placeholder: "All Regions", options: GRIEVANCE_REGION_OPTIONS },
 ];
 
 // ---------------------------------------------------------------------------

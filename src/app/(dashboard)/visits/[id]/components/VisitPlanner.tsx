@@ -20,6 +20,7 @@ export function VisitPlanner({ visitId }: { visitId: string }) {
   const hasHydrated = useAuthStore((s) => s.hasHydrated);
   const isDA = useAuthStore((s) => s.role === "DA");
   const ownDaId = useAuthStore((s) => s.profile?.daId ?? null);
+  const ownUser = useAuthStore((s) => s.user?.id ?? null);
   // undefined while loading, null when the API has no such visit for this user.
   const [detail, setDetail] = useState<ApiVisitDetail | null>();
   const [reload, setReload] = useState(0);
@@ -36,7 +37,7 @@ export function VisitPlanner({ visitId }: { visitId: string }) {
     };
   }, [visitId, reload]);
 
-  const canAct = (v: VisitRecord) => canActOnVisit(v, isDA, ownDaId);
+  const canAct = (v: VisitRecord) => canActOnVisit(v, isDA, { user: ownUser, daId: ownDaId });
   const opened = detail ? toVisitRecord(detail) : null;
   const daId = (isDA ? ownDaId : detail?.da_id) ?? undefined;
 

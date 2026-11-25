@@ -1,5 +1,5 @@
 import { authRequest } from "@/features/auth";
-import { listAreas, type AdminArea } from "@/features/assignments";
+import { listKbGeo } from "@/features/communication";
 import type { Farmer } from "@/features/farmers";
 import { ApiError } from "@/lib/api";
 
@@ -76,40 +76,33 @@ export async function createFarmerBeneficiaries(body: FarmerBeneficiaryRequest):
 const MAX_BULK = 500;
 
 // ----- Farmer area → area codes ---------------------------------------------------------------------------------
-// The farmer list gives area names ("Lekatit", "Shire Endaslasie town"); the POST needs the codes of the DA area
-// master. The kebele is found by name under a woreda of the farmer's woreda name; zone and region are its parents.
+// The farmer list gives area names ("Oromia", "Shire Endaslasie town", "Lekatit"); the POST needs their geo Master Data
+// codes (GET /get_master_data?data_type=geo, the codes DA Region / Zone / Woreda / Kebele are keyed by). The region is
+// found by name, the woreda by name among the woredas of the region's zones, and the kebele by name under that woreda.
+// Every list is read once per page (listKbGeo caches it).
 
 const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
 
-let zonesOnce: Promise<AdminArea[]> | null = null;
-const allZones = () => {
-  zonesOnce ??= listAreas({ level: "Zone" }).catch((err: unknown) => {
-    zonesOnce = null;
-    throw err;
-  });
-  return zonesOnce;
-};
-
 export type FarmerArea = Pick<FarmerBeneficiaryRequest, "region" | "zone" | "woreda" | "kebele">;
 
-/** The farmer's area codes, or a reason they could not be found in the DA area master. */
-export async function resolveFarmerArea(farmer: Pick<Farmer, "kebele" | "woreda">): Promise<FarmerArea | { error: string }> {
+/** The farmer's area codes, or a reason they could not be found in the geo Master Data. */
+export async function resolveFarmerArea(farmer: Pick<Farmer, "kebele" | "woreda" | "region">): Promise<FarmerArea | { error: string }> {
   const kebeleName = norm(farmer.kebele);
   const woredaName = norm(farmer.woreda);
-  if (!kebeleName || kebeleName === "—" || !woredaName) return { error: "The farmer's kebele or woreda is missing in the Farmer Registry." };
+  const regionName = norm(farmer.region);
+  if (!kebeleName || kebeleName === "—" || !woredaName || !regionName) return { error: "The farmer's region, woreda or kebele is missing in the Farmer Registry." };
 
-  const [kebeles, woredas, zones] = await Promise.all([
-    listAreas({ level: "Kebele", q: farmer.kebele.trim() }),
-    listAreas({ level: "Woreda", q: farmer.woreda.trim() }),
-    allZones(),
-  ]);
-  const woredaCodes = new Map(woredas.filter((w) => norm(w.name_en) === woredaName).map((w) => [w.code, w]));
-  const kebele = kebeles.find((k) => norm(k.name_en) === kebeleName && k.parent_area && woredaCodes.has(k.parent_area));
-  if (!kebele) return { error: `Kebele “${farmer.kebele}” (${farmer.woreda}) was not found in the area master.` };
-  const woreda = woredaCodes.get(kebele.parent_area!)!;
-  const zone = zones.find((z) => z.code === woreda.parent_area);
-  if (!zone?.parent_area) return { error: `The zone of woreda “${farmer.woreda}” was not found in the area master.` };
-  return { region: zone.parent_area, zone: zone.code, woreda: woreda.code, kebele: kebele.code };
+  const region = (await listKbGeo("region", "ET")).find((r) => norm(r.name) === regionName);
+  if (!region) return { error: `Region “${farmer.region}” was not found in the Master Data.` };
+  const zones = await listKbGeo("zone", region.code);
+  const woredas = (await Promise.all(zones.map((z) => listKbGeo("woreda", z.code)))).flat().filter((w) => norm(w.name) === woredaName);
+  if (woredas.length === 0) return { error: `Woreda “${farmer.woreda}” was not found in ${farmer.region} in the Master Data.` };
+  // The same woreda name can sit in two zones: the one holding the kebele is taken.
+  for (const woreda of woredas) {
+    const kebele = (await listKbGeo("kebele", woreda.code)).find((k) => norm(k.name) === kebeleName);
+    if (kebele) return { region: region.code, zone: woreda.parent, woreda: woreda.code, kebele: kebele.code };
+  }
+  return { error: `Kebele “${farmer.kebele}” (${farmer.woreda}) was not found in the Master Data.` };
 }
 
 // ----- Add many farmers to one package ---------------------------------------------------------------------------
@@ -125,9 +118,10 @@ const reasonOf = (err: unknown) => (err instanceof Error && err.message ? err.me
 
 /**
  * The POST shares one area across its farmer_ids, so farmers are grouped by their area codes and each group is sent in
- * one call (500 at most), one group after another. Each farmer's outcome is kept.
+ * one call (500 at most), one group after another. Each farmer's outcome is kept. With `area` (the Kebele picked in the
+ * Add form, whose farmers were listed) every farmer is sent with it; without it each farmer's area is looked up.
  */
-export async function addFarmersToSegment(farmers: Farmer[], segment: string): Promise<AddResult> {
+export async function addFarmersToSegment(farmers: Farmer[], segment: string, area?: FarmerArea): Promise<AddResult> {
   const result: AddResult = { added: [], skipped: [], failed: [] };
   const groups = new Map<string, { area: FarmerArea; farmers: Farmer[] }>();
   for (const farmer of farmers) {
@@ -136,13 +130,13 @@ export async function addFarmersToSegment(farmers: Farmer[], segment: string): P
       continue;
     }
     try {
-      const area = await resolveFarmerArea(farmer);
-      if ("error" in area) {
-        result.failed.push({ farmer, reason: area.error });
+      const found = area ?? (await resolveFarmerArea(farmer));
+      if ("error" in found) {
+        result.failed.push({ farmer, reason: found.error });
         continue;
       }
-      const key = [area.region, area.zone, area.woreda, area.kebele].join("|");
-      const group = groups.get(key) ?? { area, farmers: [] };
+      const key = [found.region, found.zone, found.woreda, found.kebele].join("|");
+      const group = groups.get(key) ?? { area: found, farmers: [] };
       group.farmers.push(farmer);
       groups.set(key, group);
     } catch (err) {

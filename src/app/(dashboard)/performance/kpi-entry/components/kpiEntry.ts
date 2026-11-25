@@ -1,10 +1,4 @@
-import {
-  ASSIGNED_KEBELES,
-  DEVELOPMENT_AGENTS,
-  KPI_IMPORT_MAX_BYTES,
-  REPORTING_PERIODS,
-  WOREDA_REGIONS,
-} from "@/features/performance";
+import { DEVELOPMENT_AGENTS, KPI_IMPORT_MAX_BYTES, REPORTING_PERIODS } from "@/features/performance";
 
 export type Mode = "bulk" | "manual";
 
@@ -34,9 +28,10 @@ export type Notice = { tone: "success" | "error"; text: string };
 
 export const INITIAL_FORM: ManualForm = {
   period: REPORTING_PERIODS[0],
-  woreda: WOREDA_REGIONS[0],
+  // Woreda and Kebele are picked from the geo Master Data (ManualEntrySteps).
+  woreda: "",
   agent: DEVELOPMENT_AGENTS[0],
-  kebele: ASSIGNED_KEBELES[0],
+  kebele: "",
   visits: "",
   farmerCases: "",
   needs: "",
@@ -51,9 +46,10 @@ export const REQUIRED: (keyof ManualForm)[] = ["period", "woreda", "agent", "keb
 
 export const SELECT_FIELDS = [
   { key: "period", label: "Reporting Period", options: REPORTING_PERIODS },
-  { key: "woreda", label: "Woreda / Region", options: WOREDA_REGIONS },
+  // Woreda and Kebele options are read from the geo Master Data by ManualEntrySteps.
+  { key: "woreda", label: "Woreda", options: [] as string[] },
   { key: "agent", label: "Development Agent", options: DEVELOPMENT_AGENTS },
-  { key: "kebele", label: "Assigned Kebele", options: ASSIGNED_KEBELES },
+  { key: "kebele", label: "Assigned Kebele", options: [] as string[] },
 ] as const;
 
 type MetricKey = "visits" | "farmerCases" | "needs" | "supportActions" | "reviews" | "training" | "quality";
@@ -77,7 +73,7 @@ export const TEMPLATE_HEADERS = [
   ...METRICS.map((m) => (m.unit === "%" ? `${m.label} (%)` : m.label)),
   "Operational Notes & Observations",
 ];
-export const TEMPLATE_EXAMPLE = [REPORTING_PERIODS[0], WOREDA_REGIONS[0], DEVELOPMENT_AGENTS[0], ASSIGNED_KEBELES[0], 18, 120, 6, 9, 4, 90, 85, "Met all agricultural milestones for Kebele 01."];
+export const TEMPLATE_EXAMPLE = [REPORTING_PERIODS[0], "<Woreda name>", DEVELOPMENT_AGENTS[0], "<Kebele name>", 18, 120, 6, 9, 4, 90, 85, "Met all agricultural milestones for Kebele 01."];
 
 // Draft kept for this browser session only (see lib/drafts).
 export const DRAFT_KEY = "kpi-entry";

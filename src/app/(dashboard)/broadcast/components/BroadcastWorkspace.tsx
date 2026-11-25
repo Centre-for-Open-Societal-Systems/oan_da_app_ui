@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/Card";
@@ -12,7 +12,8 @@ import { Select } from "@/components/ui/Select";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { SmsPreview } from "@/features/communication";
 import { RECIPIENT_GROUPS, SIGNALS, type RecipientGroup, type SignalSource } from "@/features/communication";
-import { loadScopeAreas, useGeoCascade, type GeoField, type GeoLevel } from "@/features/assignments";
+import { useGeoCascade, type GeoField, type GeoLevel } from "@/features/assignments";
+import { useAreaNames } from "@/features/geo";
 import { broadcastToKebele, broadcastToWoreda } from "@/features/notifications";
 import { useAuthStore } from "@/store/useAuthStore";
 import { FileDropInput } from "@/components/ui/FileDropInput";
@@ -50,7 +51,8 @@ export function BroadcastWorkspace() {
   // A Supervisor broadcasts to their own Woreda only: the Woreda on their /me scope.
   const ownWoredaOnly = role === "Supervisor";
   const ownWoreda = useAuthStore((s) => (s.role === "Supervisor" ? s.profile?.scope?.woredas?.[0] ?? null : null));
-  const [ownWoredaName, setOwnWoredaName] = useState<string | null>(null);
+  // The code is shown when the name cannot be read from the geo Master Data.
+  const ownWoredaName = useAreaNames([ownWoreda])[ownWoreda ?? ""] ?? null;
   const params = useSearchParams();
   const signal = SIGNALS.find((s) => s.id === params.get("signal"));
 
@@ -59,16 +61,6 @@ export function BroadcastWorkspace() {
   const [message, setMessage] = useState(signal ? signal.detail : "");
   // Audience is a whole Woreda, or for a DA one of their Kebeles.
   const { geo, select, retry } = useGeoCascade();
-  useEffect(() => {
-    if (!ownWoreda) return;
-    let live = true;
-    loadScopeAreas()
-      .then(({ woredas }) => live && setOwnWoredaName(woredas.find((w) => w.code === ownWoreda)?.name_en ?? null))
-      .catch(() => undefined); // The code is shown when the name cannot be read.
-    return () => {
-      live = false;
-    };
-  }, [ownWoreda]);
   // In-app, the only live channel, reaches Development Agents only, so that is the default for everyone until SMS / Telegram reach farmers.
   const [group, setGroup] = useState<RecipientGroup>("Development Agents");
   // In-app = the real notification-bell broadcast. Checked by default; SMS/Telegram are disabled stubs.

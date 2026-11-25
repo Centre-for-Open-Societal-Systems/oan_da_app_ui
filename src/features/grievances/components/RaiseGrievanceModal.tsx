@@ -17,11 +17,11 @@ import {
   selfSubmitter,
   submitGrievance,
   toAdministrativeArea,
-  type GrievanceArea,
+  toEthiopianMobile,
   type GrievanceOptions,
   type SubmitGrievanceResult,
 } from "../api";
-import { DaKebele, KebelePicker } from "./KebelePicker";
+import { AreaPicker, type AreaSelection } from "@/features/geo";
 import { VoiceRecorder } from "./VoiceRecorder";
 
 interface Props {
@@ -54,8 +54,6 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
   const accountName = useAuthStore((s) => s.user?.name);
   const agent = useAuthStore((s) => s.profile?.agent);
   const self = useMemo(() => selfSubmitter(agent, accountName), [agent, accountName]);
-  // A Supervisor's grievance is in their own Woreda: Region, Zone and Woreda come from the /me scope.
-  const supervisorWoreda = useAuthStore((s) => (s.role === "Supervisor" ? (s.profile?.scope?.woredas?.[0] ?? null) : null));
 
   const [forWhom, setForWhom] = useState<"farmer" | "me">(farmerId ? "farmer" : "me");
   // Fixed when launched from a farmer profile, otherwise typed in.
@@ -73,13 +71,20 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
   const [grievanceType, setGrievanceType] = useState("");
   const [priority, setPriority] = useState("Medium");
 
-  // Administrative area: picked from the Grievance Service's own list (KebelePicker).
+  // Administrative area: the Kebele from the Master Data picker (AreaPicker). The levels /me fills for the role are
+  // locked (a DA's down to the Kebele, a Supervisor's to the Woreda, an Executive's to the Zone); the rest are picked.
   const [kebeleCode, setKebeleCode] = useState("");
   const [kebeleName, setKebeleName] = useState("");
-  const pickKebele = useCallback((kebele: GrievanceArea | null) => {
-    setKebeleCode(kebele?.code ?? "");
-    setKebeleName(kebele?.area_name ?? "");
+  const pickKebele = useCallback((area: AreaSelection | null) => {
+    setKebeleCode(area?.kebele?.code ?? "");
+    setKebeleName(area?.kebele?.name ?? "");
   }, []);
+  // Bumped to start the picker afresh (its preset filled in again) when the form is cleared.
+  const [pickerKey, setPickerKey] = useState(0);
+  const clearArea = () => {
+    pickKebele(null);
+    setPickerKey((k) => k + 1);
+  };
 
   // Content
   const [subject, setSubject] = useState("");
@@ -121,20 +126,26 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
   const selfAsDa = forWhom === "me" && role === "DA";
   const daType = submitterTypes.find((t) => /development agent/i.test(t)) ?? DA_SUBMITTER_TYPE;
   const nameLocked = selfAsDa && !!self.name;
-  const mobileLocked = selfAsDa && !!self.mobile;
+  // A record mobile the Grievance Service would refuse stays editable.
+  const mobileLocked = selfAsDa && !!toEthiopianMobile(self.mobile);
   const effectiveType = selfAsDa ? daType : submitterType;
   const effectiveName = nameLocked ? self.name : submitterName;
   const effectiveMobile = mobileLocked ? self.mobile : contactMobile;
+  /** What is sent: +251 and the 9 digits; null until it is a valid Ethiopian mobile. */
+  const mobileToSend = toEthiopianMobile(effectiveMobile);
+  const mobileNote = mobileLocked
+    ? { hint: "From your DA record." }
+    : { hint: "Ethiopian mobile, e.g. 0911234567.", hintTone: contactMobile.trim() && !mobileToSend ? ("error" as const) : ("muted" as const) };
 
   const chooseFor = (whom: "farmer" | "me") => {
     setForWhom(whom);
-    pickKebele(null);
+    clearArea();
   };
 
   const reset = () => {
     setSubject(""); setDescription(""); setDesiredOutcome("");
     setSubmitterName(""); setContactMobile(""); setFarmerRef(farmerId ?? "");
-    setGrievanceType(""); pickKebele(null);
+    setGrievanceType(""); clearArea();
     setConsent(true); setAnonymous(false);
     setError(null); setResult(null);
     setClientOpId(newClientOpId());
@@ -153,7 +164,7 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
 
         submitter_type: effectiveType,
         submitter_name: effectiveName.trim(),
-        contact_mobile: effectiveMobile.trim(),
+        contact_mobile: mobileToSend ?? "",
         administrative_area: toAdministrativeArea(kebeleCode),
         administrative_unit: kebeleName.trim(),
         service_category: serviceCategory,
@@ -185,7 +196,7 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
     !!serviceCategory &&
     !!grievanceType &&
     effectiveName.trim().length >= 2 &&
-    effectiveMobile.trim().length >= 6 &&
+    !!mobileToSend &&
     !!kebeleCode &&
     !!kebeleName &&
     !submitting;
@@ -297,7 +308,7 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
               <FormField label="Submitter name" htmlFor="grv-subname" required {...(nameLocked ? { hint: "From your DA record." } : minLengthNote(submitterName, 2))}>
                 <Input id="grv-subname" value={effectiveName} disabled={nameLocked} onChange={(e) => setSubmitterName(e.target.value)} placeholder="Full name" />
               </FormField>
-              <FormField label="Contact mobile" htmlFor="grv-mobile" required {...(mobileLocked ? { hint: "From your DA record." } : minLengthNote(contactMobile, 6))}>
+              <FormField label="Contact mobile" htmlFor="grv-mobile" required {...mobileNote}>
                 <Input id="grv-mobile" value={effectiveMobile} disabled={mobileLocked} onChange={(e) => setContactMobile(e.target.value)} placeholder="09xxxxxxxx" inputMode="tel" />
               </FormField>
             </div>
@@ -320,7 +331,7 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
                 <FormField label="Submitter name" htmlFor="grv-subname" required {...(nameLocked ? { hint: "From your DA record." } : minLengthNote(submitterName, 2))}>
                   <Input id="grv-subname" value={effectiveName} disabled={nameLocked} onChange={(e) => setSubmitterName(e.target.value)} placeholder="Full name" />
                 </FormField>
-                <FormField label="Contact mobile" htmlFor="grv-mobile" required {...(mobileLocked ? { hint: "From your DA record." } : minLengthNote(contactMobile, 6))}>
+                <FormField label="Contact mobile" htmlFor="grv-mobile" required {...mobileNote}>
                   <Input id="grv-mobile" value={effectiveMobile} disabled={mobileLocked} onChange={(e) => setContactMobile(e.target.value)} placeholder="09xxxxxxxx" inputMode="tel" />
                 </FormField>
               </div>
@@ -346,7 +357,7 @@ export function RaiseGrievanceModal({ isOpen, onClose, farmerId, onSubmitted }: 
             </FormField>
           </div>
 
-          {selfAsDa ? <DaKebele woredaCode={self.woredaCode} kebeleName={self.kebeleName} onChange={pickKebele} /> : <KebelePicker onChange={pickKebele} woredaCode={supervisorWoreda} />}
+          <AreaPicker key={pickerKey} depth="kebele" required idPrefix="grv" onChange={pickKebele} />
 
           <FormField label="Subject" htmlFor="grv-subject" required {...minLengthNote(subject, 3)}>
             <Input id="grv-subject" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Short title" />

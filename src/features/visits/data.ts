@@ -123,14 +123,6 @@ export const VISIT_AGENT_OPTIONS: FilterOption[] = [
   { value: "Tadesse A.", label: "Tadesse Alemu", count: 4 },
 ];
 
-export const VISIT_KEBELE_OPTIONS: FilterOption[] = [
-  { value: "Bako Tibe", label: "Bako Tibe", count: 2210 },
-  { value: "Lume", label: "Lume", count: 1560 },
-  { value: "Dendi", label: "Dendi", count: 1204 },
-  { value: "Adea", label: "Adea", count: 980 },
-  { value: "Gedo", label: "Gedo", count: 812 },
-];
-
 export const VISIT_STATUS_OPTIONS: FilterOption[] = [
   { value: "Confirmed", label: "Confirmed", count: 2318 },
   { value: "Planned", label: "Planned", count: 3104 },
@@ -141,7 +133,6 @@ export const VISIT_STATUS_OPTIONS: FilterOption[] = [
 // Fields shown in the Advanced Filters drawer on the Visits page.
 export const VISIT_FILTER_FIELDS: FilterFieldConfig[] = [
   { key: "agent", label: "Agent", allLabel: "All agents", placeholder: "All Agent", options: VISIT_AGENT_OPTIONS },
-  { key: "kebele", label: "kebele", allLabel: "All kebeles", placeholder: "All Kebele", options: VISIT_KEBELE_OPTIONS },
   { key: "status", label: "Status", allLabel: "All Status", placeholder: "All", options: VISIT_STATUS_OPTIONS },
 ];
 

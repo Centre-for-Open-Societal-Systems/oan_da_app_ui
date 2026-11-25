@@ -15,8 +15,6 @@ import {
   COMPLIANCE_AGENT_OPTIONS,
   COMPLIANCE_FILTER_FIELDS,
   COMPLIANCE_INCENTIVE_OPTIONS,
-  COMPLIANCE_KEBELE_OPTIONS,
-  COMPLIANCE_WOREDA_OPTIONS,
   INCENTIVE_STATUS_TONE,
   MANDATORY_COURSE_COUNT,
   TEAM_COMPLIANCE,
@@ -27,6 +25,7 @@ import { fileDate, type CsvColumn } from "@/lib/download";
 import { downloadTable, formatLabel } from "@/lib/export";
 import { matchesQuery, searchPlaceholder } from "@/lib/search";
 import { cn } from "@/lib/utils";
+import { useAreaFilterOptions, withFieldOptions } from "@/features/geo";
 
 const SEARCH_PLACEHOLDER = searchPlaceholder(["Agent name", "DA-ID"]);
 
@@ -69,6 +68,10 @@ export function TeamComplianceTable() {
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<ComplianceFilters>(EMPTY);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+  // Every Kebele and Woreda of the user's own area from the geo Master Data, then those the rows hold.
+  const kebeleOptions = useAreaFilterOptions("kebele", TEAM_COMPLIANCE.map((r) => r.kebele));
+  const woredaOptions = useAreaFilterOptions("woreda", TEAM_COMPLIANCE.map((r) => r.woreda));
+  const filterFields = withFieldOptions(COMPLIANCE_FILTER_FIELDS, { kebele: kebeleOptions, woreda: woredaOptions });
   const [notice, setNotice] = useState<string | null>(null);
   const activeFilterCount = Object.values(filters).filter((set) => set.size > 0).length;
 
@@ -117,9 +120,9 @@ export function TeamComplianceTable() {
               </th>
               <th className="px-4 py-3 font-semibold">
                 <span className="flex items-center gap-1">
-                  <FilterDropdown label="Kebele" allLabel="All kebeles" options={COMPLIANCE_KEBELE_OPTIONS} selected={filters.kebele} onApply={setFilter("kebele")} />
+                  <FilterDropdown label="Kebele" allLabel="All kebeles" options={kebeleOptions} selected={filters.kebele} onApply={setFilter("kebele")} />
                   <span>/</span>
-                  <FilterDropdown label="Woreda" allLabel="All woredas" options={COMPLIANCE_WOREDA_OPTIONS} selected={filters.woreda} onApply={setFilter("woreda")} />
+                  <FilterDropdown label="Woreda" allLabel="All woredas" options={woredaOptions} selected={filters.woreda} onApply={setFilter("woreda")} />
                 </span>
               </th>
               <th className="whitespace-nowrap px-4 py-3 font-semibold">Mandatory Done</th>
@@ -163,7 +166,7 @@ export function TeamComplianceTable() {
       <AdvancedFiltersDrawer
         isOpen={isFiltersOpen}
         onClose={() => setIsFiltersOpen(false)}
-        fields={COMPLIANCE_FILTER_FIELDS}
+        fields={filterFields}
         filters={filters}
         onApply={(next) =>
           setFilters({

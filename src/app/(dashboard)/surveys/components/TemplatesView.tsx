@@ -18,6 +18,7 @@ import {
   type SurveyTask,
   type SurveyType,
 } from "@/features/surveys";
+import { AreaPicker, areaName, loadAreaNames, type AreaSelection } from "@/features/geo";
 
 const Icon = ({ d, className = "h-6 w-6" }: { d: string; className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
@@ -48,11 +49,16 @@ export function TemplatesView({ reloadKey = 0, notice, onDismissNotice }: { relo
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<SurveyStatus | "">("");
   const [type, setType] = useState<SurveyType | "">("");
+  // Woreda filter from the area picker: a Supervisor's own Woreda (from /me) is fixed, others pick one or leave it empty.
+  const [woreda, setWoreda] = useState("");
+  const pickArea = useCallback((area: AreaSelection) => setWoreda(area.woreda?.code ?? ""), []);
 
   const load = useCallback(() => {
     setState("loading");
-    listSurveyTemplates({ q: query, status: status || undefined, type: type || undefined })
-      .then(({ items, total: t }) => {
+    listSurveyTemplates({ q: query, status: status || undefined, type: type || undefined, woreda: woreda || undefined })
+      .then(async ({ items, total: t }) => {
+        // Templates carry the Woreda code; its name is read from the Master Data before the rows show.
+        await loadAreaNames(items.map((i) => i.woreda));
         setRows(items);
         setTotal(t);
         setState("ready");
@@ -61,7 +67,7 @@ export function TemplatesView({ reloadKey = 0, notice, onDismissNotice }: { relo
         setError(describeSurveyError(err));
         setState("error");
       });
-  }, [query, status, type]);
+  }, [query, status, type, woreda]);
 
   // Debounce typing in the search box.
   useEffect(() => {
@@ -84,7 +90,7 @@ export function TemplatesView({ reloadKey = 0, notice, onDismissNotice }: { relo
       key: "name", header: "Template", className: "min-w-[260px]", cell: (t) => (
         <span className="block">
           <span className="font-semibold text-ink">{t.name}</span>
-          <span className="mt-0.5 block text-[12.5px] text-ink-soft">Template {t.templateVersion}{t.woreda ? ` · ${t.woreda}` : ""}</span>
+          <span className="mt-0.5 block text-[12.5px] text-ink-soft">Template {t.templateVersion}{t.woreda ? ` · ${areaName(t.woreda)}` : ""}</span>
         </span>
       ),
     },
@@ -146,9 +152,10 @@ export function TemplatesView({ reloadKey = 0, notice, onDismissNotice }: { relo
             />
           </div>
         </div>
+        <AreaPicker depth="woreda" idPrefix="tpl-filter" showCountry={false} onChange={pickArea} className="border-b border-line-soft p-3.5 sm:p-4" />
         <DataTable itemLabel="templates" columns={columns} rows={rows} rowKey={(t) => t.id} minWidth="1180px" state={state} onRetry={load}
-          emptyTitle={query || status || type ? "No templates match your filters" : "No survey templates yet"}
-          emptyHint={query || status || type ? "Clear a filter or try a different name." : "Use New Template to publish the first survey."} />
+          emptyTitle={query || status || type || woreda ? "No templates match your filters" : "No survey templates yet"}
+          emptyHint={query || status || type || woreda ? "Clear a filter or try a different name." : "Use New Template to publish the first survey."} />
       </Card>
     </>
   );

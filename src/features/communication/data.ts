@@ -15,7 +15,6 @@ export const WOREDA_AUDIENCES: Record<string, Record<RecipientGroup, number>> = 
   Dendi: { Farmers: 860, "Development Agents": 27 },
   Cheliya: { Farmers: 710, "Development Agents": 22 },
 };
-export const BROADCAST_WOREDAS = Object.keys(WOREDA_AUDIENCES);
 
 export const audienceOf = (group: RecipientGroup, woreda: string): Audience => `${group} — ${woreda} Woreda`;
 export const audienceSize = (group: RecipientGroup, woreda: string) => WOREDA_AUDIENCES[woreda]?.[group] ?? 0;

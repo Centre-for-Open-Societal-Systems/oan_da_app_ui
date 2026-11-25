@@ -16,6 +16,7 @@ import { matchesQuery } from "@/lib/search";
 import { KeyDates } from "../lifecycle/components/KeyDates";
 import { ICONS } from "../lifecycle/components/shared";
 import { PageIntro, SELECT_CLASS, SummaryTile, has, optionsOf } from "../leave-admin/shared";
+import { areaFilterOptions, useScopeAreaNames } from "@/features/geo";
 
 interface RegionRow {
   region: string;
@@ -51,8 +52,10 @@ export function LeaveOverview() {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
 
+  // Every Region from the geo Master Data, then those the rows hold.
+  const regionNames = useScopeAreaNames("region", ROWS.map((r) => r.region));
   const options = {
-    region: optionsOf(ROWS.map((r) => r.region)),
+    region: areaFilterOptions(ROWS.map((r) => r.region), regionNames),
     leaveYear: optionsOf(ROWS.map((r) => r.leaveYear)),
     policy: optionsOf(ROWS.map((r) => r.policy)),
   };

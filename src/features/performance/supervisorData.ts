@@ -3,7 +3,6 @@ import type { FilterFieldConfig } from "@/components/ui/AdvancedFiltersDrawer";
 import type { FilterOption } from "@/components/ui/FilterDropdown";
 import type { PillTone } from "@/components/ui/Pill";
 
-export const REGIONS = ["Oromia", "Amhara", "Sidama", "SNNP", "Tigray"];
 export const PERIODS = ["Last 7 days", "Last 30 days", "Last 90 days", "This quarter", "This year"];
 
 export const WOREDA_SUMMARY = {
@@ -445,7 +444,6 @@ const optionsFor = (pick: (row: AgentPerformanceRow) => string): FilterOption[] 
 };
 
 export const PERFORMANCE_AGENT_OPTIONS = optionsFor((r) => r.name);
-export const PERFORMANCE_KEBELE_OPTIONS = optionsFor((r) => r.kebele);
 export const PERFORMANCE_STATUS_OPTIONS = optionsFor((r) => r.status);
 export const PERFORMANCE_TIER_OPTIONS: FilterOption[] = PERFORMANCE_TIERS.map((t) => ({
   value: t.code,
@@ -455,15 +453,14 @@ export const PERFORMANCE_TIER_OPTIONS: FilterOption[] = PERFORMANCE_TIERS.map((t
 
 export const PERFORMANCE_FILTER_FIELDS: FilterFieldConfig[] = [
   { key: "agent", label: "Agent", allLabel: "All agents", placeholder: "All Agents", options: PERFORMANCE_AGENT_OPTIONS },
-  { key: "kebele", label: "Kebele", allLabel: "All kebeles", placeholder: "All Kebeles", options: PERFORMANCE_KEBELE_OPTIONS },
+  // Filled in by the component from the geo Master Data (useAreaFilterOptions).
+  { key: "kebele", label: "Kebele", allLabel: "All kebeles", placeholder: "All Kebeles", options: [] },
   { key: "status", label: "Status", allLabel: "All Status", placeholder: "All Status", options: PERFORMANCE_STATUS_OPTIONS },
   { key: "tier", label: "Tier", allLabel: "All tiers", placeholder: "All Tiers", options: PERFORMANCE_TIER_OPTIONS },
 ];
 
 // KPI entry / import form options
 export const REPORTING_PERIODS = ["Q3 2026 (Jul - Sep)", "Q2 2026 (Apr - Jun)", "Q1 2026 (Jan - Mar)", "Q4 2025 (Oct - Dec)"];
-export const WOREDA_REGIONS = ["Adama Woreda, Oromia", "Bishoftu Woreda, Oromia", "Dendi Woreda, Oromia"];
 export const DEVELOPMENT_AGENTS = ["Almaz Wolde", "Bekele Negash", "Chaltu Dida", "Tadesse Alemu"];
-export const ASSIGNED_KEBELES = ["Adama, Kebele 01", "Adama, Kebele 05", "Adama, Kebele 07", "Adama, Kebele 12"];
 
 export const KPI_IMPORT_MAX_BYTES = 5 * 1024 * 1024;

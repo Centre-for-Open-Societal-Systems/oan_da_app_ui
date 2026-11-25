@@ -12,13 +12,15 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { SegmentTabs } from "@/components/ui/SegmentTabs";
 import { FilterDropdown, type FilterOption } from "@/components/ui/FilterDropdown";
 import { AdvancedFiltersDrawer, type FilterFieldConfig, type FilterSelection } from "@/components/ui/AdvancedFiltersDrawer";
-import { areaLabel, areaNameMap, loadScopeAreas } from "@/features/assignments";
+import { areaLabel } from "@/features/assignments";
+import { useAreaNames } from "@/features/geo";
 import { createRbacAssignment, generatePassword, isAssignableRole, listRbacAssignments, registerUser, revokeRbacAssignment, toPortalRoleFromBackend, updateRbacAssignment, type RbacAssignmentRecord } from "@/features/users";
 import { ApiError } from "@/lib/api";
 import { ROLE_LABELS, ROLES, type Role } from "@/lib/rbac";
 import { matchesQuery, searchPlaceholder } from "@/lib/search";
 import { useAuthStore } from "@/store/useAuthStore";
 import { UserFormModal, parseDisplayDate, type UserFormValues } from "./UserFormModal";
+import { useScopeAreas } from "@/features/geo";
 
 // §5 RBAC assignment: user_id, role, active, region_scope, woreda_scope, effective_from/to, assigned_by.
 interface RbacAssignment {
@@ -131,19 +133,7 @@ export function UsersRoles() {
     };
   }, [hasBackendSession]);
   // Scopes are stored as area-master codes; the names make the table readable. Older rows that hold a name show as is.
-  const [areaNames, setAreaNames] = useState<Record<string, string>>({});
-  useEffect(() => {
-    if (!hasBackendSession) return;
-    let current = true;
-    loadScopeAreas()
-      .then((areas) => current && setAreaNames(areaNameMap(areas)))
-      .catch(() => {
-        // Codes stay visible on their own.
-      });
-    return () => {
-      current = false;
-    };
-  }, [hasBackendSession]);
+  const areaNames = useAreaNames(users.flatMap((u) => [u.regionScope, u.woredaScope]));
   const scopeText = (code: string) => areaLabel(areaNames, code);
   const signedInName = `${useAuthStore((s) => s.user?.name) ?? "Admin"} (Admin)`;
   const [filters, setFilters] = useState<UserFilters>(EMPTY);
@@ -154,8 +144,13 @@ export function UsersRoles() {
 
   const roleOptions = optionsOf(users.map((u) => u.role), ROLES, (r) => ROLE_LABELS[r as Role]);
   const activeOptions = optionsOf(users.map(activeLabel), ["Active", "Inactive"]);
-  const regionOptions = optionsOf(users.map((u) => u.regionScope), undefined, scopeText);
-  const scopeOptions = optionsOf(users.map((u) => u.woredaScope), undefined, scopeText);
+  // Scope options: the Regions (and the Woredas of the user's own area) from the geo Master Data, then those the rows hold.
+  const apiRegions = useScopeAreas("region") ?? [];
+  const apiWoredas = useScopeAreas("woreda") ?? [];
+  const apiAreaNames = Object.fromEntries([...apiRegions, ...apiWoredas].map((a) => [a.code, a.name]));
+  const scopeOptionText = (code: string) => (apiAreaNames[code] && !areaNames[code] ? `${apiAreaNames[code]} (${code})` : scopeText(code));
+  const regionOptions = optionsOf(users.map((u) => u.regionScope), [...new Set([...apiRegions.map((a) => a.code), ...users.map((u) => u.regionScope).filter(Boolean)])], scopeOptionText);
+  const scopeOptions = optionsOf(users.map((u) => u.woredaScope), [...new Set([...apiWoredas.map((a) => a.code), ...users.map((u) => u.woredaScope).filter(Boolean)])], scopeOptionText);
   const filterFields: FilterFieldConfig[] = [
     { key: "role", label: "Role", allLabel: "All roles", placeholder: "All Roles", options: roleOptions },
     { key: "active", label: "Active", allLabel: "All users", placeholder: "All", options: activeOptions },

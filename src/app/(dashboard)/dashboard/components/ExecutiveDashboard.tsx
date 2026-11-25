@@ -17,14 +17,15 @@ import { matchesQuery, searchPlaceholder } from "@/lib/search";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { DateRangeDropdown } from "./DateRangeDropdown";
 import { TablePagination, usePagination } from "@/components/ui/TablePagination";
+import { useAreaFilterOptions, withFieldOptions } from "@/features/geo";
 
 const SEARCH_PLACEHOLDER = searchPlaceholder(["Woreda", "Farmers", "Kebeles", "Agents", "Visit coverage", "Data quality", "Grievances", "Status"]);
 
 const STATUSES: KebeleStatus[] = ["On track", "Watch", "At risk"];
-const WOREDA_OPTIONS: FilterOption[] = WOREDA_ROLLUPS.map((w) => ({ value: w.woreda, label: w.woreda, count: w.kebeles }));
 const STATUS_OPTIONS: FilterOption[] = STATUSES.map((s) => ({ value: s, label: s, count: WOREDA_ROLLUPS.filter((w) => w.status === s).length }));
 const FILTER_FIELDS: FilterFieldConfig[] = [
-  { key: "woreda", label: "Woreda", allLabel: "All woredas", placeholder: "All Woredas", options: WOREDA_OPTIONS },
+  // Filled in by the component from the geo Master Data (useAreaFilterOptions).
+  { key: "woreda", label: "Woreda", allLabel: "All woredas", placeholder: "All Woredas", options: [] },
   { key: "status", label: "Status", allLabel: "All statuses", placeholder: "All Statuses", options: STATUS_OPTIONS },
 ];
 
@@ -51,6 +52,9 @@ export function ExecutiveDashboard() {
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<WoredaFilters>(EMPTY);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+  // Every Woreda of the user's own area from the geo Master Data, then those the rows hold.
+  const woredaOptions = useAreaFilterOptions("woreda", WOREDA_ROLLUPS.map((w) => w.woreda));
+  const filterFields = withFieldOptions(FILTER_FIELDS, { woreda: woredaOptions });
 
   const activeFilterCount = Object.values(filters).filter((set) => set.size > 0).length;
   const setFilter = (key: keyof WoredaFilters) => (next: Set<string>) => setFilters((prev) => ({ ...prev, [key]: next }));
@@ -133,7 +137,7 @@ export function ExecutiveDashboard() {
             <thead>
               <tr className="border-y border-line bg-surface text-[14px] font-semibold text-slate-500">
                 <th className="whitespace-nowrap px-4 py-3 font-semibold">
-                  <FilterDropdown label="Woreda" allLabel="All woredas" options={WOREDA_OPTIONS} selected={filters.woreda} onApply={setFilter("woreda")} />
+                  <FilterDropdown label="Woreda" allLabel="All woredas" options={woredaOptions} selected={filters.woreda} onApply={setFilter("woreda")} />
                 </th>
                 <th className="px-4 py-3 font-semibold">Farmers</th>
                 <th className="px-4 py-3 text-center font-semibold">Kebeles</th>
@@ -184,7 +188,7 @@ export function ExecutiveDashboard() {
         <AdvancedFiltersDrawer
           isOpen={isFiltersOpen}
           onClose={() => setIsFiltersOpen(false)}
-          fields={FILTER_FIELDS}
+          fields={filterFields}
           filters={filters}
           onApply={(next) =>
             setFilters({
