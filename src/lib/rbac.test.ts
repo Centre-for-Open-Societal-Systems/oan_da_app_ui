@@ -41,6 +41,16 @@ describe("navForRole", () => {
     for (const role of ROLES.filter((r) => r !== "DA")) expect(hrefsFor(role)).not.toContain("/my-teams");
   });
 
+  it("names the agents registry My Teams for the Supervisor, with no performance team item", () => {
+    const items = navForRole("Supervisor").flatMap((g) => g.items);
+    expect(items.find((i) => i.href === "/agents")?.title).toBe("My Teams");
+    expect(items.map((i) => i.href)).not.toContain("/performance/teams");
+    expect(items.filter((i) => i.title === "My Teams")).toHaveLength(1);
+    expect(navForRole("Admin").flatMap((g) => g.items).find((i) => i.href === "/agents")?.title).toBe("Agents");
+    expect(pageTitleFor("/agents", "Supervisor")).toBe("My Teams");
+    expect(pageTitleFor("/agents", "Admin")).toBe("Agents");
+  });
+
   it("drops groups with nothing visible", () => {
     for (const role of ROLES) for (const g of navForRole(role)) expect(g.items.length).toBeGreaterThan(0);
   });
@@ -75,7 +85,7 @@ describe("pageTitleFor", () => {
   it.each([
     ["/dashboard", "Dashboard"],
     ["/farmers", "My Farmers"],
-    ["/farmers/new", "Register Farmer"],
+    ["/farmers/new", "Farmer Registration"],
     ["/farmers/f-1", "Farmer Profile"],
     ["/farmers/f-1/services", "Farmer Services"],
     ["/visits/v-1/outcome", "Visit Outcome"],
@@ -87,6 +97,12 @@ describe("pageTitleFor", () => {
     ["/performance/kpi-entry", "KPI Entry"],
     ["/admin/users", "Users & Roles"],
     ["/my-teams", "My Teams"],
+    ["/performance/teams", "My Teams"],
+    ["/grievances", "Grievances"],
+    ["/knowledge", "Knowledge Base"],
+    ["/knowledge/article-1", "Knowledge Base"],
+    ["/notifications", "Notifications"],
+    ["/404-error", "Page not found"],
     ["/nowhere", "Dashboard"],
   ])("%s → %s", (path, title) => {
     expect(pageTitleFor(path)).toBe(title);

@@ -1,0 +1,185 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("./cropSownApi", async (importOriginal) => ({
+  REGISTER_TAB_IDS: (await importOriginal<typeof import("./cropSownApi")>()).REGISTER_TAB_IDS,
+  fetchIntakeForm: vi.fn(),
+  saveFarmerCrop: vi.fn(),
+  listFarmerCrops: vi.fn(),
+  fetchFarmerCrop: vi.fn(),
+  fetchRegisterTab: vi.fn(),
+}));
+
+import { intakeDisplayValue, loadCropDetails, loadStageDisplay, sectionRows, stageValues, submissionsOf, summaryOf, summaryDisplay, summaryValues, toFormValue } from "./cropSownLoad";
+import { clearIntakeFormCache } from "./cropSownSubmit";
+import { fetchFarmerCrop, fetchIntakeForm, fetchRegisterTab, listFarmerCrops } from "./cropSownApi";
+import { CROP_SOWN_FORM } from "./cropSown";
+
+const field = (field_name: string, extra: object = {}) => ({ field_name, label: field_name, data_type: "string", required: false, readonly: false, options: null, attribute_id: null, ...extra });
+const intake = (form_id: string, sections: object[] = []) => ({ form_id, register_id: "r", form_mnemonic: form_id, intake_forms: [], sections }) as never;
+const planningIntake = intake("form-planning", [
+  { section_id: "cropsown_intake_season_section_01", section_register_id: "r", section_mnemonic: "s", screen_section: null, is_list: false, fields: [field("production_season", { options: [{ value_id: "SEASON_MEHER", value_display: "Meher" }] })] },
+  { section_id: "cropsown_planning_details_section_01", section_register_id: "reg-planning-details", section_mnemonic: "p", screen_section: null, is_list: true, fields: [] },
+]);
+
+beforeEach(() => {
+  clearIntakeFormCache();
+  vi.mocked(listFarmerCrops).mockReset();
+  vi.mocked(fetchFarmerCrop).mockReset();
+  vi.mocked(fetchRegisterTab).mockReset();
+  vi.mocked(fetchIntakeForm).mockReset().mockImplementation(async (form) => (form === "planning" ? planningIntake : intake(`form-${form}`)));
+});
+
+describe("toFormValue", () => {
+  const def = (key: string, extra: object = {}) => ({ key, label: key, type: "select" as const, ...extra });
+  it("turns the registry's codes back into the form's labels", () => {
+    expect(toFormValue("PLOT_CATEGORY_ANNUAL_CROP", def("plot_category", { optionValues: { "Annual Crop": "PLOT_CATEGORY_ANNUAL_CROP" } }), undefined)).toBe("Annual Crop");
+    expect(toFormValue(true, def("is_plot_registered", { optionValues: { Yes: true, No: false } }), undefined)).toBe("Yes");
+    expect(toFormValue("CROP_TEFF", def("commodity", { fallbackValues: { Teff: "CROP_TEFF" } }), undefined)).toBe("Teff");
+    expect(toFormValue("SEASON_MEHER", def("production_season"), field("production_season", { options: [{ value_id: "SEASON_MEHER", value_display: "Meher" }] }))).toBe("Meher");
+    expect(toFormValue(["A", "B"], def("x", { type: "multiselect" }), undefined)).toBe("A, B");
+    expect(toFormValue("2026-05-01T00:00:00", def("planned_date", { type: "date" }), undefined)).toBe("2026-05-01");
+    expect(toFormValue(null, def("x"), undefined)).toBe("");
+  });
+});
+
+describe("sectionRows", () => {
+  it("finds section records however the API nests them", () => {
+    const rows = sectionRows([{ tabs: [{ sections: [{ section_id: "a", records: [{ x: 1 }] }] }] }, { section_id: "b", section_payload: [{ y: 2 }] }]);
+    expect(rows.map((r) => r.sectionId)).toEqual(["a", "b"]);
+  });
+});
+
+describe("stageValues", () => {
+  it("fills the Identity and Planning sections of the Planning tab", () => {
+    const values = stageValues(
+      "planning",
+      [
+        { sectionId: "crop_farmer_lookup", rows: [{ farmer_id: "FR-1", fayda_fan_id: "5837291046283715" }] },
+        { sectionId: "cropsown_intake_season_section_01", rows: [{ crop_year: "2026", production_season: "SEASON_MEHER" }] },
+        { sectionId: "cropsown_planning_details_section_01", rows: [{ land_id: "L-1", land_area: 1.5, plot_category: "PLOT_CATEGORY_ANNUAL_CROP" }] },
+      ],
+      planningIntake,
+    );
+    expect(values).toMatchObject({ "identity.crop_year": "2026", "identity.production_season": "Meher", "identity.fayda_fan_id": "5837291046283715", "planning.land_id": "L-1", "planning.land_area": "1.5", "planning.plot_category": "Annual Crop" });
+    expect(CROP_SOWN_FORM[0].key).toBe("planning");
+  });
+});
+
+// The shape of GET /farmers/{id}/crops: drafts (no region, no year), the approved submission, and the register's own row.
+const display = (extra: Record<string, string | null> = {}) =>
+  Object.entries({ fayda_fan_id: "5837291046283715", region_name: null, zone_name: null, woreda_name: null, kebele_name: null, crop_year: null, ...extra }).map(([field_name, value], order) => ({ field_name, order, value }));
+const LIST = [
+  { submission_id: "sub-new", form_id: "form-planning", record_name: "FR-9", draft_status: "DRAFT", approval_status: "PENDING", last_updated_at: "2026-11-02T10:08:27", display_fields: display() },
+  { submission_id: "sub-old", form_id: "form-planning", record_name: "FR-9", draft_status: "DRAFT", approval_status: "PENDING", last_updated_at: "2026-11-02T08:17:28", display_fields: display() },
+  { submission_id: "sub-final", form_id: "form-planning", record_name: "FR-9", draft_status: "FINAL", approval_status: "APPROVED", last_updated_at: "2026-11-02T06:34:26", display_fields: display({ region_name: "Tigray", zone_name: "North Western", woreda_name: "Laelay Koraro", crop_year: "2026" }) },
+  { internal_record_id: "reg-1", functional_record_id: "REG/S1/2026/28979", record_name: "FR-9", display_fields: display({ region_name: "Tigray" }) },
+] as never;
+
+describe("the crops list", () => {
+  it("separates submissions from the register row, newest first", () => {
+    expect(submissionsOf([LIST[3], LIST[2], LIST[0], LIST[1]] as never).map((c) => c.submission_id)).toEqual(["sub-new", "sub-old", "sub-final"]);
+  });
+
+  it("takes each summary value from the newest row that has it (drafts have none)", () => {
+    expect(summaryOf(LIST)).toMatchObject({ fayda_fan_id: "5837291046283715", region_name: "Tigray", zone_name: "North Western", woreda_name: "Laelay Koraro", crop_year: "2026" });
+  });
+
+  it("turns the summary into Identity and Address values, leaving a past crop year out", () => {
+    const year = String(new Date().getFullYear());
+    expect(summaryValues({ fayda_fan_id: "5837291046283715", crop_year: year, region_name: "Tigray", zone_name: "North Western", woreda_name: "Laelay Koraro" })).toEqual({
+      "identity.fayda_fan_id": "5837291046283715",
+      "identity.crop_year": year,
+      "address.region": "Tigray",
+      "address.zone": "North Western",
+      "address.woreda": "Laelay Koraro",
+    });
+    expect(summaryValues({ crop_year: "2019" })).toEqual({});
+  });
+});
+
+describe("loadCropDetails", () => {
+  it("reports a farmer with no earlier submission", async () => {
+    vi.mocked(listFarmerCrops).mockResolvedValue([]);
+    await expect(loadCropDetails("FR-1")).resolves.toEqual({ values: {}, stages: [], total: 0 });
+  });
+
+  it("fills the form from the list's summary and the newest submission's sections", async () => {
+    vi.mocked(fetchFarmerCrop).mockResolvedValue({ sections: [{ section_id: "cropsown_intake_season_section_01", records: [{ crop_year: String(new Date().getFullYear()), production_season: "SEASON_MEHER" }] }], tabs: [] } as never);
+    const result = await loadCropDetails("FR-9", LIST);
+    expect(fetchFarmerCrop).toHaveBeenCalledTimes(1);
+    expect(fetchFarmerCrop).toHaveBeenCalledWith("FR-9", "sub-new");
+    expect(result.total).toBe(3);
+    expect(result.stages).toEqual(["planning"]);
+    expect(result.values).toMatchObject({ "identity.fayda_fan_id": "5837291046283715", "address.region": "Tigray", "address.zone": "North Western", "identity.production_season": "Meher" });
+  });
+
+  it("keeps read-only fields, coordinates and past crop years for display only", async () => {
+    const sections = [
+      { section_id: "cropsown_cropsown_location_section_03", records: [{ latitude: "9.1", geo_code_hierarchy_json: { region: "x" } }] },
+      { section_id: "cropsown_planning_details_section_01", records: [{ planned_date_ec: "2017-10-11" }] },
+    ];
+    vi.mocked(fetchFarmerCrop).mockResolvedValue({ sections, tabs: [] } as never);
+    const shown = await loadCropDetails("FR-9", LIST, { display: true });
+    expect(shown.values).toMatchObject({ "address.latitude": "9.1", "planning.planned_date_ec": "2017-10-11" });
+    expect(summaryDisplay({ crop_year: "2019" })).toEqual({ "identity.crop_year": "2019" });
+    expect(shown.values["address.geo_code_hierarchy_json"]).toContain("Tigray");
+
+    const form = await loadCropDetails("FR-9", LIST);
+    expect(form.values["address.latitude"]).toBeUndefined();
+    expect(form.values["planning.planned_date_ec"]).toBeUndefined();
+  });
+
+  it("reads stages from the register record's tabs first, falling back to submissions", async () => {
+    const withRegister = [...LIST, { record_name: "Teff", internal_record_id: "reg-1" }];
+    vi.mocked(fetchRegisterTab).mockImplementation(async (_farmer, _id, tabId) => ({
+      internal_record_id: "reg-1",
+      tab_id: tabId,
+      tabs: [{ tab_id: tabId, records: tabId === "cropsown_planning_tab"
+        // As staging sends it: no section_id, only the section_register_id the intake form knows.
+        ? [{ section_register_id: "reg-planning-details", is_list: true, records: [{ planned_date_ec: "2018-01-05" }] }]
+        : tabId === "cropsown_production_tab" ? [{ section_register_id: "reg-production", is_list: true, records: [{ yield_qt: 12 }] }] : [] }],
+    }));
+    vi.mocked(fetchFarmerCrop).mockResolvedValue({ sections: [{ section_id: "cropsown_planning_details_section_01", records: [{ planned_date_ec: "2017-10-11" }] }], tabs: [] } as never);
+    const result = await loadCropDetails("FR-9", withRegister, { display: true, register: true });
+    expect(fetchRegisterTab).toHaveBeenCalledWith("FR-9", "reg-1", "cropsown_planning_tab");
+    expect(fetchRegisterTab).toHaveBeenCalledWith("FR-9", "reg-1", "cropsown_harvest_tab");
+    expect(result.values["planning.planned_date_ec"]).toBe("2018-01-05");
+    expect(fetchFarmerCrop).not.toHaveBeenCalled();
+    expect(result.production).toEqual([{ sectionId: "Production", rows: [{ yield_qt: 12 }] }]);
+
+    vi.mocked(fetchRegisterTab).mockRejectedValue(new Error("down"));
+    const fallback = await loadCropDetails("FR-9", withRegister, { display: true, register: true });
+    expect(fallback.values["planning.planned_date_ec"]).toBe("2017-10-11");
+  });
+
+  it("still gives the summary when a submission cannot be read", async () => {
+    vi.mocked(fetchFarmerCrop).mockRejectedValue(new Error("boom"));
+    const result = await loadCropDetails("FR-9", LIST);
+    expect(result.stages).toEqual([]);
+    expect(result.values).toMatchObject({ "identity.fayda_fan_id": "5837291046283715", "address.woreda": "Laelay Koraro" });
+  });
+});
+
+describe("loadStageDisplay", () => {
+  it("lays a stage out by its intake form, labels and option labels included", async () => {
+    vi.mocked(fetchIntakeForm).mockResolvedValue(intake("form-planning", [
+      { section_id: "cropsown_planning_details_section_01", section_register_id: "reg-planning-details", section_mnemonic: "cs_planning_details", screen_section: null, is_list: true,
+        fields: [field("soil_fertility", { label: "Soil Fertility", options: [{ label: "High", value: "SOIL_HIGH" }] }), field("land_id", { label: "Land ID" }), field("is_plot_registered", { label: null })] },
+    ]));
+    vi.mocked(fetchRegisterTab).mockResolvedValue({ internal_record_id: "reg-1", tab_id: "cropsown_planning_tab",
+      tabs: [{ tab_id: "cropsown_planning_tab", records: [{ section_register_id: "reg-planning-details", is_list: true, records: [{ soil_fertility: "SOIL_HIGH", land_id: "Plot 1", is_plot_registered: true }] }] }] });
+    const shown = await loadStageDisplay("FR-9", [{ record_name: "Teff", internal_record_id: "reg-1" }], "planning");
+    expect(shown.hasData).toBe(true);
+    expect(shown.sections[0].rows[0]).toEqual([
+      { key: "soil_fertility", label: "Soil Fertility", value: "High" },
+      { key: "land_id", label: "Land ID", value: "Plot 1" },
+      { key: "is_plot_registered", label: "Is plot registered", value: "Yes" },
+    ]);
+  });
+
+  it("shows a catalog choice by value_display and an empty value as a dash", () => {
+    const f = field("season", { choices: [{ value_id: "SEASON_MEHER", value_display: "Meher (main rains)" }] }) as never;
+    expect(intakeDisplayValue("SEASON_MEHER", f)).toBe("Meher (main rains)");
+    expect(intakeDisplayValue(null, f)).toBe("—");
+  });
+});

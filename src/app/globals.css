@@ -150,8 +150,14 @@
     to { opacity: 1; transform: translateY(0) scale(1); }
   }
   @keyframes dropdown-in {
-    from { opacity: 0; transform: translateY(-4px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(-5px) scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
   }
   @keyframes slide-down {
     from { opacity: 0; transform: translateY(-6px); }
@@ -194,6 +200,7 @@ body {
 /* Custom Green Scrollbar */
 .green-scrollbar::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 .green-scrollbar::-webkit-scrollbar-track {
   background: transparent;
@@ -241,4 +248,11 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 input[type="date"]:hover::-webkit-calendar-picker-indicator {
   opacity: 1;
+}
+
+/* A field whose note is an error: the control itself turns red too, whatever kind it is (see FormField). */
+.field-invalid input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.field-invalid textarea,
+.field-invalid [role="combobox"] {
+  border-color: var(--color-danger);
 }

@@ -5,7 +5,6 @@ import type {
   GrievanceBucket,
   GrievanceCase,
   GrievanceCategory,
-  GrievancePriority,
   GrievanceStatus,
   ThreadMessage,
 } from "./types";
@@ -54,36 +53,17 @@ export const GRIEVANCES: Grievance[] = RECORDS.map((r, i) => {
 
 export const TOTAL_GRIEVANCES = GRIEVANCES.length;
 
-export function bucketOf(status: GrievanceStatus): GrievanceBucket {
-  switch (status) {
-    case "Pending Submit":
-    case "Submitted":
-    case "More Info Needed":
-    case "Pending Submitter":
-      return "Pending";
-    case "Assigned":
-    case "In Progress":
-      return "In Progress";
-    case "Closed":
-      return "Resolved";
-    default:
-      return status;
-  }
-}
+/** Stat-card order; the table's Status column and filter use the same statuses so the two always agree. */
+export const GRIEVANCE_BUCKETS: GrievanceBucket[] = ["Assigned", "In Progress", "More Info Needed", "Rejected", "Resolved", "Closed"];
 
-/** Stat-card order; the table's Status column and filter use the same buckets so the two always agree. */
-export const GRIEVANCE_BUCKETS: GrievanceBucket[] = ["Pending", "In Progress", "Under Review", "Resolved", "Rejected"];
-
-/** Stat-card counts for a set of records (pass the table's filtered rows so the cards match the table). */
+/** Stat-card counts for a set of records (pass the table's filtered rows so the cards match the table). Other statuses count only under All. */
 export function grievanceStatsFor(list: Grievance[]): Record<"All" | GrievanceBucket, number> {
-  return list.reduce(
-    (acc, g) => {
-      acc.All += 1;
-      acc[bucketOf(g.status)] += 1;
-      return acc;
-    },
-    { All: 0, Pending: 0, "In Progress": 0, "Under Review": 0, Resolved: 0, Rejected: 0 },
-  );
+  const counts = { All: 0, Assigned: 0, "In Progress": 0, "More Info Needed": 0, Rejected: 0, Resolved: 0, Closed: 0 };
+  for (const g of list) {
+    counts.All += 1;
+    if (g.status in counts) counts[g.status as GrievanceBucket] += 1;
+  }
+  return counts;
 }
 
 export const GRIEVANCE_STATS = grievanceStatsFor(GRIEVANCES);
@@ -96,18 +76,12 @@ function toOptions<T extends string>(values: T[]): FilterOption[] {
 
 export const GRIEVANCE_CATEGORY_OPTIONS = toOptions(GRIEVANCES.map((g) => g.category));
 export const GRIEVANCE_STATUS_OPTIONS: FilterOption[] = GRIEVANCE_BUCKETS.map((b) => ({ value: b, label: b, count: GRIEVANCE_STATS[b] }));
-export const GRIEVANCE_PRIORITY_OPTIONS: FilterOption[] = (["Critical", "High", "Medium", "Low"] as GrievancePriority[]).map((p) => ({
-  value: p,
-  label: p,
-  count: GRIEVANCES.filter((g) => g.priority === p).length,
-}));
 
 export const GRIEVANCE_REGION_OPTIONS = toOptions(GRIEVANCES.map((g) => g.region));
 
 export const GRIEVANCE_FILTER_FIELDS: FilterFieldConfig[] = [
   { key: "category", label: "Category", allLabel: "All categories", placeholder: "All Categories", options: GRIEVANCE_CATEGORY_OPTIONS },
   { key: "status", label: "Status", allLabel: "All statuses", placeholder: "All Statuses", options: GRIEVANCE_STATUS_OPTIONS },
-  { key: "priority", label: "Priority", allLabel: "All priorities", placeholder: "All Priorities", options: GRIEVANCE_PRIORITY_OPTIONS },
   { key: "region", label: "Region", allLabel: "All regions", placeholder: "All Regions", options: GRIEVANCE_REGION_OPTIONS },
 ];
 
@@ -204,13 +178,11 @@ export function grievanceFilterOptions(list: Grievance[]) {
   const stats = grievanceStatsFor(list);
   const category = toOptions(list.map((g) => g.category));
   const status: FilterOption[] = GRIEVANCE_BUCKETS.map((b) => ({ value: b, label: b, count: stats[b] }));
-  const priority: FilterOption[] = (["Critical", "High", "Medium", "Low"] as GrievancePriority[]).map((p) => ({ value: p, label: p, count: list.filter((g) => g.priority === p).length }));
   const region = toOptions(list.map((g) => g.region).filter(Boolean));
   const fields: FilterFieldConfig[] = [
     { key: "category", label: "Category", allLabel: "All categories", placeholder: "All Categories", options: category },
     { key: "status", label: "Status", allLabel: "All statuses", placeholder: "All Statuses", options: status },
-    { key: "priority", label: "Priority", allLabel: "All priorities", placeholder: "All Priorities", options: priority },
     ...(region.length > 0 ? [{ key: "region", label: "Region", allLabel: "All regions", placeholder: "All Regions", options: region }] : []),
   ];
-  return { category, status, priority, region, fields };
+  return { category, status, region, fields };
 }

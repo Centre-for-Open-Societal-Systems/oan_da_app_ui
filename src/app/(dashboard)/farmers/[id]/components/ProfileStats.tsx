@@ -2,14 +2,17 @@ import { StatCard } from "@/components/ui/StatCard";
 import { PLOTS } from "@/features/farmers";
 import type { Farmer } from "@/features/farmers";
 
-/** `fromApi`: land is the registry's own total (farmer.landHa), not the sample plots. */
-export function ProfileStats({ farmer, fromApi = false }: { farmer: Farmer; fromApi?: boolean }) {
+/**
+ * `fromApi`: land is the registry's own total (farmer.landHa), not the sample plots. `known`: whether the plots and
+ * visits counts are loaded yet (their tabs load them); an unknown count shows "—".
+ */
+export function ProfileStats({ farmer, fromApi = false, known = { plots: true, visits: true } }: { farmer: Farmer; fromApi?: boolean; known?: { plots: boolean; visits: boolean } }) {
   const totalLandHa = fromApi ? farmer.landHa : PLOTS.slice(0, farmer.totalPlots).reduce((sum, plot) => sum + plot.areaHa, 0);
 
   const stats = [
     {
       label: "Total plots",
-      value: String(farmer.totalPlots),
+      value: known.plots ? String(farmer.totalPlots) : "—",
       accent: "border-l-brand-green",
       tile: "bg-brand-tint text-brand-green",
       icon: (
@@ -34,7 +37,7 @@ export function ProfileStats({ farmer, fromApi = false }: { farmer: Farmer; from
     },
     {
       label: "Visits",
-      value: String(farmer.visits),
+      value: known.visits ? String(farmer.visits) : "—",
       accent: "border-l-violet-600",
       tile: "bg-purple-100 text-violet-600",
       icon: (
@@ -60,7 +63,7 @@ export function ProfileStats({ farmer, fromApi = false }: { farmer: Farmer; from
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 sm:gap-4">
       {stats.map((stat) => (
         <StatCard key={stat.label} label={stat.label} value={stat.value} accent={stat.accent} tile={stat.tile} icon={stat.icon} />
       ))}

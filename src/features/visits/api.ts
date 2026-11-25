@@ -1,5 +1,14 @@
 import { authRequest } from "@/features/auth";
-import type { VisitRecord, VisitStatus } from "./types";
+import type { PlannerStatus, VisitRecord, VisitStatus } from "./types";
+
+/** One question a farmer asked and the advice given, on an Advisory visit. */
+export interface AdvisoryQa {
+  question: string;
+  answer: string;
+}
+
+/** The visit type that carries questions and answers. */
+export const ADVISORY_VISIT_TYPE = "Advisory";
 
 /** One row of GET /api/v1/da-services/visits (the fields the portal reads). */
 export interface ApiVisit {
@@ -7,6 +16,8 @@ export interface ApiVisit {
   name: string;
   da_id: string;
   farmer_id: string;
+  /** The name sent when the visit was planned; older visits may not have one. */
+  farmer_name?: string | null;
   visit_type: string;
   purpose: string | null;
   /** "2026-10-16T10:30:00", server local time. */
@@ -19,6 +30,15 @@ export interface ApiVisit {
   physical_status: string;
   /** Planned / Confirmed / Completed / Missed, or a raw physical status (Cancelled, Rescheduled …). */
   ui_status: string;
+  /** The planner's card colour, derived by the backend. */
+  planner_status?: PlannerStatus;
+  /** Unknown, Confirmed, Tentative or Declined. */
+  farmer_confirmation?: string | null;
+  confirmation_note?: string | null;
+  location_lat?: number | null;
+  location_lng?: number | null;
+  /** An Advisory visit's questions; empty for other types. Always on GET /visits/{id}; on list rows once the backend sends it. */
+  advisory_qa?: AdvisoryQa[];
 }
 
 export interface VisitQuery {
@@ -28,11 +48,15 @@ export interface VisitQuery {
   to?: string;
   /** Planned / Confirmed / Completed / Missed or a physical status. */
   status?: string;
+  /** Only this farmer's visits (the profile's Visit history). */
+  farmer_id?: string;
+  /** Only this DA's visits. Without it a DA gets every visit in their assigned Kebeles. */
+  da_id?: string;
   limit?: number;
   start?: number;
 }
 
-/** GET /api/v1/da-services/visits: visits the caller may see (a DA: their own), earliest first. */
+/** GET /api/v1/da-services/visits: visits the caller may see, earliest first. */
 export async function listVisits(q: VisitQuery = {}): Promise<{ items: ApiVisit[]; total: number }> {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(q)) if (value !== undefined && value !== "") query.set(key, String(value));
@@ -42,10 +66,10 @@ export async function listVisits(q: VisitQuery = {}): Promise<{ items: ApiVisit[
 
 const UI_STATUSES: readonly VisitStatus[] = ["Confirmed", "Planned", "Completed", "Missed"];
 
-/**
- * An API visit in the table's shape. The API carries the farmer's registry id only (no name or email yet),
- * so the id stands in for the name. Cancelled / rescheduled visits show as Missed, the closest pill.
- */
+/** The farmer's name on a visit, or their registry id when the visit has no name (planned before names were stored). */
+export const visitFarmerLabel = (v: { farmer_id: string; farmer_name?: string | null }) => v.farmer_name?.trim() || v.farmer_id;
+
+/** An API visit in the table's shape. Cancelled / rescheduled visits show as Missed, the closest pill. */
 export function toVisitRecord(v: ApiVisit): VisitRecord {
   const at = new Date(v.scheduled_at);
   return {
@@ -54,7 +78,7 @@ export function toVisitRecord(v: ApiVisit): VisitRecord {
     time: v.scheduled_at.slice(11, 16),
     agent: v.da_id,
     farmerId: v.farmer_id,
-    farmerName: v.farmer_id,
+    farmerName: visitFarmerLabel(v),
     farmerEmail: "",
     kebele: v.kebele ?? "—",
     purpose: v.purpose || v.visit_type,
@@ -63,8 +87,12 @@ export function toVisitRecord(v: ApiVisit): VisitRecord {
     durationMin: v.duration_min,
     assignedBy: v.assigned_by ?? undefined,
     physicalStatus: v.physical_status,
+    visitType: v.visit_type || undefined,
   };
 }
+
+/** A DA acts only on their own visits; an unknown DA id (/me not read yet) counts as not theirs. Officers are not limited here. */
+export const canActOnVisit = (v: Pick<VisitRecord, "agent">, isDA: boolean, daId: string | null | undefined) => !isDA || v.agent === daId;
 
 /** Only these can be checked in; anything else gets "Only a Planned or Confirmed visit can be started." */
 export const canStartVisit = (v: Pick<VisitRecord, "physicalStatus">) => v.physicalStatus === "Planned" || v.physicalStatus === "Confirmed";
@@ -146,6 +174,28 @@ export async function fetchVisit(visitId: string): Promise<ApiVisitDetail> {
   return res.data;
 }
 
+/** One question on a farmer's Advisory tab, with when it was saved and last changed. */
+export interface FarmerAdvisoryQa extends AdvisoryQa {
+  /** "2026-11-17 15:29:29.432267", server local time. */
+  createdAt: string;
+  /** Last change, e.g. when the answer was added; same format. */
+  modifiedAt: string;
+}
+
+/** One question row of GET /farmers/{id}/advisory. */
+interface ApiAdvisoryRow {
+  question: string;
+  answer: string | null;
+  creation: string;
+  modified: string;
+}
+
+/** A farmer's Advisory questions, newest first, as GET /farmers/{id}/advisory sends them. */
+export async function listFarmerAdvisory(farmerId: string): Promise<FarmerAdvisoryQa[]> {
+  const res = await authRequest<{ data: ApiAdvisoryRow[] }>(`/da-services/farmers/${encodeURIComponent(farmerId)}/advisory?limit=500`);
+  return res.data.map((row) => ({ question: row.question, answer: row.answer ?? "", createdAt: row.creation, modifiedAt: row.modified }));
+}
+
 /** What happens next after a visit; a follow-up visit or task is created by the backend. */
 export const NEXT_ACTION_TYPES = ["None", "Follow-up visit", "Task"] as const;
 export type NextActionType = (typeof NEXT_ACTION_TYPES)[number];
@@ -157,6 +207,8 @@ export interface SubmitOutcomeRequest {
   advice_given?: string;
   inputs_actions?: string;
   next_action?: { type: NextActionType; note?: string; date?: string };
+  /** Advisory visits only: every question with its answer; this list replaces the one stored at planning. */
+  advisory_qa?: AdvisoryQa[];
   /** Same id on a retry returns the completed visit instead of creating a second follow-up. */
   client_op_id: string;
 }
@@ -210,7 +262,7 @@ export interface ActivityReportData {
   /** Stays 0 until grievances are linked to visits on the backend. */
   issues_raised: number;
   follow_ups: number;
-  outcomes: { visit_id: string; farmer_id: string; kebele: string | null; purpose: string; summary: string | null; completed_at: string | null }[];
+  outcomes: { visit_id: string; farmer_id: string; farmer_name?: string | null; kebele: string | null; purpose: string; summary: string | null; completed_at: string | null }[];
 }
 
 /** `week` as "2026-W42"; the backend defaults to the current week. */

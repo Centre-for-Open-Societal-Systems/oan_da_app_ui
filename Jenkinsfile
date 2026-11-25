@@ -11,6 +11,11 @@ pipeline {
         AWS_ACCOUNT_ID  = '379220350808'
         IMAGE_REGISTRY  = '379220350808.dkr.ecr.ap-south-1.amazonaws.com'
         IMAGE_NAME      = 'da-registry-frontend'   // must exist as an ECR repository first
+        // develop is also installed on the oan_dev k3s node (stage "develop → oan_dev (helm)"), from the same
+        // image pushed again under this repository with the tag <package.json version>-develop.<build>.
+        ECR_REPO        = 'eoan/oan-da-app-ui/da-app-ui'
+        // oan_dev's private address: APISIX binds its ports 80/443, the oan_dev verify calls it from the VPN agent.
+        OAN_DEV_EDGE_IP = '10.0.1.131'
         IMAGE_REPO      = "${IMAGE_REGISTRY}/${IMAGE_NAME}"
         // The DA cluster node (different from the grievance node). Jenkins SSHes in and runs helm there.
         DA_NODE         = '65.0.132.192'
@@ -49,6 +54,13 @@ pipeline {
                     def sha = sh(returnStdout: true, script: 'git rev-parse --short=7 HEAD').trim()
                     env.IMAGE_TAG_BUILD = "${env.TARGET_ENV}-${env.BUILD_NUMBER}-${sha}"
                     env.FULL_IMAGE      = "${env.IMAGE_REPO}:${env.IMAGE_TAG_BUILD}"
+                    // The Helm chart version, also the image tag in eoan/oan-da-app-ui/da-app-ui (ci/package_chart.py version):
+                    //   develop <package.json version>-develop.<build>, pushed by "Push image (helm)";
+                    //   staging <package.json version>-staging.<build>: the develop image of the same source tree, tagged
+                    //   again by "Package chart" (promote). Nothing is rebuilt for the QA cluster.
+                    if (env.BRANCH_NAME == 'develop' || env.BRANCH_NAME == 'staging') {
+                        env.IMMUTABLE_TAG = sh(returnStdout: true, script: 'python3 ci/package_chart.py version').trim()
+                    }
                     echo "Branch ${env.BRANCH_NAME} -> namespace ${env.K8S_NAMESPACE}, image ${env.FULL_IMAGE}"
                 }
             }
@@ -147,6 +159,138 @@ ENDSSH
                     echo "da-registry-frontend did not return 200 at $VERIFY_URL"
                     exit 1
                 '''
+            }
+        }
+
+        // ---- develop -> Helm release `da-app-ui` on the oan_dev k3s node ----
+        // Runs after the DA node deploy above, so a problem here never blocks it. The image built above is
+        // pushed again under eoan/oan-da-app-ui/da-app-ui:<package.json version>-develop.<build>. The chart sets
+        // API_BASE_URL and API_PATH_PREFIX at runtime: the DA services API through APISIX.
+        stage('Push image (helm)') {
+            when { branch 'develop' }
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-ecr-creds'
+                ]]) {
+                    script {
+                        // <package.json version>-develop.<build>, which is also the chart version
+                        env.IMMUTABLE_TAG = sh(returnStdout: true, script: 'python3 ci/package_chart.py version').trim()
+                    }
+                    sh '''#!/usr/bin/env bash
+                        set -euo pipefail
+                        IMAGE_URI="${IMAGE_REGISTRY}/${ECR_REPO}"
+
+                        aws ecr get-login-password --region "$AWS_REGION" \
+                            | docker login --username AWS --password-stdin "$IMAGE_REGISTRY"
+
+                        # ECR does not create a repository on push.
+                        aws ecr describe-repositories --region "$AWS_REGION" --repository-names "$ECR_REPO" >/dev/null 2>&1 \
+                            || aws ecr create-repository --region "$AWS_REGION" --repository-name "$ECR_REPO" >/dev/null
+
+                        docker tag "$FULL_IMAGE" "${IMAGE_URI}:${IMMUTABLE_TAG}"
+                        docker push "${IMAGE_URI}:${IMMUTABLE_TAG}"
+                        docker rmi "${IMAGE_URI}:${IMMUTABLE_TAG}" || true
+                        echo "Pushed ${IMAGE_URI}:${IMMUTABLE_TAG}"
+                    '''
+                }
+            }
+        }
+
+        // Flow (develop): Push image (helm) -> Package chart -> deploy -> Publish chart.
+        // helm/oan-da-app-ui is zipped with this build's image before the deploy; the deploy installs
+        // that archive, and the same archive is published to oan-helm afterwards.
+        // staging: `promote` instead of `package` (as oan_a2c and oan_da_app_services): the chart develop built from this
+        // source tree, its image tagged <package.json version>-staging.<build> in ECR. Fails if develop never built this
+        // tree: merge develop into staging.
+        stage('Package chart') {
+            when { anyOf { branch 'develop'; branch 'staging' } }
+            steps {
+                script {
+                    env.IMAGE_TAG = env.IMMUTABLE_TAG
+                    env.SOURCE_COMMIT = sh(returnStdout: true, script: 'git rev-parse --verify HEAD').trim()
+                    env.COMMIT_SUBJECT = sh(returnStdout: true, script: 'git log -1 --pretty=%s').trim()
+                    env.IMAGE_REPOSITORY = "${env.IMAGE_REGISTRY}/${env.ECR_REPO}"
+                    if (env.BRANCH_NAME == 'staging') {
+                        // The workspace holds the staging branch only; promote needs the develop commits the chart index names.
+                        withCredentials([gitUsernamePassword(credentialsId: scm.userRemoteConfigs[0].credentialsId, gitToolName: 'Default')]) {
+                            sh 'git fetch --quiet --no-tags origin +refs/heads/develop:refs/remotes/origin/develop'
+                        }
+                    }
+                }
+                // promote tags the image in ECR (batch-get-image + put-image) with the same credential as "Push image".
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-ecr-creds'
+                ]]) {
+                    sh "python3 ci/package_chart.py ${env.BRANCH_NAME == 'staging' ? 'promote' : 'package'}"
+                }
+                // The deploy stage runs on the VPN deploy agent, which gets the archive from here.
+                stash name: 'built-chart', includes: 'built-chart/**'
+            }
+        }
+
+        stage('develop → oan_dev (helm)') {
+            when { beforeAgent true; branch 'develop' }
+            agent { label 'oan-ci-deploy' }   // VPN agent with helm and kubectl that reaches the oan_dev API
+            options { timeout(time: 15, unit: 'MINUTES') }
+            steps {
+                checkout scm
+                unstash 'built-chart'
+                withCredentials([file(credentialsId: 'oan-dev-kubeconfig', variable: 'KUBECONFIG')]) {
+                    sh 'bash ci/deploy-helm-dev.sh'
+                }
+            }
+        }
+
+        // Through APISIX on oan_dev by its private address: public DNS may still point elsewhere.
+        stage('Verify (oan_dev)') {
+            when { beforeAgent true; branch 'develop' }
+            agent { label 'oan-ci-deploy' }
+            steps {
+                sh '''
+                    host=da-app.development.oanstaging.com
+                    url="https://$host/login"
+                    for i in $(seq 1 10); do
+                        code=$(curl -sL -o /dev/null -w "%{http_code}" --resolve "$host:443:$OAN_DEV_EDGE_IP" "$url" || true)
+                        echo "attempt $i: $url -> $code"
+                        [ "$code" = "200" ] && exit 0
+                        sleep 6
+                    done
+                    echo "da-app-ui did not return 200 at $url"
+                    exit 1
+                '''
+            }
+        }
+
+        // ---- staging -> Helm release `da-app-ui` on the QA cluster (qa.oanstaging.com), as oan_a2c ----
+        // Runs after the DA node staging deploy above, so a problem here never blocks it. Installs the promoted
+        // archive with helm/environments/staging; the kubeconfig is the jenkins-qa-deployer ServiceAccount
+        // (oan-helm docs/qa-cluster.md), whose oan-cluster-access lists namespace da-app.
+        stage('staging → QA cluster (helm)') {
+            when { beforeAgent true; branch 'staging' }
+            agent { label 'oan-ci-deploy' }   // VPN agent with helm and kubectl; must reach the QA API
+            options { timeout(time: 15, unit: 'MINUTES') }
+            steps {
+                checkout scm
+                unstash 'built-chart'
+                withCredentials([file(credentialsId: 'oan-qa-kubeconfig', variable: 'KUBECONFIG')]) {
+                    sh 'DEPLOY_ENV=staging bash ci/deploy-helm-dev.sh'
+                }
+            }
+        }
+
+        // Adds the archive built by 'Package chart' to repository/<branch>/ of oan-helm (develop or staging), only
+        // after the oan_dev / QA deploy succeeded.
+        stage('Publish chart') {
+            when { anyOf { branch 'develop'; branch 'staging' } }
+            steps {
+                // UNSTABLE, not failed: the image is already deployed.
+                catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                    withCredentials([usernamePassword(credentialsId: 'oan-helm-fork-token', usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
+                        sh 'python3 ci/package_chart.py publish'
+                    }
+                }
             }
         }
     }

@@ -1,0 +1,142 @@
+// Generates src/features/farmers/cropSownSpec.ts from the Crop Sown registry's intake-form metadata
+// (Centre-for-Open-Societal-Systems/cropsown-regsitry, cropsown-extension/.../meta_data/register-metadata).
+//
+//   node scripts/gen-cropsown-spec.mjs <path to that register-metadata folder> [path to docs/file-import.md]
+//
+// It reads the section UI schemas of the four intake forms and writes, per section, each field's widget, label,
+// required/readonly flags, numeric kind, choices (static lists, or the attribute / geo level they come from) and
+// validation rules, so the portal's form and its checks follow the registry's own definition.
+import { readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const dir = process.argv[2];
+const docs = process.argv[3];
+if (!dir) throw new Error("usage: node scripts/gen-cropsown-spec.mjs <register-metadata folder>");
+
+const SECTIONS = [
+  "cropsown_intake_record_section_01",
+  "cropsown_common_intake_record_section_01",
+  "cropsown_cropsown_location_section_03",
+  "cropsown_planning_details_section_01",
+  "cropsown_cluster_details_section_01",
+  "cropsown_cultivation_details_section_01",
+  "cropsown_cultivation_cluster_details_section_01",
+  "cropsown_sowing_details_section_01",
+  "cropsown_infestation_details_section_01",
+  "cropsown_harvest_details_section_01",
+];
+// zzzzzzzzzz_required_land_rows.sql marks these columns required on top of the base schema.
+const EXTRA_REQUIRED = {
+  cropsown_sowing_details_section_01: ["sowing_date", "area_sown", "commodity"],
+  cropsown_harvest_details_section_01: ["harvest_date", "qty_harvested", "commodity"],
+};
+
+const rows = [];
+for (const f of readdirSync(dir).filter((f) => f.endsWith(".sql"))) {
+  const sql = readFileSync(join(dir, f), "utf8");
+  for (const m of sql.matchAll(/\('([0-9a-f-]{36})','(\w+_section_\d+)','([0-9a-f-]{36})'[\s\S]*?'(\{"panels":[\s\S]*?\})'(?=,\s*'(?:TRUE|FALSE)')/g)) {
+    try {
+      rows.push({ id: m[2], uuid: m[3], json: JSON.parse(m[4].replace(/''/g, "'")) });
+    } catch {
+      /* not a section schema */
+    }
+  }
+}
+const byId = new Map(rows.map((r) => [r.id, r]));
+const idOfUuid = new Map(rows.map((r) => [r.uuid, r.id]));
+
+const collect = (node, out = []) => {
+  if (Array.isArray(node)) node.forEach((n) => collect(n, out));
+  else if (node && typeof node === "object") {
+    if (node.widget && (node["column-key"] || node["widget-data-path"]) && node.widget !== "dialog-table") out.push(node);
+    for (const [k, v] of Object.entries(node)) if (k !== "widget-data-source") collect(v, out);
+  }
+  return out;
+};
+
+const spec = {};
+for (const id of SECTIONS) {
+  const row = byId.get(id);
+  if (!row) throw new Error(`section ${id} not found in ${dir}`);
+  const list = JSON.stringify(row.json).includes('"dialog-table"');
+  const fields = collect(row.json).map((w) => {
+    const path = typeof w["widget-data-path"] === "string" ? w["widget-data-path"] : "";
+    const key = w["column-key"] ?? (path.includes(".") ? path.split(".").pop() : path) ?? "";
+    const src = w["widget-data-source"];
+    const field = { key: typeof key === "string" && key ? key : "geo_code_hierarchy_json", label: w["widget-label"] ?? "", widget: w.widget };
+    if (w["widget-required"] || EXTRA_REQUIRED[id]?.includes(field.key)) field.required = true;
+    if (w["widget-readonly"]) field.readonly = true;
+    const numeric = w["widget-data-format"]?.numericType;
+    if (numeric) field.numeric = numeric;
+    if (src?.type === "static") field.options = src.options.map((o) => [o.label, o.value]);
+    if (src?.type === "api" && src.params?.attribute_id) field.attribute = src.params.attribute_id;
+    if (src?.type === "api" && src.params?.level_id) field.geoLevel = src.params.level_id;
+    const rules = [];
+    for (const [kind, rule] of Object.entries(w["widget-data-validation"] ?? {})) {
+      if (!["max", "min", "equals"].includes(kind)) continue;
+      const p = rule.value?.path ?? "";
+      const ref = p.match(/^([0-9a-f-]{36})\.records\[0\]\.(\w+)$/);
+      rules.push(ref ? { kind, section: idOfUuid.get(ref[1]), field: ref[2], message: rule.message } : { kind, field: p, message: rule.message });
+    }
+    if (rules.length) field.rules = rules;
+    return field;
+  });
+  spec[id] = { title: row.json["section-title"], list, fields };
+}
+
+// The code lists of docs/file-import.md ("Code lists"): the codes Master Data serves for each attribute.
+const codes = {};
+if (docs) {
+  const text = readFileSync(docs, "utf8");
+  const from = text.indexOf("## Code lists");
+  for (const m of text.slice(from).matchAll(/### (\w+)\n([\s\S]*?)(?=\n### |$)/g)) {
+    // The prose above the codes also names the list in backticks; that name is not one of its codes.
+    const list = [...m[2].matchAll(/`([A-Z0-9_]+)`/g)].map((c) => c[1]).filter((c) => c !== m[1]);
+    if (list.length) codes[m[1]] = list;
+  }
+}
+
+const out = `// GENERATED by scripts/gen-cropsown-spec.mjs from the Crop Sown registry's intake-form metadata. Do not edit by hand:
+// change the registry (or the script) and run it again.
+
+export type SpecWidget = "text" | "number" | "date" | "select" | "multi-select" | "radio" | "geo-hierarchy";
+
+export interface SpecRule {
+  kind: "max" | "min" | "equals";
+  /** The other field to compare with, in the same row, or in \`section\` when that is set. */
+  field: string;
+  section?: string;
+  message: string;
+}
+
+export interface SpecField {
+  key: string;
+  label: string;
+  widget: SpecWidget;
+  required?: true;
+  readonly?: true;
+  numeric?: "integer" | "decimal";
+  /** Static choices as [label, value]. */
+  options?: [string, string | boolean][];
+  /** Choices come from this attribute of the registry (served by the intake-form route). */
+  attribute?: string;
+  /** Choices are the values of this geo level (l1 region … l4 kebele). */
+  geoLevel?: string;
+  rules?: SpecRule[];
+}
+
+export interface SpecSection {
+  title: string;
+  /** A list section (a dialog table in the registry): one row per entry. */
+  list: boolean;
+  fields: SpecField[];
+}
+
+export const CROP_SOWN_SPEC: Record<string, SpecSection> = ${JSON.stringify(spec, null, 2)};
+
+/** The codes the registry accepts for each attribute (docs/file-import.md); the portal falls back to these. */
+export const CROP_SOWN_CODES: Record<string, string[]> = ${JSON.stringify(codes, null, 2)};
+`;
+writeFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "src", "features", "farmers", "cropSownSpec.ts"), out);
+console.log(Object.entries(spec).map(([id, s]) => `${id}: ${s.fields.length} fields${s.list ? " (list)" : ""}`).join("\n"));

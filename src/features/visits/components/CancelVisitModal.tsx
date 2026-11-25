@@ -56,7 +56,7 @@ export function CancelVisitModal({ visit, onClose, onCancelled }: CancelVisitMod
     >
       <div className="flex flex-col gap-4">
         {error && <Banner tone="error" title="Visit not cancelled">{error}</Banner>}
-        <FormField label="Reason" htmlFor="cancel-reason" required>
+        <FormField label="Reason" htmlFor="cancel-reason" required hint="Required. Kept on the visit record.">
           <Textarea id="cancel-reason" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Farmer moved" />
         </FormField>
         <p className="text-[12.5px] text-muted">The visit stays in the record as Cancelled. Plan a new visit if it is still needed.</p>

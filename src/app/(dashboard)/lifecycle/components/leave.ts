@@ -2,6 +2,16 @@
 import { formatDate, type LifecycleRequest, type RequestFields, type TransitionCopy } from "./lifecycle";
 
 export const LEAVE_TYPES = ["Annual leave", "Sick leave", "Special leave", "Maternity leave", "Suspension"];
+/** Types offered on the Request leave dialog: what each one is, and the badge shown beside it (Annual shows the days left). */
+export const LEAVE_TYPE_OPTIONS = [
+  { type: "Annual leave", note: "Paid - plan ahead with your supervisor", badge: "" },
+  { type: "Sick leave", note: "Paid - medical note after 3 days", badge: "As needed" },
+  { type: "Maternity leave", note: "120 days - Starts up to 30 days before", badge: "120 days" },
+  { type: "Paternity leave", note: "10 working days around the birth", badge: "10 days" },
+  { type: "Marriage leave", note: "3 working days, once", badge: "3 days" },
+  { type: "Mourning leave", note: "3 working days per bereavement", badge: "3 days" },
+  { type: "Leave without pay", note: "Needs supervisor and HR approval", badge: "Unpaid" },
+];
 export const LEAVE_YEAR = 2026;
 /** Days a DA is entitled to per policy year; other types aren't deducted from a balance. */
 export const LEAVE_ENTITLEMENT: Record<string, number> = { "Annual leave": 20, "Sick leave": 30, "Special leave": 5 };
@@ -26,6 +36,8 @@ export interface LeaveRecord {
   approver: string;
   submitted: string;
   reason: string;
+  /** Interim cover DA, when one was named. */
+  cover?: string;
   /** Raised in this session, so it has a request page. */
   hasPage?: boolean;
 }
@@ -48,18 +60,43 @@ const isWeekday = (date: Date) => date.getDay() !== 0 && date.getDay() !== 6;
 
 export const calendarDays = (start: string, end: string) => Math.round((day(end).getTime() - day(start).getTime()) / 86_400_000) + 1;
 
-/** Monday–Friday days from start to end, both included. */
+/** Public holidays that are not counted as leave days (ISO date -> name). Sample list until the leave calendar API exists. */
+export const PUBLIC_HOLIDAYS: Record<string, string> = {
+  "2026-09-11": "Enkutatash (Ethiopian New Year)",
+  "2026-09-27": "Meskel",
+  "2027-01-07": "Genna (Ethiopian Christmas)",
+  "2027-01-19": "Timket",
+  "2027-03-02": "Adwa Victory Day",
+  "2027-03-10": "Eid al-Fitr (provisional)",
+  "2027-04-30": "Siklet (Good Friday)",
+  "2027-05-01": "Labour Day",
+  "2027-05-05": "Patriots' Victory Day",
+  "2027-05-28": "Derg Downfall Day",
+};
+
+/** A weekday that is not a public holiday. */
+export const isWorkingDay = (iso: string) => isWeekday(day(iso)) && !PUBLIC_HOLIDAYS[iso];
+
+/** Monday–Friday days from start to end, both included, without public holidays. */
 export function workingDays(start: string, end: string) {
   let count = 0;
-  for (let d = day(start); d <= day(end); d.setDate(d.getDate() + 1)) if (isWeekday(d)) count++;
+  for (let d = day(start); d <= day(end); d.setDate(d.getDate() + 1)) if (isWorkingDay(isoOf(d))) count++;
   return count;
+}
+
+/** Working days with half a day taken off for a half-day start and/or end. */
+export function leaveDays(start: string, end: string, halfStart = false, halfEnd = false) {
+  let days = workingDays(start, end);
+  if (halfStart && isWorkingDay(start)) days -= 0.5;
+  if (halfEnd && isWorkingDay(end) && !(halfStart && start === end)) days -= 0.5;
+  return days;
 }
 
 /** First working day after the leave ends. */
 export function returnDate(end: string) {
   const d = day(end);
   do d.setDate(d.getDate() + 1);
-  while (!isWeekday(d));
+  while (!isWorkingDay(isoOf(d)));
   return isoOf(d);
 }
 
@@ -89,7 +126,7 @@ export function leaveRecords(requests: LifecycleRequest[]): LeaveRecord[] {
   const raised = requests
     .filter((r) => r.code === "LV")
     .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt))
-    .map((r): LeaveRecord => ({ id: r.id, type: r.scope, start: r.effective, end: r.target, days: workingDays(r.effective, r.target), status: r.status, approver: "Dr. Tewodros M.", submitted: r.submittedAt, reason: r.reason, hasPage: true }));
+    .map((r): LeaveRecord => ({ id: r.id, type: r.scope, start: r.effective, end: r.target, days: leaveDays(r.effective, r.target, r.halfStart, r.halfEnd), status: r.status, approver: "Dr. Tewodros M.", submitted: r.submittedAt, reason: r.reason, cover: r.successor ? r.successor.split(" — ")[0] : undefined, hasPage: true }));
   return [...raised, ...LEAVE_RECORDS];
 }
 

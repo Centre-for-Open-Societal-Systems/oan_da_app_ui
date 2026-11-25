@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
-import { dateRange, durationLine, leaveBalance, leaveStatus, returnDate, workingDays } from "./leave";
+import { dateRange, durationLine, leaveBalance, leaveDays, leaveStatus, returnDate } from "./leave";
 import { LIFECYCLE_DA, LIFECYCLE_STAGES, assignmentFormFor, formatDate, gradeAndRole, type LifecycleEvent, type LifecycleRequest, type LifecycleTone, type LifecycleTransition, type RequestFields } from "./lifecycle";
 import { assignmentLine, eligibilityLine, returnAssignment } from "./reactivation";
 import { clearanceLine, lengthOfService, retirementKind } from "./retirement";
@@ -200,7 +200,7 @@ function leaveRows(fields: RequestFields, document: { name: string; size: number
   // A submitted request only counts the requests raised before it; a draft counts all of them.
   const saved = "id" in fields ? (fields as LifecycleRequest) : undefined;
   const balance = leaveBalance(fields.scope, Object.values(useLifecycleHistory.getState().requests), { excludeId: saved?.id, before: saved?.submittedAt });
-  const days = workingDays(fields.effective, fields.target);
+  const days = leaveDays(fields.effective, fields.target, fields.halfStart, fields.halfEnd);
   return [
     { label: "Dates", value: dateRange(fields.effective, fields.target, true) },
     { label: "Duration", value: durationLine(fields.effective, fields.target) },

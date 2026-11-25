@@ -1,7 +1,12 @@
 export type FarmerStatus = "Verified" | "Pending" | "Flagged";
 
+/** What the portal shows for a registry status: an approved farmer is Active, every other one Inactive. */
+export type FarmerActivity = "Active" | "Inactive";
+
 export interface Farmer {
   id: string;
+  /** Farmer-ID shown to people ("FR-675618129549"); also works in every farmer URL. Absent on sample farmers. */
+  regId?: string;
   name: string;
   email: string;
   phone: string;
@@ -11,6 +16,8 @@ export interface Farmer {
   region: string;
   crop: string;
   landHa: number;
+  /** The registry sent no land total: shown as a dash, not "0 ha". */
+  landUnknown?: boolean;
   /** Main animal kept, recorded the same way as the primary crop. */
   livestock: string;
   /** Head count of the primary livestock. */
@@ -21,6 +28,8 @@ export interface Farmer {
   /** Why the record is Pending / Flagged (shown on hover); undefined when Verified. */
   statusReason?: string;
   totalPlots: number;
+  /** The registry sent no plot count. */
+  plotsUnknown?: boolean;
   visits: number;
   lastVisit: string;
 }

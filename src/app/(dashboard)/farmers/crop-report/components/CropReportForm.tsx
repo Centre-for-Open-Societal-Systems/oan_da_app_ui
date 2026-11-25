@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { BackLink } from "@/components/ui/BackLink";
@@ -9,20 +9,38 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { SegmentTabs } from "@/components/ui/SegmentTabs";
+import { ApiError } from "@/lib/api";
 import { readDraft, removeDraft, writeDraft } from "@/lib/drafts";
 import {
   CROP_SOWN_FORM,
-  FARMERS,
+  CROP_SOWN_INTRO_TAB,
+  CROP_SOWN_TABS,
   FarmerAvatar,
-  findFarmersById,
-  getCropSownPrefill,
+  apiFarmerToFarmer,
+  listFarmers,
+  describeCropSownError,
   registryCode,
+  MissingFieldError,
+  saveStage,
+  validateSections,
+  type FieldErrors,
+  fieldInMessage,
+  type StageDrafts,
+  type ApiFarmerCrop,
+  listFarmerCrops,
+  loadCropDetails,
+  labelOfCode,
+  fetchFarmerPlots,
+  type GeoIds,
+  type GeoIdsBySection,
+  useIntakeFields,
   valueKey,
   type CropSownValues,
   type Farmer,
 } from "@/features/farmers";
 import { SectionCard } from "../../[id]/components/SectionCard";
-import { CropSownFieldInput } from "./CropSownFieldInput";
+import { CropSownHistory } from "./CropSownHistory";
+import { CropSownSectionFields } from "./CropSownSectionFields";
 
 const DRAFT_KEY = "crop-report";
 
@@ -34,6 +52,29 @@ interface Draft {
 
 type Notice = { tone: "success" | "info" | "error"; title: string; body?: string };
 
+/** A farmer known only by the Farmer ID typed in; the id doubles as the registry code sent to the Crop Sown routes. */
+const farmerFromId = (id: string): Farmer => ({
+  id,
+  regId: id,
+  // No made-up name: the registry fills the real one in. A plain word passes the registry's name rule (letters only).
+  name: "Farmer",
+  email: "",
+  phone: "",
+  kebele: "—",
+  woreda: "",
+  region: "",
+  crop: "—",
+  landHa: 0,
+  livestock: "—",
+  livestockHeads: 0,
+  registeredAt: "—",
+  registeredTime: "",
+  status: "Verified",
+  totalPlots: 0,
+  visits: 0,
+  lastVisit: "—",
+});
+
 const now = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
 // Submit Crop Report: find the farmer by Farmer ID, start from what the registries already hold for them,
@@ -44,7 +85,7 @@ export function CropReportForm() {
   const [farmer, setFarmer] = useState<Farmer>();
   const [values, setValues] = useState<CropSownValues>({});
   const [prefilled, setPrefilled] = useState<CropSownValues>({});
-  const [tab, setTab] = useState(CROP_SOWN_FORM[0].key);
+  const [tab, setTab] = useState(CROP_SOWN_TABS[0].key);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -52,20 +93,41 @@ export function CropReportForm() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  /** The registry draft of each stage (submission id + subject record), kept between the step-by-step saves. */
+  const [drafts, setDrafts] = useState<StageDrafts>({});
+  const [savingStep, setSavingStep] = useState(false);
+  const [searching, setSearching] = useState(false);
+  /** The farmer's Crop Sown record as the registry lists it (GET /farmers/{id}/crops); null until a search has read it. */
+  const [history, setHistory] = useState<ApiFarmerCrop[] | null>(null);
+  /** The registry refused the farmer to this DA (not linked or assigned): shown instead of "no farmer found". */
+  const [accessDenied, setAccessDenied] = useState<string | null>(null);
+  /** What the registry answered for the farmer just found: what was filled in, and what it could not give. */
+  const [loadNote, setLoadNote] = useState<{ tone: "success" | "info" | "error"; title: string; body: string } | null>(null);
+  /** What failed the registry's checks, by field; cleared per field as it is edited. */
+  const [errors, setErrors] = useState<FieldErrors>({});
+  /** The API's reference for the saved submission, shown on the success popup. */
+  const [reference, setReference] = useState<string>();
 
   useEffect(() => {
     const t = setTimeout(() => setMounted(true), 0);
     return () => clearTimeout(t);
   }, []);
 
-  const choose = (f: Farmer) => {
+  const choose = (f: Farmer, crops?: ApiFarmerCrop[]) => {
     const draft = readDraft<Draft>(DRAFT_KEY);
     const hasDraft = draft && draft.farmerId === f.id;
-    const prefill = getCropSownPrefill(f);
+    // The farmer is filled from the registry's own APIs (below).
+    const prefill = { [valueKey("identity", "farmer_id")]: registryCode(f), [valueKey("identity", "farmer_name")]: f.name };
+    setLoadNote(null);
+    void loadFromRegistry(f, crops);
     setFarmer(f);
+    setDrafts({});
+    setErrors({});
     setPrefilled(prefill);
-    setValues(hasDraft ? draft.values : prefill);
-    setTab(CROP_SOWN_FORM[0].key);
+    // The registry takes the current crop year only: start from it (editable).
+    setValues(hasDraft ? draft.values : { ...prefill, [valueKey("identity", "crop_year")]: String(new Date().getFullYear()) });
+    setTab(CROP_SOWN_TABS[0].key);
     setSubmitted(false);
     setShowAutoFillBanner(true);
     if (hasDraft) {
@@ -73,13 +135,107 @@ export function CropReportForm() {
     }
   };
 
-  const search = () => {
+  /**
+   * Fills the form from the registry's own APIs: the Land API (GET /farmers/{id}/plots: the first plot's id, area,
+   * ownership and soil fertility) and the Crop Sown API (GET /farmers/{id}/crops: the farmer's earlier submissions, the
+   * newest of each stage filling its tab). What a farmer already has on record wins over the plot. The cluster registry has
+   * no API. Says what it found, and what it could not get.
+   */
+  const loadFromRegistry = async (f: Farmer, listed?: ApiFarmerCrop[]) => {
+    const code = registryCode(f);
+    const [plotsResult, cropsResult] = await Promise.allSettled([fetchFarmerPlots(code), loadCropDetails(code, listed)]);
+    const landed: CropSownValues = {};
+    const lines: string[] = [];
+    let failure: unknown = null;
+
+    if (plotsResult.status === "fulfilled") {
+      const plots = plotsResult.value;
+      const first = plots[0];
+      if (first) {
+        for (const section of ["planning", "cultivation", "sowing", "harvest"]) {
+          landed[valueKey(section, "land_id")] = first.plot_id;
+          if (first.area_in_hectare !== null && section !== "sowing" && section !== "harvest") landed[valueKey(section, "land_area")] = String(first.area_in_hectare);
+        }
+        // The Land API speaks the registry's codes (OWNER, SF_HIGH): shown here by their labels.
+        const ownership = first.land_ownership_type ? labelOfCode("OWNERSHIP_TYPE", first.land_ownership_type) : undefined;
+        const soil = first.soil_fertility ? labelOfCode("SOIL_FERTILITY", first.soil_fertility) : undefined;
+        if (ownership) landed[valueKey("planning", "ownership_type")] = ownership;
+        if (soil) landed[valueKey("planning", "soil_fertility_type")] = soil;
+        lines.push(`${plots.length} plot${plots.length === 1 ? "" : "s"} on record (Land ID ${first.plot_id} filled in; change it for another plot)`);
+      } else {
+        lines.push("no plots on record");
+      }
+    } else {
+      failure = plotsResult.reason;
+    }
+
+    let earlier: CropSownValues = {};
+    if (cropsResult.status === "fulfilled") {
+      const crop = cropsResult.value;
+      earlier = crop.values;
+      lines.push(crop.total === 0 ? "no earlier Crop Sown submission" : `${crop.total} earlier Crop Sown submission${crop.total === 1 ? "" : "s"}${crop.stages.length ? ` (filled in: ${crop.stages.join(", ")})` : " (their details could not be read)"}`);
+    } else {
+      failure ??= cropsResult.reason;
+    }
+
+    // Registry data under what the user has already typed; earlier submissions over the plot's values.
+    setValues((prev) => ({ ...landed, ...earlier, ...Object.fromEntries(Object.entries(prev).filter(([, v]) => v !== "")) }));
+    if (failure) {
+      setLoadNote({ tone: "error", title: `${f.name}: some registry data could not be loaded`, body: `${describeCropSownError(failure)}${lines.length ? ` Loaded: ${lines.join("; ")}.` : ""} Enter the rest yourself.` });
+    } else {
+      setLoadNote({ tone: "success", title: `${f.name}: loaded from the registry`, body: `${lines.join("; ")}. Cluster details have no registry API: enter them here.` });
+    }
+  };
+
+  const search = async () => {
+    if (searching) return;
+    setAccessDenied(null);
+    setHistory(null);
     const q = query.trim();
-    // Search by query or default to demo farmer Lelise Gudeta (FR-88466) if search clicked with empty input
-    const found = q ? findFarmersById(q) : [FARMERS[0]];
+    if (!q) {
+      setMatches([]);
+      setFarmer(undefined);
+      return;
+    }
+    // The caller's farmers by name, Farmer-ID or phone (GET /farmers).
+    let found: Farmer[] = [];
+    setSearching(true);
+    try {
+      found = (await listFarmers({ searchText: q, pageSize: 20 })).items.map(apiFarmerToFarmer);
+    } catch {
+      // The Crop Sown lookup below still works with a Farmer ID.
+    } finally {
+      setSearching(false);
+    }
+    // Not in that list: the Search button asks the registry's Crop Sown API for the farmer's record
+    // (GET /farmers/{id}/crops). That one list tells whether the farmer exists and is this DA's, and it is reused to fill
+    // the form (not asked for twice). No profile call is made here.
+    let crops: ApiFarmerCrop[] | undefined;
+    if (found.length === 0 && /^[A-Za-z0-9][A-Za-z0-9_-]{2,}$/.test(q)) {
+      setSearching(true);
+      try {
+        crops = await listFarmerCrops(q);
+        setHistory(crops);
+        found = [farmerFromId(q)];
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) {
+          found = [];
+        } else if (err instanceof ApiError && err.status === 403) {
+          // Not this DA's farmer: nothing can be read or saved for them, so do not carry on with the ID.
+          found = [];
+          setAccessDenied(describeCropSownError(err));
+        } else {
+          // The registry could not be asked: carry on with the ID as typed, and say so.
+          found = [farmerFromId(q)];
+          setNotice({ tone: "error", title: "Farmer details could not be loaded", body: `${describeCropSownError(err)} You can still enter the report with this Farmer ID.` });
+        }
+      } finally {
+        setSearching(false);
+      }
+    }
     setMatches(found);
     if (found.length === 1) {
-      choose(found[0]);
+      choose(found[0], crops);
     } else if (found.length === 0) {
       setFarmer(undefined);
     }
@@ -99,22 +255,77 @@ export function CropReportForm() {
   };
 
   // Each stage is saved before moving on, so a closed tab or lost connection costs at most the current stage.
-  const saveAndNext = () => {
-    if (saveDraft()) goTo(tabIndex + 1);
+  /** Runs the registry's checks on the current tab (and the identity the stage hangs on); true when nothing is wrong. */
+  const checkTab = (): boolean => {
+    // A stage hangs on the identity (and Planning on the address), which the "Crop Sown" tab holds: checked as the stage is saved.
+    const stage = CROP_SOWN_FORM.find((t) => t.key === tab)?.sections ?? current.sections;
+    const all = validateSections(stage, values);
+    // A value fetched from the registry cannot be edited here, so it is not held to the form's rules (the Farmer ID, which
+    // the user typed to find the farmer, still is).
+    const found = Object.fromEntries(Object.entries(all).filter(([k]) => !(k in prefilled) || k === "identity.farmer_id"));
+    setErrors(found);
+    const bad = Object.keys(found);
+    if (bad.length === 0) return true;
+    if (!current.sections.some((s) => bad[0].startsWith(`${s.id}.`))) setTab(CROP_SOWN_INTRO_TAB);
+    setNotice({ tone: "error", title: `${bad.length} field${bad.length === 1 ? "" : "s"} need attention`, body: found[bad[0]] });
+    window.setTimeout(() => document.getElementById(bad[0])?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+    return false;
+  };
+
+  /** Shows an API rejection: on the field it names (switching to its tab) when it names one, else as a banner. */
+  const showSaveError = (err: unknown, title: string) => {
+    const message = describeCropSownError(err);
+    // The tab being saved first: field names such as land_id repeat across the four forms.
+    const named = err instanceof MissingFieldError ? null : fieldInMessage(message, current.sections) ?? fieldInMessage(message, CROP_SOWN_TABS.flatMap((t) => t.sections));
+    if (err instanceof MissingFieldError) setTab(err.tab);
+    if (named) {
+      const owner = current.sections.some((s) => s.id === named.sectionId) ? current : CROP_SOWN_TABS.find((t) => t.sections.some((s) => s.id === named.sectionId));
+      if (owner && owner.key !== tab) setTab(owner.key);
+      setErrors({ [named.key]: message });
+      window.setTimeout(() => document.getElementById(named.key)?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
+    }
+    setNotice({ tone: "error", title, body: message });
+  };
+
+  const saveAndNext = async () => {
+    if (!farmer || savingStep || !checkTab() || !saveDraft()) return;
+    setSavingStep(true);
+    try {
+      const result = await saveStage({ farmer, tab, values, drafts, geoIds: geoIds.current });
+      setDrafts(result.drafts);
+      setNotice(null);
+      goTo(tabIndex + 1);
+    } catch (err) {
+      showSaveError(err, `${current.label} not saved`);
+    } finally {
+      setSavingStep(false);
+    }
   };
 
   const handleOpenConfirm = (e?: FormEvent) => {
     if (e) e.preventDefault();
-    if (!farmer) return;
+    if (!farmer || !checkTab()) return;
     setShowConfirmModal(true);
   };
 
-  const handleConfirmSubmit = () => {
-    if (!farmer) return;
-    removeDraft(DRAFT_KEY);
-    setSubmitted(true);
-    setShowConfirmModal(false);
-    setShowSuccessModal(true);
+  // Saves the last stage (the earlier ones were saved by Save & Next) and shows the application reference.
+  const handleConfirmSubmit = async () => {
+    if (!farmer || isSaving) return;
+    setIsSaving(true);
+    try {
+      const result = await saveStage({ farmer, tab, values, drafts, geoIds: geoIds.current });
+      setDrafts(result.drafts);
+      setReference(result.drafts.planning?.reference ?? Object.values(result.drafts).find((d) => d?.reference)?.reference);
+      removeDraft(DRAFT_KEY);
+      setSubmitted(true);
+      setShowConfirmModal(false);
+      setShowSuccessModal(true);
+    } catch (err) {
+      setShowConfirmModal(false);
+      showSaveError(err, "Crop Sown Survey not submitted");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleBackToStart = () => {
@@ -123,21 +334,28 @@ export function CropReportForm() {
     setFarmer(undefined);
     setQuery("");
     setMatches(null);
+    setHistory(null);
     setValues({});
     setPrefilled({});
     setSubmitted(false);
     setIsEditing(false);
-    setTab(CROP_SOWN_FORM[0].key);
+    setTab(CROP_SOWN_TABS[0].key);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const tabIndex = CROP_SOWN_FORM.findIndex((t) => t.key === tab);
-  const current = CROP_SOWN_FORM[tabIndex];
-  const isLast = tabIndex === CROP_SOWN_FORM.length - 1;
+  const tabIndex = CROP_SOWN_TABS.findIndex((t) => t.key === tab);
+  const current = CROP_SOWN_TABS[tabIndex];
+  const isLast = tabIndex === CROP_SOWN_TABS.length - 1;
   const goTo = (i: number) => {
-    setTab(CROP_SOWN_FORM[i].key);
+    setTab(CROP_SOWN_TABS[i].key);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
+  // Registry choices for the current tab; the geo ids picked in each section are kept for the save.
+  const { optionsOf, requiredOf } = useIntakeFields(tab);
+  const geoIds = useRef<GeoIdsBySection>({});
+  const setGeoIds = useCallback((sectionId: string, ids: GeoIds) => {
+    geoIds.current[sectionId] = ids;
+  }, []);
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -150,7 +368,7 @@ export function CropReportForm() {
       {!isEditing && (
         <>
           <Card className="px-5 py-5 shadow-card">
-            <h1 className="text-[20px] font-bold tracking-tight text-ink sm:text-[22px]">Submit Crop Report</h1>
+            <h1 className="text-[20px] font-bold tracking-tight text-ink sm:text-[22px]">Crop Sown Survey</h1>
             <p className="mt-1 text-[13.5px] text-ink-soft">
               Find the farmer by Farmer ID. Their registry details fill in automatically; complete each Crop Sown stage and submit.
             </p>
@@ -181,12 +399,21 @@ export function CropReportForm() {
                     autoComplete="off"
                   />
                 </div>
-                <Button type="submit" variant="brand" className="h-11 px-6 font-semibold">
-                  Search
+                <Button type="submit" variant="brand" disabled={searching} className="h-11 px-6 font-semibold">
+                  {searching ? "Searching…" : "Search"}
                 </Button>
               </form>
 
-              {matches?.length === 0 && (
+              {matches?.length === 0 && accessDenied && (
+                <Banner tone="error" title={`You cannot report for "${query.trim()}"`}>
+                  {accessDenied} Choose a farmer from{" "}
+                  <Link href="/farmers" className="font-semibold underline">
+                    My Farmers
+                  </Link>
+                  , or ask your supervisor to assign this farmer to you.
+                </Banner>
+              )}
+              {matches?.length === 0 && !accessDenied && (
                 <Banner tone="error" title={`No farmer found with ID "${query.trim()}"`}>
                   Check the ID on the farmer&apos;s registration card (format FR-00000), or find them under{" "}
                   <Link href="/farmers" className="font-semibold underline">
@@ -224,17 +451,19 @@ export function CropReportForm() {
 
           {/* When the user searches through the search box along with the input box, the data (card appears below) is displayed */}
           {farmer && (
-            <Card className="flex items-center justify-between gap-4 p-5 shadow-card">
-              <div className="flex items-center gap-4 min-w-0">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#dcfce7] text-[#16a34a] font-bold text-[16px]">
+            <Card className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 sm:p-5 shadow-card rounded-2xl border-line">
+              <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-green to-emerald-700 text-white font-bold text-[16px] shadow-xs">
                   {farmer.name
                     .split(" ")
+                    .filter(Boolean)
                     .map((n) => n[0])
-                    .join("")}
+                    .slice(0, 2)
+                    .join("") || "FA"}
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-[17px] font-bold text-ink sm:text-[18px]">{farmer.name}</h3>
-                  <p className="mt-0.5 truncate text-[13.5px] text-muted">
+                  <h3 className="text-[17px] font-bold text-ink sm:text-[18px] truncate">{farmer.name}</h3>
+                  <p className="mt-0.5 truncate text-[13px] sm:text-[13.5px] text-muted">
                     {registryCode(farmer)} · {farmer.kebele}, {farmer.woreda} · {farmer.crop} · {farmer.landHa} ha
                   </p>
                 </div>
@@ -242,13 +471,14 @@ export function CropReportForm() {
               <Button
                 type="button"
                 variant="brand"
-                className="flex shrink-0 items-center gap-1.5 px-6 py-2.5 font-semibold text-[14px]"
+                className="flex shrink-0 items-center justify-center gap-1.5 px-6 py-2.5 font-semibold text-[14px] w-full sm:w-auto"
                 onClick={() => setIsEditing(true)}
               >
                 Edit →
               </Button>
             </Card>
           )}
+          {farmer && <CropSownHistory crops={history} />}
         </>
       )}
 
@@ -256,35 +486,42 @@ export function CropReportForm() {
       {isEditing && farmer && (
         <>
           {/* Top Summary Card with Change Button */}
-          <SectionCard
-            title="Find farmer"
-            description="Auto-assigned from KPIs by the aggregation engine (backend) — rule-based, recomputed each period. Proposed 4-tier scheme."
-          >
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-4 min-w-0">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#dcfce7] text-[#16a34a] font-bold text-[16px]">
+          <SectionCard title="Farmer" className="rounded-2xl border-line shadow-card">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-green to-emerald-700 text-white font-bold text-[16px] shadow-xs">
                   {farmer.name
                     .split(" ")
+                    .filter(Boolean)
                     .map((n) => n[0])
-                    .join("")}
+                    .slice(0, 2)
+                    .join("") || "FA"}
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-[17px] font-bold text-ink sm:text-[18px]">{farmer.name}</h3>
-                  <p className="mt-0.5 truncate text-[13.5px] text-muted">
-                    {registryCode(farmer)} · {farmer.kebele}, {farmer.woreda} · {farmer.crop} · {farmer.landHa} ha
+                  <h3 className="text-[17px] font-bold text-ink sm:text-[18px] truncate">{farmer.name}</h3>
+                  <p className="mt-0.5 truncate text-[13px] sm:text-[13.5px] text-muted">
+                    {registryCode(farmer)}
                   </p>
                 </div>
               </div>
               <Button
                 type="button"
                 variant="outline"
-                className="px-5 py-2 text-[14px] font-medium text-ink hover:bg-slate-50 border-line shrink-0"
+                className="shrink-0 border-line px-5 py-2 text-[14px] font-medium text-ink hover:bg-slate-50 w-full sm:w-auto"
                 onClick={handleBackToStart}
               >
                 Change
               </Button>
             </div>
           </SectionCard>
+
+          <CropSownHistory crops={history} />
+
+          {loadNote && (
+            <Banner tone={loadNote.tone} title={loadNote.title} onDismiss={() => setLoadNote(null)}>
+              {loadNote.body}
+            </Banner>
+          )}
 
           {/* Auto-filled Notification Banner */}
           {showAutoFillBanner && (
@@ -322,7 +559,7 @@ export function CropReportForm() {
               {submitted && farmer && (
                 <>
                   {" "}
-                  <Link href={`/farmers/${farmer.id}`} className="font-semibold underline">
+                  <Link href={`/farmers/${farmer.regId ?? farmer.id}`} className="font-semibold underline">
                     Open farmer profile
                   </Link>
                 </>
@@ -337,9 +574,9 @@ export function CropReportForm() {
                 <SegmentTabs
                   label="Crop Sown stages"
                   className="border-0 shadow-none rounded-none"
-                  tabs={CROP_SOWN_FORM.map((t) => ({
+                  tabs={CROP_SOWN_TABS.map((t) => ({
                     key: t.key,
-                    label: t.label,
+                    label: t.label === "Harvesting" ? "Harvest" : t.label,
                     // Fields still to enter on this stage.
                     count: t.sections.reduce((n, s) => n + s.fields.filter((f) => !values[valueKey(s.id, f.key)]).length, 0),
                   }))}
@@ -354,31 +591,30 @@ export function CropReportForm() {
                     key={section.id}
                     title={section.title}
                     className="rounded-xl border border-line shadow-xs"
+                    collapsible={true}
+                    defaultOpen={true}
                   >
-                    <div className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
-                      {section.fields.map((field) => {
-                        const k = valueKey(section.id, field.key);
-                        return (
-                          <CropSownFieldInput
-                            key={k}
-                            id={k}
-                            field={field}
-                            value={values[k] ?? ""}
-                            onChange={(v) => setValues((prev) => ({ ...prev, [k]: v }))}
-                            // Registry data stays as fetched; the DA enters only what they observe on the plot.
-                            autoFilled={k in prefilled}
-                          />
-                        );
-                      })}
-                    </div>
+                    <CropSownSectionFields
+                      section={section}
+                      values={values}
+                      prefilled={prefilled}
+                      errors={errors}
+                      optionsOf={optionsOf}
+                      requiredOf={requiredOf}
+                      onGeoIds={setGeoIds}
+                      onChange={(changes) => {
+                        setValues((prev) => ({ ...prev, ...changes }));
+                        setErrors((prev) => Object.fromEntries(Object.entries(prev).filter(([e]) => !(e in changes))));
+                      }}
+                    />
                   </SectionCard>
                 ))}
               </fieldset>
             </div>
 
             {/* Bottom Footer Card */}
-            <div className="flex flex-col gap-3 rounded-xl border border-line bg-white p-4 shadow-card sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-3 rounded-2xl border border-line bg-white p-4 shadow-card sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center justify-between sm:justify-start gap-3 w-full sm:w-auto">
                 <Button
                   type="button"
                   variant="outline"
@@ -388,8 +624,8 @@ export function CropReportForm() {
                 >
                   Save Draft
                 </Button>
-                <span className="flex items-center gap-1.5 text-[13.5px] font-normal text-muted">
-                  <svg className="h-4 w-4 text-slate-500" viewBox="0 0 20 20" fill="currentColor">
+                <span className="flex items-center gap-1.5 text-[13px] font-medium text-muted">
+                  <svg className="h-4 w-4 text-emerald-600" viewBox="0 0 20 20" fill="currentColor">
                     <path
                       fillRule="evenodd"
                       d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
@@ -399,13 +635,13 @@ export function CropReportForm() {
                   Auto-saved
                 </span>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => goTo(tabIndex - 1)}
                   disabled={tabIndex === 0}
-                  className="flex items-center gap-1.5 px-5 py-2.5 font-semibold text-ink"
+                  className="flex items-center justify-center gap-1.5 px-4 sm:px-5 py-2.5 font-semibold text-ink flex-1 sm:flex-initial"
                 >
                   ← Previous Step
                 </Button>
@@ -414,19 +650,19 @@ export function CropReportForm() {
                     type="button"
                     variant="brand"
                     onClick={handleOpenConfirm}
-                    className="flex items-center gap-1.5 px-6 py-2.5 font-semibold"
+                    className="flex items-center justify-center gap-1.5 px-5 sm:px-6 py-2.5 font-semibold flex-1 sm:flex-initial"
                   >
-                    Submit Crop Report →
+                    Submit Crop sown →
                   </Button>
                 ) : (
                   <Button
                     type="button"
                     variant="brand"
                     onClick={saveAndNext}
-                    disabled={submitted}
-                    className="flex items-center gap-1.5 px-6 py-2.5 font-semibold"
+                    disabled={submitted || savingStep}
+                    className="flex items-center justify-center gap-1.5 px-5 sm:px-6 py-2.5 font-semibold flex-1 sm:flex-initial"
                   >
-                    Save &amp; Next →
+                    {savingStep ? "Saving…" : "Save & Next →"}
                   </Button>
                 )}
               </div>
@@ -447,7 +683,7 @@ export function CropReportForm() {
                 </div>
                 <div>
                   <h3 className="text-[17px] font-bold text-ink sm:text-[18px]">
-                    Submit crop report for {farmer.name}?
+                    Submit Crop Sown Survey for {farmer.name}?
                   </h3>
                   <p className="mt-0.5 text-[13px] text-muted">
                     Review the summary below. Auto-filled registry data and your entries will be recorded together.
@@ -521,9 +757,10 @@ export function CropReportForm() {
                   type="button"
                   variant="brand"
                   onClick={handleConfirmSubmit}
+                  disabled={isSaving}
                   className="flex items-center gap-1.5 px-6 py-2 font-semibold"
                 >
-                  Confirm &amp; submit →
+                  {isSaving ? "Submitting…" : <>Confirm &amp; submit →</>}
                 </Button>
               </div>
             </div>
@@ -559,10 +796,10 @@ export function CropReportForm() {
 
             {/* Title & Description */}
             <h3 className="mt-4 text-[20px] font-bold text-ink">
-              Crop report submitted!
+              Crop Sown Survey submitted!
             </h3>
             <p className="mt-2 text-[13.5px] leading-relaxed text-muted px-2">
-              The Crop Sown report for {farmer.name} ({registryCode(farmer)}) — {farmer.crop}, {values["identity.crop_year"] || "2026"} {values["identity.production_season"] || "Meher"} season — has been submitted and sent to the Woreda office for review.
+              The Crop Sown Survey for {farmer.name} ({registryCode(farmer)}) — {farmer.crop}, {values["identity.crop_year"] || "2026"} {values["identity.production_season"] || "Meher"} season — has been submitted and sent to the Woreda office for review.
             </p>
 
             {/* Status Pill */}
@@ -570,6 +807,7 @@ export function CropReportForm() {
               <span className="h-2 w-2 rounded-full bg-amber-600" />
               Pending Woreda review
             </div>
+            {reference && <p className="mt-3 text-[12.5px] text-muted">Reference: <span className="font-semibold text-ink">{reference}</span></p>}
 
             {/* Action button: Back to farmer profile */}
             <div className="mt-6 pt-5 border-t border-line">

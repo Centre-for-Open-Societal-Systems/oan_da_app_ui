@@ -2,7 +2,6 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
 import { Textarea } from "@/components/ui/Textarea";
-import { CURRENT_AGENT } from "@/features/farmers";
 import { AttributionCard } from "@/features/farmers";
 
 interface AddAdvisoryNoteModalProps {
@@ -35,11 +34,12 @@ export function AddAdvisoryNoteModal({ isOpen, onClose }: AddAdvisoryNoteModalPr
           onClose();
         }}
       >
-        <AttributionCard name={CURRENT_AGENT.name} avatar={CURRENT_AGENT.avatar} subtitle="Today · will be attributed to you" />
+        <AttributionCard subtitle="Today · will be attributed to you" />
 
         <FormField
           label="Note"
           htmlFor="advisory-note"
+          required
           hint="This note will be visible to the farmer and any DA assigned to this record."
         >
           <Textarea

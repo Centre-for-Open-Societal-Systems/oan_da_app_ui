@@ -1,9 +1,6 @@
-import { REGISTRY_TABS } from "./registrySpec";
+import { WIZARD_STEPS } from "./registrySpec";
 
-// One step per Farmer Registry tab, then a final review.
-export const REGISTRATION_STEPS = [
-  ...REGISTRY_TABS.map(({ key, label }) => ({ key, label })),
-  { key: "review", label: "Review and submit" },
-];
+// One step per part of the POST /farmers body, then a final review.
+export const REGISTRATION_STEPS = WIZARD_STEPS.map(({ key, label }) => ({ key, label }));
 
 export const TOTAL_STEPS = REGISTRATION_STEPS.length;

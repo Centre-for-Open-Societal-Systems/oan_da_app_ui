@@ -27,7 +27,7 @@ beforeEach(() => {
 describe("planVisit", () => {
   it("posts the visit and returns the stored record", async () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ data: { name: "DA-VIS-0001", physical_status: "Planned" } }), { status: 201 }));
-    const body = { farmer_id: "FRM-000103", date: "2026-10-16", time: "10:30", visit_type: "Advisory", purpose: "Input advisory", duration_min: 60, priority: "High" as const, notify_farmer_sms: true, client_op_id: "op-1" };
+    const body = { farmer_id: "FRM-000103", farmer_name: "Lelise Gudeta", user: "u", date: "2026-10-16", time: "10:30", visit_type: "Advisory", purpose: "Input advisory", duration_min: 60, priority: "High" as const, notify_farmer_sms: true, client_op_id: "op-1" };
 
     await expect(planVisit(body)).resolves.toMatchObject({ name: "DA-VIS-0001" });
 

@@ -1,11 +1,11 @@
 // Public API of the farmers feature. Import from "@/features/farmers", never from files inside it.
 export * from "./agentProfile";
-export * from "./advisoryStore";
 export * from "./cropSown";
 export * from "./data";
 export * from "./filters";
 export * from "./qualifications";
 export * from "./types";
+export { AdvisoryQaFields } from "./components/AdvisoryQaFields";
 export * from "./components/AttributionCard";
 export * from "./components/CertificateDocuments";
 export * from "./components/ConsentWithdrawalModal";
@@ -15,4 +15,15 @@ export * from "./components/PlanVisitModal";
 export * from "./components/ProfilePhotoUpload";
 export * from "./components/StatusPill";
 export * from "./farmersApi";
+export * from "./registryApi";
 export * from "./livestockReport";
+export * from "./livestockApi";
+export * from "./livestockRecords";
+export * from "./cropSownApi";
+export * from "./useGeoLevels";
+export * from "./cropSownSubmit";
+export * from "./useIntakeFields";
+export * from "./cropSownValidation";
+export { labelOfCode } from "./cropSownSpecApply";
+export * from "./cropSownLoad";
+export * from "./useRegistryOptions";

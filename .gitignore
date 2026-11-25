@@ -44,3 +44,12 @@ next-env.d.ts
 Task-Sheet-*.md
 Task-Sheet-*.csv
 WORK-LOG-*.csv
+
+# local API reference files (kept local)
+API_CURLS.sh
+API_LIST.txt
+API_LIST.xlsx
+
+# local https certs (npm run dev:sso)
+/certificates
+built-chart/

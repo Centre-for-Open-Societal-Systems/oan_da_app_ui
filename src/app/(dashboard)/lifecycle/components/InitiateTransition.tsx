@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { readDraft, removeDraft, writeDraft } from "@/lib/drafts";
-import { cn } from "@/lib/utils";
+import { cn, todayIso } from "@/lib/utils";
 import { ASSIGNMENT_FORMS, LIFECYCLE_DA, SUCCESSOR_OPTIONS, transitionFor, type LifecycleTransition, type TransitionCopy } from "./lifecycle";
 import {
   APPROVER_LINE,
@@ -42,9 +42,12 @@ type StoredDraft = Omit<InitiateDraft, "files"> & { savedAt: string };
 
 const clock = () => new Date().toTimeString().slice(0, 5);
 
+const withToday = (draft: InitiateDraft) => (draft.effective ? draft : { ...draft, effective: todayIso() });
+
 /**
  * Draft state for a full-page initiate form. Every edit is auto-saved to the session (files excluded), and a
- * draft saved earlier in the session is restored after mount.
+ * draft saved earlier in the session is restored after mount. The effective date starts on today, also set after mount
+ * because the server's day can differ from the browser's.
  */
 export function useSessionDraft(draftKey: string, initial: InitiateDraft) {
   const [draft, setDraft] = useState<InitiateDraft>(initial);
@@ -54,9 +57,12 @@ export function useSessionDraft(draftKey: string, initial: InitiateDraft) {
   useEffect(() => {
     const t = setTimeout(() => {
       const saved = readDraft<StoredDraft>(draftKey);
-      if (!saved) return;
+      if (!saved) {
+        setDraft(withToday);
+        return;
+      }
       const { savedAt, ...values } = saved;
-      setDraft((d) => ({ ...d, ...values }));
+      setDraft((d) => withToday({ ...d, ...values }));
       setSaveNote(`Draft restored · ${savedAt}`);
     }, 0);
     return () => clearTimeout(t);
@@ -89,6 +95,9 @@ export function useSessionDraft(draftKey: string, initial: InitiateDraft) {
   };
 }
 
+/** The "today or later" rule of a date field as its note; red on a failed submit, or once the date is earlier. */
+export const fromTodayNote = (value: string, error?: string) => ({ hint: error ?? "Today or later.", hintTone: error || (!!value && value < todayIso()) ? ("error" as const) : ("muted" as const) });
+
 export function FormSection({ step, title, subtitle, tone, children }: { step: number; title: string; subtitle: string; tone: LifecycleTransition["tone"]; children: ReactNode }) {
   return (
     <section className="[&+section]:border-t [&+section]:border-line-soft">
@@ -113,7 +122,7 @@ export function LockedField({ id, label, value }: { id: string; label: string; v
   );
 }
 
-export function DocumentPicker({ title = "Supporting document", label, tone, files, onChange }: { title?: string; label: string; tone: LifecycleTransition["tone"]; files: File[]; onChange: (files: File[]) => void }) {
+export function DocumentPicker({ title = "Supporting document", required, label, tone, files, onChange }: { title?: string; required?: boolean; label: string; tone: LifecycleTransition["tone"]; files: File[]; onChange: (files: File[]) => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -127,7 +136,7 @@ export function DocumentPicker({ title = "Supporting document", label, tone, fil
 
   return (
     <div className="flex flex-col gap-2 sm:col-span-2">
-      <p className="text-[14px] font-medium text-ink">{title}</p>
+      <p className="text-[14px] font-medium text-ink">{title}{required && <span className="ml-1 text-danger">*</span>}</p>
       <div
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
@@ -255,8 +264,8 @@ export function InitiateTransition({ slug }: { slug: string }) {
     </FormField>
   );
   const effectiveField = (
-    <FormField key="effective" label="Effective date" htmlFor="lc-effective" required hint={error("effective")} hintTone="error">
-      <Input id="lc-effective" type="date" value={draft.effective} onChange={(e) => set("effective", e.target.value)} />
+    <FormField key="effective" label="Effective date" htmlFor="lc-effective" required {...fromTodayNote(draft.effective, error("effective"))}>
+      <Input id="lc-effective" type="date" min={todayIso()} value={draft.effective} onChange={(e) => set("effective", e.target.value)} />
     </FormField>
   );
   const currentField = <LockedField key="current" id="lc-current" label={form.currentLabel} value={form.currentValue} />;

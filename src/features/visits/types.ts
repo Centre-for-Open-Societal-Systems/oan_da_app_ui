@@ -18,6 +18,8 @@ export interface VisitRecord {
   assignedBy?: string;
   /** Backend physical status (e.g. "In progress"); absent on sample records. */
   physicalStatus?: string;
+  /** Visit type chosen at planning (Crop Survey, Advisory …); absent on sample records. */
+  visitType?: string;
 }
 
 export interface VisitTimelineEntry {
@@ -30,34 +32,17 @@ export interface VisitTimelineEntry {
 export type PlannerStatus = "scheduled" | "completed" | "overdue";
 
 export interface PlannerVisit {
+  id: string;
   time: string;
   farmerName: string;
   kebele: string;
   status: PlannerStatus;
 }
 
-export interface PlannerDay {
-  label: string;
-  dayOfMonth: number;
-  isToday?: boolean;
-  visits: PlannerVisit[];
-}
-
-export type PriorityLevel = "high" | "medium" | "low";
-
-export interface PriorityFarmer {
-  /** Registry id, so Schedule can preselect the farmer. */
-  farmerId: string;
-  name: string;
-  issue: string;
-  level: PriorityLevel;
-  /** Visit type the issue calls for; preselected in the Schedule form. */
-  visitType: string;
-}
-
 export type ArrivalState = "done" | "confirmed" | "tentative";
 
 export interface TodaysVisit {
+  id: string;
   farmerName: string;
   plannedArrival: string;
   state: ArrivalState;

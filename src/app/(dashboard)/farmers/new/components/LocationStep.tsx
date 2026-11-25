@@ -1,111 +1,122 @@
 "use client";
 
 import { useState } from "react";
-import { Select } from "@/components/ui/Select";
+import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
-import { REGIONS } from "../locationData";
-import { REGISTRY_TABS } from "../registrySpec";
-import { RegistryStep, Section } from "./RegistryStep";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { cn } from "@/lib/utils";
+import { describeFarmerError, usePlaces, type PlaceLevel } from "@/features/farmers";
+import type { StepProps } from "./FarmerStep";
 
-const locationTab = REGISTRY_TABS.find((tab) => tab.key === "location")!;
+const LEVELS: PlaceLevel[] = ["region", "zone", "woreda", "kebele"];
+const title = (level: PlaceLevel) => level[0].toUpperCase() + level.slice(1);
 
-/** `initial` restores a saved draft (field name → value). */
-export function LocationStep({ initial = {} }: { initial?: Record<string, string> }) {
-  const [region, setRegion] = useState(initial.region ?? "");
-  const [zone, setZone] = useState(initial.zone ?? "");
-  const [woreda, setWoreda] = useState(initial.woreda ?? "");
-  const [kebele, setKebele] = useState(initial.kebele ?? "");
-
-  const zones = REGIONS.find((r) => r.name === region)?.zones ?? [];
-  const woredas = zones.find((z) => z.name === zone)?.woredas ?? [];
-  const kebeles = woredas.find((w) => w.name === woreda)?.kebeles ?? [];
-
-  // Each level resets everything below it so stale selections don't linger
-  const handleRegionChange = (value: string) => {
-    setRegion(value);
-    setZone("");
-    setWoreda("");
-    setKebele("");
-  };
-
-  const handleZoneChange = (value: string) => {
-    setZone(value);
-    setWoreda("");
-    setKebele("");
-  };
-
-  const handleWoredaChange = (value: string) => {
-    setWoreda(value);
-    setKebele("");
-  };
-
-  const path = [region, zone, woreda, kebele].filter(Boolean).join(" › ");
-
-  const hierarchy = (
-    <>
-      <Section title="Administrative Location" description="Select the region, zone, woreda and kebele from the location hierarchy.">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-          <div className="flex items-center gap-2.5">
-            <span className="text-[14px] font-semibold text-ink">Location hierarchy</span>
-            <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-[11.5px] font-semibold text-blue-700">One cascading selection</span>
-          </div>
-          {path && (
-            <span className="flex items-center gap-1.5 text-[13px] font-medium text-brand-green">
-              <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0zM12 13a3 3 0 100-6 3 3 0 000 6z" />
-              </svg>
-              {path}
-            </span>
-          )}
-        </div>
-        <div className="grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2 xl:grid-cols-4">
-          <FormField label="Region" htmlFor="region" required>
-            <Select id="region" name="region" value={region} onChange={(e) => handleRegionChange(e.target.value)}>
-              <option value="" disabled>Select Region</option>
-              {REGIONS.map((r) => (
-                <option key={r.name} value={r.name}>{r.name}</option>
-              ))}
-            </Select>
-          </FormField>
-
-          <FormField label="Zone" htmlFor="zone" required>
-            <Select id="zone" name="zone" value={zone} disabled={!region} onChange={(e) => handleZoneChange(e.target.value)}>
-              <option value="" disabled>Select Zone</option>
-              {zones.map((z) => (
-                <option key={z.name} value={z.name}>{z.name}</option>
-              ))}
-            </Select>
-          </FormField>
-
-          <FormField label="Woreda" htmlFor="woreda" required>
-            <Select id="woreda" name="woreda" value={woreda} disabled={!zone} onChange={(e) => handleWoredaChange(e.target.value)}>
-              <option value="" disabled>Select Woreda</option>
-              {woredas.map((w) => (
-                <option key={w.name} value={w.name}>{w.name}</option>
-              ))}
-            </Select>
-          </FormField>
-
-          <FormField label="Kebele" htmlFor="kebele" required>
-            <Select id="kebele" name="kebele" value={kebele} disabled={!woreda} onChange={(e) => setKebele(e.target.value)}>
-              <option value="" disabled>Select Kebele</option>
-              {kebeles.map((k) => (
-                <option key={k} value={k}>{k}</option>
-              ))}
-            </Select>
-          </FormField>
-        </div>
-      </Section>
-
-      <p className="flex items-start gap-2.5 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-[13px] text-blue-700">
-        <svg className="mt-0.5 h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="10" />
-          <path d="M12 16v-4M12 8h.01" />
-        </svg>
-        Region, Zone, Woreda and Kebele are chosen as one hierarchy. The four names below are saved as read-only projections of the selected level.
-      </p>
-    </>
+/** One level of the cascade: its places come from the registry under the level chosen above it. */
+function PlaceSelect({ level, parent, value, error, onChange }: { level: PlaceLevel; parent: string | undefined; value: string; error?: string; onChange: (id: string, name: string) => void }) {
+  const { places, error: loadError, loading } = usePlaces(level, parent);
+  const waiting = level !== "region" && !parent;
+  const hint = error ?? (loadError ? describeFarmerError(loadError) : waiting ? `Choose the ${LEVELS[LEVELS.indexOf(level) - 1]} first.` : undefined);
+  return (
+    <FormField label={title(level)} htmlFor={level} required hint={hint} hintTone={error || loadError ? "error" : "muted"}>
+      <Select
+        id={level}
+        value={value}
+        disabled={!places}
+        onChange={(e) => onChange(e.target.value, places?.find((p) => p.id === e.target.value)?.name ?? "")}
+        aria-invalid={error ? true : undefined}
+      >
+        <option value="">{loading ? "Loading…" : `Select ${level}`}</option>
+        {places?.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </Select>
+    </FormField>
   );
+}
 
-  return <RegistryStep tab={locationTab} initial={initial} leading={hierarchy} />;
+export function LocationStep({ form, update, errors }: StepProps) {
+  const [locating, setLocating] = useState<string | null>(null);
+
+  // Choosing a level clears the ones below it: their lists belong to the old choice.
+  const choose = (level: PlaceLevel, id: string, name: string) => {
+    const below = LEVELS.slice(LEVELS.indexOf(level) + 1);
+    const places = { ...form.places, [level]: id || undefined };
+    const placeNames = { ...form.placeNames, [level]: name || undefined };
+    for (const l of below) {
+      delete places[l];
+      delete placeNames[l];
+    }
+    update({ places, placeNames });
+  };
+
+  // "latitude longitude altitude accuracy", the shape the registry takes (e.g. "9.03 38.74 2350 5").
+  const locate = () => {
+    if (!navigator.geolocation) return setLocating("This device cannot give a location.");
+    setLocating("Finding the location…");
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        const parts = [coords.latitude.toFixed(6), coords.longitude.toFixed(6), coords.altitude !== null ? Math.round(coords.altitude) : null, Math.round(coords.accuracy)];
+        update({ location: parts.filter((p) => p !== null).join(" ") });
+        setLocating(null);
+      },
+      (err) => setLocating(err.message || "The location could not be read."),
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
+  };
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+        {LEVELS.map((level, i) => (
+          <PlaceSelect
+            key={level}
+            level={level}
+            parent={i === 0 ? undefined : form.places[LEVELS[i - 1]]}
+            value={form.places[level] ?? ""}
+            error={errors[level]}
+            onChange={(id, name) => choose(level, id, name)}
+          />
+        ))}
+      </div>
+
+      <div className="w-full">
+        <FormField
+          label="GPS location"
+          htmlFor="location"
+          hint={locating ?? "Latitude and longitude, then altitude and accuracy if known, separated by spaces."}
+          hintTone={locating && locating !== "Finding the location…" ? "error" : errors.location ? "error" : "muted"}
+        >
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+            <div className="relative flex-1">
+              <Input
+                id="location"
+                type="text"
+                value={form.location}
+                onChange={(e) => update({ location: e.target.value })}
+                placeholder="9.03 38.74 2350 5"
+                className={cn("h-11 w-full", errors.location && "border-danger")}
+                aria-invalid={errors.location ? true : undefined}
+              />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={locate}
+              disabled={locating === "Finding the location…"}
+              className="h-11 shrink-0 px-4 gap-2 text-[13px] font-semibold text-slate-700 hover:text-brand-green hover:border-brand-green border-line transition-all active:scale-95 shadow-2xs whitespace-nowrap"
+            >
+              <svg className="h-4 w-4 text-brand-green shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+              <span>{locating === "Finding the location…" ? "Detecting location…" : "Use this device's location"}</span>
+            </Button>
+          </div>
+        </FormField>
+      </div>
+    </div>
+  );
 }

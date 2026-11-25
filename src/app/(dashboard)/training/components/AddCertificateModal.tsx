@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
 import { CERTIFICATE_TYPES, REVIEW_OWNER, useCertificatesStore, type CertificateType } from "@/features/performance";
-import { cn } from "@/lib/utils";
+import { cn, todayIso } from "@/lib/utils";
 
 const MAX_SIZE_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["application/pdf", "image/jpeg", "image/png"];
@@ -26,7 +26,7 @@ interface Form {
   issuedOn: string;
   expiresOn: string;
 }
-const EMPTY: Form = { name: "", issuer: "", credentialId: "", notes: "", type: "", issuedOn: "", expiresOn: "" };
+const blankForm = (): Form => ({ name: "", issuer: "", credentialId: "", notes: "", type: "", issuedOn: todayIso(), expiresOn: "" });
 
 function Panel({ title, children, className }: { title: string; children: ReactNode; className?: string }) {
   return (
@@ -41,7 +41,7 @@ function Panel({ title, children, className }: { title: string; children: ReactN
 export function AddCertificateModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const add = useCertificatesStore((s) => s.add);
   const inputRef = useRef<HTMLInputElement>(null);
-  const [form, setForm] = useState<Form>(EMPTY);
+  const [form, setForm] = useState<Form>(blankForm);
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -60,7 +60,7 @@ export function AddCertificateModal({ isOpen, onClose }: { isOpen: boolean; onCl
   const show = (key: keyof Form) => (submitted ? errors[key] : undefined);
 
   const close = () => {
-    setForm(EMPTY);
+    setForm(blankForm());
     setFile(null);
     setFileError(null);
     setSubmitted(false);
@@ -143,10 +143,10 @@ export function AddCertificateModal({ isOpen, onClose }: { isOpen: boolean; onCl
                 {CERTIFICATE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
               </Select>
             </FormField>
-            <FormField label="Issue date" htmlFor="cert-issued" required hint={show("issuedOn")} hintTone="error">
+            <FormField label="Issue date" htmlFor="cert-issued" required hint={show("issuedOn") ?? "Cannot be in the future."} hintTone={show("issuedOn") || (form.issuedOn && errors.issuedOn) ? "error" : "muted"}>
               <Input id="cert-issued" type="date" value={form.issuedOn} onChange={set("issuedOn")} />
             </FormField>
-            <FormField label="Expiry date (optional)" htmlFor="cert-expiry" hint={show("expiresOn")} hintTone="error">
+            <FormField label="Expiry date (optional)" htmlFor="cert-expiry" hint={show("expiresOn") ?? "Must be after the issue date."} hintTone={errors.expiresOn ? "error" : "muted"}>
               <Input id="cert-expiry" type="date" value={form.expiresOn} min={form.issuedOn || undefined} onChange={set("expiresOn")} />
             </FormField>
           </div>

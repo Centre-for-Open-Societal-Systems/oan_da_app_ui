@@ -1,8 +1,10 @@
 import type { FilterFieldConfig, FilterSelection } from "@/components/ui/AdvancedFiltersDrawer";
 import type { FilterOption } from "@/components/ui/FilterDropdown";
-import type { Farmer } from "./types";
+import type { Farmer, FarmerActivity, FarmerStatus } from "./types";
 
 export type { FilterOption };
+
+export const farmerActivity = (status: FarmerStatus): FarmerActivity => (status === "Verified" ? "Active" : "Inactive");
 
 // Option lists (with registry-wide counts) for the column filter dropdowns and the Advanced Filters panel.
 export const KEBELE_OPTIONS: FilterOption[] = [
@@ -78,6 +80,6 @@ export function applyFilters(farmers: Farmer[], filters: FarmerFilters): Farmer[
       matchesKebele(farmer, filters.kebele) &&
       (filters.crop.size === 0 || filters.crop.has(farmer.crop)) &&
       (filters.livestock.size === 0 || filters.livestock.has(farmer.livestock)) &&
-      (filters.status.size === 0 || filters.status.has(farmer.status)),
+      (filters.status.size === 0 || filters.status.has(farmerActivity(farmer.status))),
   );
 }

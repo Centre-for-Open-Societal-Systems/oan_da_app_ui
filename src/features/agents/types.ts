@@ -2,7 +2,8 @@
 
 export type FaydaStatus = "Verified" | "Pending" | "Mismatch";
 export type ActiveStatus = "Active" | "On-leave" | "Separated" | "Unassigned";
-export type EducationTier = "Certificate" | "Diploma" | "Degree" | "Masters";
+// The registry's own tiers plus the labels Master Data may hand back; keep the known ones for filters.
+export type EducationTier = "Certificate" | "Diploma" | "Degree" | "Masters" | "MSc" | "PhD" | (string & {});
 export type ApprovalStatus = "Draft" | "Awaiting review" | "Changes requested" | "Approved" | "Published" | "Rejected";
 
 export interface Agent {
@@ -23,7 +24,24 @@ export interface Agent {
   specialisation: string;
   joinedAt: string;
   updatedAt: string;
-  source: "Bulk import" | "MoA sync";
+  source: "Bulk import" | "MoA sync" | "DA Registry";
+}
+
+/** A colleague as GET /da-services/experts lists them: work contacts, not a registry record (see features/agents/api). */
+export interface TeamMember {
+  daId: string;
+  fullName: string;
+  kebele: string;
+  woreda: string;
+  region: string;
+  specialisation: string;
+  activeStatus: ActiveStatus;
+  phone: string;
+  email?: string;
+  language?: string;
+  /** Known for the signed-in DA's own registry record only. */
+  farmerCount?: number;
+  joinedAt?: string;
 }
 
 export type IssuanceState = "Generated" | "Queued" | "Exception" | "Failed-retry";

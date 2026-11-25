@@ -118,6 +118,7 @@ function CaseManagement({ onSaved }: { onSaved: (summary: string) => void }) {
           <Checkbox checked={escalated} onChange={(e) => setEscalated(e.target.checked)} />
           Escalated
         </label>
+        {!canSave && <p className="text-[12.5px] text-muted">Set at least one field above to enable Save Assignment.</p>}
         <Button type="button" variant="brand" onClick={save} disabled={!canSave} className="w-full gap-2">
           <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" /><path d="M17 21v-8H7v8M7 3v5h8" />

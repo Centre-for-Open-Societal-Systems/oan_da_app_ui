@@ -64,6 +64,7 @@ export function ProfilePhotoUpload({ initialPreview = null, showActions = true, 
     revokePreview();
     setPreview(null);
     setError(null);
+    if (inputRef.current) inputRef.current.value = "";
   };
 
   return (
@@ -119,26 +120,29 @@ export function ProfilePhotoUpload({ initialPreview = null, showActions = true, 
         {error && <p className="mt-2 text-[12.5px] text-danger">{error}</p>}
 
         {showActions && (
-          <div className="mt-4 flex items-center gap-2">
+          <div className="mt-3.5 flex flex-wrap items-center justify-center gap-2">
             <button
               type="button"
               onClick={() => inputRef.current?.click()}
-              className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-md bg-brand-green px-3.5 text-[13px] font-semibold text-white shadow-sm transition-all hover:bg-brand-green-dark active:scale-95"
+              className="inline-flex h-8.5 items-center justify-center gap-1.5 rounded-lg bg-brand-green px-3 text-[12.5px] font-semibold text-white shadow-xs transition-colors hover:bg-brand-green-dark cursor-pointer active:scale-95"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" />
               </svg>
               Upload Photo
             </button>
             {allowRemove && (
-            <button
-              type="button"
-              onClick={handleRemove}
-              disabled={!preview}
-              className="h-9 rounded-md border border-line bg-white px-3.5 text-[13px] font-medium text-ink-soft transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Remove
-            </button>
+              <button
+                type="button"
+                onClick={handleRemove}
+                disabled={!preview}
+                className="inline-flex h-8.5 items-center justify-center gap-1.5 rounded-lg border border-line bg-white px-2.5 text-[12.5px] font-medium text-ink-soft transition-colors hover:bg-rose-50 hover:border-rose-300 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white disabled:hover:border-line disabled:hover:text-ink-soft cursor-pointer"
+              >
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                Remove
+              </button>
             )}
           </div>
         )}

@@ -4,7 +4,7 @@ import { useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { FormField } from "./FormField";
-import { Input } from "./Input";
+import { DatePicker } from "./DatePicker";
 import { FilterDropdown, type FilterOption } from "./FilterDropdown";
 
 export interface FilterFieldConfig {
@@ -23,7 +23,10 @@ interface AdvancedFiltersDrawerProps {
   onClose: () => void;
   fields: FilterFieldConfig[];
   filters: FilterSelection;
-  onApply: (next: FilterSelection) => void;
+  /** `range` is the Date Range (yyyy-mm-dd, empty = open ended); pages without date data ignore it. */
+  onApply: (next: FilterSelection, range: { from: string; to: string }) => void;
+  /** Hide the Date Range block on pages whose rows have no date to filter. */
+  showDateRange?: boolean;
 }
 
 type QuickRange = "today" | "yesterday" | "7d" | "30d";
@@ -62,7 +65,7 @@ function rangeFor(quick: QuickRange): { from: string; to: string } {
   return { from: toISODate(start), to: toISODate(today) };
 }
 
-export function AdvancedFiltersDrawer({ isOpen, onClose, fields, filters, onApply }: AdvancedFiltersDrawerProps) {
+export function AdvancedFiltersDrawer({ isOpen, onClose, fields, filters, onApply, showDateRange = true }: AdvancedFiltersDrawerProps) {
   // Unique per drawer so pages with two tables (two drawers) do not repeat element ids.
   const uid = useId();
   const [mounted, setMounted] = useState(false);
@@ -108,13 +111,13 @@ export function AdvancedFiltersDrawer({ isOpen, onClose, fields, filters, onAppl
     fields.filter((f) => (draft.selections[f.key]?.size ?? 0) > 0).length + (draft.from || draft.to ? 1 : 0);
 
   const apply = () => {
-    onApply(cloneSelection(fields, draft.selections));
+    onApply(cloneSelection(fields, draft.selections), { from: draft.from, to: draft.to });
     onClose();
   };
 
   const reset = () => {
     setDraft({ selections: emptySelection(fields), from: "", to: "", quickRange: null });
-    onApply(emptySelection(fields));
+    onApply(emptySelection(fields), { from: "", to: "" });
   };
 
   return createPortal(
@@ -137,7 +140,7 @@ export function AdvancedFiltersDrawer({ isOpen, onClose, fields, filters, onAppl
         aria-modal="true"
         aria-labelledby={`${uid}-title`}
         className={cn(
-          "absolute right-0 top-0 flex h-full w-full max-w-[350px] flex-col bg-white shadow-2xl transition-transform duration-300 ease-in-out",
+          "absolute right-0 top-0 flex h-full w-full max-w-[450px] flex-col bg-white shadow-2xl transition-transform duration-300 ease-in-out",
           isOpen ? "translate-x-0" : "translate-x-full",
         )}
       >
@@ -181,51 +184,84 @@ export function AdvancedFiltersDrawer({ isOpen, onClose, fields, filters, onAppl
             </FormField>
           ))}
 
-          <div className="flex flex-col gap-3">
-            <p className="text-[14px] font-medium text-ink">Date Range</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor={`${uid}-from`} className="text-[12.5px] text-subtle">From</label>
-                <Input
-                  id={`${uid}-from`}
-                  type="date"
-                  value={draft.from}
-                  onChange={(e) => update({ from: e.target.value, quickRange: null })}
-                  className="h-10 px-2.5 text-[13.5px]"
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor={`${uid}-to`} className="text-[12.5px] text-subtle">To</label>
-                <Input
-                  id={`${uid}-to`}
-                  type="date"
-                  value={draft.to}
-                  onChange={(e) => update({ to: e.target.value, quickRange: null })}
-                  className="h-10 px-2.5 text-[13.5px]"
-                />
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {QUICK_RANGES.map((range) => {
-                const active = draft.quickRange === range.value;
-                return (
+          {showDateRange && (
+            <div className="flex flex-col gap-3.5 rounded-xl border border-line bg-surface/50 p-4 transition-all">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-brand-tint text-brand-green">
+                    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                      <line x1="16" y1="2" x2="16" y2="6" />
+                      <line x1="8" y1="2" x2="8" y2="6" />
+                      <line x1="3" y1="10" x2="21" y2="10" />
+                    </svg>
+                  </span>
+                  <p className="text-[14px] font-semibold text-ink">Date Range</p>
+                </div>
+                {(draft.from || draft.to || draft.quickRange) && (
                   <button
-                    key={range.value}
                     type="button"
-                    onClick={() => update({ quickRange: range.value, ...rangeFor(range.value) })}
-                    className={cn(
-                      "rounded-md border px-3 py-1.5 text-[13px] transition-colors",
-                      active
-                        ? "border-brand-green bg-brand-mint font-medium text-brand-green"
-                        : "border-line bg-white text-muted hover:border-slate-300 hover:text-ink",
-                    )}
+                    onClick={() => update({ from: "", to: "", quickRange: null })}
+                    className="text-[12px] font-semibold text-muted hover:text-brand-green transition-colors hover:underline"
                   >
-                    {range.label}
+                    Clear dates
                   </button>
-                );
-              })}
+                )}
+              </div>
+
+              {/* Modern Animated Date Pickers */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5 min-w-0">
+                  <label htmlFor={`${uid}-from`} className="text-[12px] font-medium text-subtle">
+                    From
+                  </label>
+                  <DatePicker
+                    value={draft.from}
+                    onChange={(val) => update({ from: val, quickRange: null })}
+                    placeholder="From date"
+                    className="w-full h-10 px-3 bg-white"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5 min-w-0">
+                  <label htmlFor={`${uid}-to`} className="text-[12px] font-medium text-subtle">
+                    To
+                  </label>
+                  <DatePicker
+                    value={draft.to}
+                    onChange={(val) => update({ to: val, quickRange: null })}
+                    placeholder="To date"
+                    className="w-full h-10 px-3 bg-white"
+                  />
+                </div>
+              </div>
+
+              {/* Modern Animated Quick Range Pills in 1 Single Balanced Row */}
+              <div className="grid grid-cols-4 gap-1.5 pt-0.5">
+                {QUICK_RANGES.map((range) => {
+                  const active = draft.quickRange === range.value;
+                  return (
+                    <button
+                      key={range.value}
+                      type="button"
+                      onClick={() => update({ quickRange: range.value, ...rangeFor(range.value) })}
+                      title={range.label}
+                      className={cn(
+                        "relative flex w-full items-center justify-center gap-1 rounded-lg border px-1.5 py-2 text-[11px] sm:text-[12px] font-medium transition-all duration-200 active:scale-95 cursor-pointer whitespace-nowrap text-center",
+                        active
+                          ? "border-brand-green bg-emerald-50 text-brand-green font-semibold shadow-xs ring-1 ring-brand-green/30 scale-[1.02]"
+                          : "border-zinc-200 bg-white text-slate-600 hover:border-emerald-300 hover:bg-emerald-50/40 hover:text-brand-green shadow-2xs",
+                      )}
+                    >
+                      {active && (
+                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-green animate-pulse" />
+                      )}
+                      <span className="truncate">{range.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <div className="flex items-center gap-3 border-t border-line bg-surface px-6 py-5">

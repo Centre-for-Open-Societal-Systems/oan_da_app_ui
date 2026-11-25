@@ -4,7 +4,8 @@ import type { ReactNode } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Pill } from "@/components/ui/Pill";
-import type { SuperAdminUser } from "@/features/superadmin";
+import { cn } from "@/lib/utils";
+import { REGISTRY_ENTITIES, type SuperAdminUser } from "@/features/superadmin";
 
 interface SuperAdminUserViewModalProps {
   user: SuperAdminUser;
@@ -16,9 +17,9 @@ interface SuperAdminUserViewModalProps {
 // 24/06/1999, as the form's Date of Birth is stored ISO.
 const formatDate = (iso: string) => iso.split("-").reverse().join("/");
 
-function Detail({ label, children }: { label: string; children: ReactNode }) {
+function Detail({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1">
+    <div className={cn("flex min-w-0 flex-col gap-1", className)}>
       <dt className="text-[13px] text-ink-soft">{label}</dt>
       <dd className="break-words text-[15px] font-medium text-ink">{children}</dd>
     </div>
@@ -87,8 +88,18 @@ export function SuperAdminUserViewModal({ user, onClose, onEdit }: SuperAdminUse
       </Section>
 
       <Section title="Services and registries">
-        <Detail label="Service">{user.service}</Detail>
-        <Detail label="Registry and Catalogue">{user.registry}</Detail>
+        <Detail label="Service" className="lg:col-span-2">{user.service.join(", ")}</Detail>
+        <Detail label="Registry and Catalogue" className="lg:col-span-2">{user.registry.join(", ")}</Detail>
+        <Detail label="Entities" className="sm:col-span-2 lg:col-span-4">
+          <ul className="flex flex-col gap-1">
+            {user.registry.map((r) => (
+              <li key={r}>
+                <span className="text-ink-soft">{r}: </span>
+                {(REGISTRY_ENTITIES[r] ?? []).filter((e) => user.entities.includes(e)).join(", ") || "-"}
+              </li>
+            ))}
+          </ul>
+        </Detail>
       </Section>
     </Modal>
   );

@@ -1,30 +1,56 @@
+import { useState } from "react";
 import { Banner } from "@/components/ui/Banner";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { DatePicker } from "@/components/ui/DatePicker";
+import { TimePicker } from "@/components/ui/TimePicker";
+import { todayIso } from "@/lib/utils";
 import type { Farmer } from "../types";
-import { DURATIONS, PRIORITIES, PRIORITY_BY_LEVEL, type VisitPreset } from "./planVisit";
+import { DURATIONS, type VisitPreset } from "./planVisit";
 
 interface VisitDetailsFieldsProps {
-  selected: Farmer | undefined;
+  selected: Farmer[];
   preset: VisitPreset | undefined;
   isSchedule: boolean;
 }
 
-// Purpose, date/time, location and priority (uncontrolled inputs) plus the priority / offline notice.
+// Purpose, date/time and location (uncontrolled inputs) plus the priority / offline notice. Priority is not asked: a
+// Priority-list preset sends its own level, every other visit the backend's default (Medium).
 export function VisitDetailsFields({ selected, preset, isSchedule }: VisitDetailsFieldsProps) {
+  const today = todayIso();
+  const [date, setDate] = useState(today);
+  const [time, setTime] = useState("09:00");
+  const pastDate = date !== "" && date < today;
+
   return (
     <>
       <FormField label="Purpose / objective" htmlFor="visit-purpose" required>
-        <Input id="visit-purpose" className="h-10" defaultValue={preset ? `${preset.reason} — inspect and agree next steps` : "Planning-round crop survey — record plot boundary and crop split"} required />
+        <Input id="visit-purpose" className="h-10" placeholder="Enter the purpose of the visit" required />
       </FormField>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <FormField label="Date" htmlFor="visit-date" required>
-          <Input id="visit-date" type="date" className="h-10" defaultValue="2026-08-25" required />
+        <FormField label="Date" htmlFor="visit-date" required hint={pastDate ? "You cannot select past date for visit" : "Today or later."} hintTone={pastDate ? "error" : "muted"}>
+          <DatePicker
+            id="visit-date"
+            name="date"
+            value={date}
+            minDate={today}
+            clearable={false}
+            onChange={setDate}
+            className="w-full h-10"
+            required
+          />
         </FormField>
         <FormField label="Time" htmlFor="visit-time" required>
-          <Input id="visit-time" type="time" className="h-10" defaultValue="09:00" required />
+          <TimePicker
+            id="visit-time"
+            name="time"
+            value={time}
+            onChange={setTime}
+            className="w-full h-10"
+            required
+          />
         </FormField>
         <FormField label="Duration" htmlFor="visit-duration">
           <Select id="visit-duration" className="h-10" defaultValue="45 min">
@@ -33,12 +59,11 @@ export function VisitDetailsFields({ selected, preset, isSchedule }: VisitDetail
         </FormField>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField label="Location" htmlFor="visit-location" hint="Auto-filled from the farmer's registered parcel">
+      <FormField label="Location" htmlFor="visit-location" hint="Auto-filled from the farmer's registered parcel">
           <Input
             id="visit-location"
             className="h-10 border-transparent bg-slate-100 text-ink"
-            value={selected ? `${selected.kebele} 01 · plot 8.191°N, 37.052°E` : ""}
+            value={selected.length > 1 ? "Each farmer's registered parcel" : selected.length === 1 ? `${selected[0].kebele} 01 · plot 8.191°N, 37.052°E` : ""}
             placeholder="Select a farmer first"
             readOnly
             endAdornment={
@@ -48,12 +73,6 @@ export function VisitDetailsFields({ selected, preset, isSchedule }: VisitDetail
             }
           />
         </FormField>
-        <FormField label="Priority" htmlFor="visit-priority">
-          <Select id="visit-priority" className="h-10" defaultValue={preset ? PRIORITY_BY_LEVEL[preset.level] : PRIORITIES[0]}>
-            {PRIORITIES.map((p) => <option key={p}>{p}</option>)}
-          </Select>
-        </FormField>
-      </div>
 
       {isSchedule && (!preset || preset.level === "high") ? (
         <Banner tone="error">{preset ? `Flagged for ${preset.reason.toLowerCase()} — high priority, aim to schedule within 48 hours.` : "This farmer is flagged as high priority — aim to schedule within 48 hours."}</Banner>

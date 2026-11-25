@@ -156,6 +156,9 @@ export interface RequestFields {
   access?: string;
   /** Notice period on a separation (30 days served / Waived / Not served). */
   notice?: string;
+  /** Leave taken as a half day on the first / last day. */
+  halfStart?: boolean;
+  halfEnd?: boolean;
 }
 
 /** A submitted Assignment & role request, shown on /lifecycle/requests/<id>. */

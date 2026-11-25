@@ -38,8 +38,8 @@ export function ManualEntrySteps({ form, errors, setField }: ManualEntryStepsPro
               label={label}
               htmlFor={`kpi-${key}`}
               required={REQUIRED.includes(key)}
-              hint={errors[key] ?? hint}
-              hintTone={errors[key] ? "error" : "muted"}
+              hint={errors[key] ?? `${hint} · ${max === undefined ? "0 or more" : `0 to ${max}`}`}
+              hintTone={errors[key] || (form[key] !== "" && (Number(form[key]) < 0 || (max !== undefined && Number(form[key]) > max))) ? "error" : "muted"}
             >
               <Input
                 id={`kpi-${key}`}

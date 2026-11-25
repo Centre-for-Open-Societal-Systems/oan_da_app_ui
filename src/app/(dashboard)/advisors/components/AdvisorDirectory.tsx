@@ -4,12 +4,14 @@ import { useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Pill } from "@/components/ui/Pill";
+import { Button } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { RowAction } from "@/components/ui/RowAction";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { AdvancedFiltersButton } from "@/components/ui/AdvancedFiltersButton";
 import { FilterDropdown, type FilterOption } from "@/components/ui/FilterDropdown";
 import { AdvancedFiltersDrawer, type FilterFieldConfig, type FilterSelection } from "@/components/ui/AdvancedFiltersDrawer";
-import { ADVISOR_STATUS_TONE, advisorUpdatedDate, type Advisor } from "@/features/communication";
+import { advisorUpdatedDate, type Advisor } from "@/features/communication";
 import { Banner } from "@/components/ui/Banner";
 import { ExportButton } from "@/components/ui/ExportButton";
 import { matchesQuery, searchPlaceholder } from "@/lib/search";
@@ -27,7 +29,6 @@ const EXPORT_COLUMNS: CsvColumn<Advisor>[] = [
   { header: "Woreda", value: (a) => a.woreda },
   { header: "Phone", value: (a) => a.phone },
   { header: "Email", value: (a) => a.email },
-  { header: "Status", value: (a) => a.status },
   { header: "Availability", value: (a) => a.availability },
   { header: "Last Updated", value: (a) => a.updatedAt },
 ];
@@ -39,12 +40,21 @@ interface AdvisorFilters extends FilterSelection {
   expertise: Set<string>;
   region: Set<string>;
   woreda: Set<string>;
-  status: Set<string>;
 }
-const EMPTY: AdvisorFilters = { expertise: new Set(), region: new Set(), woreda: new Set(), status: new Set() };
+const EMPTY: AdvisorFilters = { expertise: new Set(), region: new Set(), woreda: new Set() };
 
 // MoA subject-matter experts the DA can reach out to. Read-only reference list; View opens the advisor page.
-export function AdvisorDirectory({ advisors }: { advisors: Advisor[] }) {
+export function AdvisorDirectory({
+  advisors,
+  state = "ready",
+  onRetry,
+  onAddAdvisor,
+}: {
+  advisors: Advisor[];
+  state?: "loading" | "ready" | "error";
+  onRetry?: () => void;
+  onAddAdvisor?: () => void;
+}) {
   const [filters, setFilters] = useState<AdvisorFilters>(EMPTY);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -53,12 +63,10 @@ export function AdvisorDirectory({ advisors }: { advisors: Advisor[] }) {
   const expertiseOptions = optionsOf(advisors.map((a) => a.expertise));
   const regionOptions = optionsOf(advisors.map((a) => a.region));
   const woredaOptions = optionsOf(advisors.map((a) => a.woreda));
-  const statusOptions = optionsOf(advisors.map((a) => a.status));
   const filterFields: FilterFieldConfig[] = [
     { key: "expertise", label: "Expertise Area", allLabel: "All expertise areas", placeholder: "All Expertise Areas", options: expertiseOptions },
     { key: "region", label: "Region", allLabel: "All regions", placeholder: "All Regions", options: regionOptions },
     { key: "woreda", label: "Woreda", allLabel: "All woredas", placeholder: "All Woredas", options: woredaOptions },
-    { key: "status", label: "Status", allLabel: "All Status", placeholder: "All Status", options: statusOptions },
   ];
 
   const activeFilterCount = Object.values(filters).filter((set) => set.size > 0).length;
@@ -70,11 +78,21 @@ export function AdvisorDirectory({ advisors }: { advisors: Advisor[] }) {
       has(filters.expertise, a.expertise) &&
       has(filters.region, a.region) &&
       has(filters.woreda, a.woreda) &&
-      has(filters.status, a.status) &&
-      matchesQuery(query, a.name, a.id, a.expertise, a.unit, a.region, a.woreda, a.phone, a.email, a.status),
+      matchesQuery(query, a.name, a.id, a.expertise, a.unit, a.region, a.woreda, a.phone, a.email),
   );
 
   const columns: Column<Advisor>[] = [
+    {
+      key: "sno",
+      header: "S.No.",
+      align: "center",
+      className: "w-16 min-w-[64px] whitespace-nowrap",
+      cell: (a) => (
+        <span className="text-[13px] font-medium text-muted">
+          {rows.indexOf(a) + 1}
+        </span>
+      ),
+    },
     {
       key: "advisor",
       header: "Advisor",
@@ -92,20 +110,16 @@ export function AdvisorDirectory({ advisors }: { advisors: Advisor[] }) {
     },
     { key: "unit", header: "MoA Unit / Directorate", cell: (a) => <span className="block min-w-[200px]">{a.unit}</span> },
     {
-      key: "location",
-      header: (
-        <span className="flex items-center gap-1">
-          <FilterDropdown label="Region" allLabel="All regions" options={regionOptions} selected={filters.region} onApply={setFilter("region")} />
-          <span className="text-muted">/</span>
-          <FilterDropdown label="Woreda" allLabel="All woredas" options={woredaOptions} selected={filters.woreda} onApply={setFilter("woreda")} />
-        </span>
-      ),
-      cell: (a) => (
-        <span className="flex flex-col">
-          <span className="text-ink">{a.region}</span>
-          <span className="text-[12.5px] text-muted">{a.woreda}</span>
-        </span>
-      ),
+      key: "region",
+      header: <FilterDropdown label="Region" allLabel="All regions" options={regionOptions} selected={filters.region} onApply={setFilter("region")} />,
+      className: "whitespace-nowrap",
+      cell: (a) => <span className="font-medium text-ink">{a.region}</span>,
+    },
+    {
+      key: "woreda",
+      header: <FilterDropdown label="Woreda" allLabel="All woredas" options={woredaOptions} selected={filters.woreda} onApply={setFilter("woreda")} />,
+      className: "whitespace-nowrap",
+      cell: (a) => <span className="text-ink-soft">{a.woreda}</span>,
     },
     {
       key: "contact",
@@ -117,63 +131,98 @@ export function AdvisorDirectory({ advisors }: { advisors: Advisor[] }) {
         </span>
       ),
     },
-    {
-      key: "status",
-      header: <FilterDropdown label="Status" allLabel="All Status" options={statusOptions} selected={filters.status} onApply={setFilter("status")} />,
-      cell: (a) => <Pill tone={ADVISOR_STATUS_TONE[a.status]} className="px-2.5 py-0.5 text-[12.5px]">{a.status}</Pill>,
-    },
     { key: "updated", header: "Last Updated", cell: (a) => <span className="whitespace-nowrap">{advisorUpdatedDate(a)}</span> },
     { key: "action", header: "Action", align: "center", cell: (a) => <RowAction icon="view" href={`/advisors/${a.id}`}>View</RowAction> },
   ];
 
   return (
-    <Card className="overflow-hidden p-0 shadow-card">
-      {/* Toolbar */}
-      <div className="flex flex-col gap-3 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-center gap-2.5">
-          <h2 className="text-[16px] font-semibold text-ink">Advisor directory</h2>
-          {rows.length !== advisors.length && <span className="text-[13px] text-muted">{rows.length} of {advisors.length} advisors</span>}
-        </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end">
-          <SearchInput value={query} onChange={setQuery} placeholder={SEARCH_PLACEHOLDER} />
-          <AdvancedFiltersButton activeCount={activeFilterCount} onClick={() => setIsFiltersOpen(true)} />
-          <ExportButton
-            disabled={rows.length === 0}
-            onExport={(format) => {
-              downloadTable(format, `advisors-report-${fileDate()}`, rows, EXPORT_COLUMNS, "Advisors report");
-              setNotice(`Exported ${rows.length} advisor${rows.length === 1 ? "" : "s"} matching the current search and filters (${formatLabel(format)}).`);
-            }}
-          />
-        </div>
-      </div>
-
-      {notice && <Banner tone="success" className="mx-4 mb-3" onDismiss={() => setNotice(null)}>{notice}</Banner>}
-
-      <DataTable
-        itemLabel="advisors"
-        columns={columns}
-        rows={rows}
-        rowKey={(a) => a.id}
-        minWidth="1100px"
-        emptyTitle={advisors.length === 0 ? "No advisors listed yet" : "No advisors match the selected filters"}
-        emptyHint={advisors.length === 0 ? "MoA subject-matter experts will appear here once the directory is published." : "Clear a filter or try a different search."}
-      />
-
-      <AdvancedFiltersDrawer
-        isOpen={isFiltersOpen}
-        onClose={() => setIsFiltersOpen(false)}
-        fields={filterFields}
-        filters={filters}
-        onApply={(next) =>
-          setFilters({
-            expertise: next.expertise ?? new Set(),
-            region: next.region ?? new Set(),
-            woreda: next.woreda ?? new Set(),
-            status: next.status ?? new Set(),
-          })
+    <div className="flex w-full flex-col gap-4">
+      {/* Top Header Card with Export Report (Dropdown) on the Right */}
+      <PageHeader
+        title="Advisors"
+        description="Directory of Ministry of Agriculture subject-matter experts DAs can reference for specialist advisory support. A reference list — not an HR record of MoA staff."
+        actions={
+          <div className="flex w-full sm:w-auto items-center justify-end gap-2.5">
+            {onAddAdvisor && (
+              <Button
+                type="button"
+                variant="brand"
+                size="md"
+                onClick={onAddAdvisor}
+                className="h-10 gap-1.5 px-3.5 sm:px-4 text-[13.5px] font-semibold shadow-xs"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                <span>Add advisor</span>
+              </Button>
+            )}
+            <ExportButton
+              disabled={rows.length === 0}
+              className="h-10"
+              onExport={(format) => {
+                downloadTable(format, `advisors-report-${fileDate()}`, rows, EXPORT_COLUMNS, "Advisors report");
+                setNotice(`Exported ${rows.length} advisor${rows.length === 1 ? "" : "s"} matching the current search and filters (${formatLabel(format)}).`);
+              }}
+            />
+          </div>
         }
       />
 
-    </Card>
+      {notice && <Banner tone="success" onDismiss={() => setNotice(null)}>{notice}</Banner>}
+
+      <Card className="overflow-hidden p-0 shadow-card">
+        {/* Responsive Toolbar */}
+        <div className="flex flex-col gap-3.5 px-4 py-3.5 sm:px-5 sm:py-4 md:flex-row md:items-center md:justify-between border-b border-line">
+          <div className="flex items-center gap-2.5">
+            <h2 className="text-[15px] sm:text-[16px] font-semibold text-ink">Advisor directory</h2>
+            {state !== "loading" && (
+              <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600 border border-slate-200/60">
+                {rows.length === advisors.length ? `${advisors.length} advisors` : `${rows.length} of ${advisors.length} advisors`}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 sm:gap-3 w-full md:w-auto">
+            <SearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder={SEARCH_PLACEHOLDER}
+              className="flex-1 min-w-0 md:w-[260px] lg:w-[280px]"
+            />
+            <AdvancedFiltersButton
+              activeCount={activeFilterCount}
+              onClick={() => setIsFiltersOpen(true)}
+              className="shrink-0 h-10 px-3 sm:px-4"
+            />
+          </div>
+        </div>
+
+        <DataTable
+          itemLabel="advisors"
+          columns={columns}
+          rows={rows}
+          rowKey={(a) => a.id}
+          minWidth="1240px"
+          state={state}
+          onRetry={onRetry}
+          emptyTitle={advisors.length === 0 ? "No advisors listed yet" : "No advisors match the selected filters"}
+          emptyHint={advisors.length === 0 ? "MoA subject-matter experts appear here once an Administrator adds them." : "Clear a filter or try a different search."}
+        />
+
+        <AdvancedFiltersDrawer
+          isOpen={isFiltersOpen}
+          onClose={() => setIsFiltersOpen(false)}
+          fields={filterFields}
+          filters={filters}
+          onApply={(next) =>
+            setFilters({
+              expertise: next.expertise ?? new Set(),
+              region: next.region ?? new Set(),
+              woreda: next.woreda ?? new Set(),
+            })
+          }
+        />
+      </Card>
+    </div>
   );
 }

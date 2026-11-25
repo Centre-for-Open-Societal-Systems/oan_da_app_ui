@@ -29,3 +29,88 @@ export async function markNotificationRead(id: string): Promise<void> {
 export async function markAllNotificationsRead(): Promise<void> {
   await authRequest("/da-services/notifications/read-all", { method: "POST" });
 }
+
+/** The notification kind the broadcast engine writes when a message reaches this user. */
+export const BROADCAST_KIND = "Broadcast";
+
+export interface BroadcastList {
+  /** The user's received broadcasts, newest first. */
+  items: AppNotification[];
+  /** Unread broadcasts in this list (for a "new broadcasts" badge). */
+  unreadCount: number;
+}
+
+/**
+ * The signed-in user's received broadcasts (notifications of kind "Broadcast"), newest first.
+ *
+ * Read-only: there is no API to create a broadcast — the backend writes these rows on its own
+ * events. The notifications endpoint has no server-side kind filter, so one page (default the
+ * API max, 100) is fetched and filtered here. Follow-up: add a `kind=Broadcast` query param
+ * to GET /notifications so older broadcasts past the first page are reachable.
+ */
+export async function listBroadcasts({ limit = 100 } = {}): Promise<BroadcastList> {
+  const { items } = await listNotifications({ limit });
+  const broadcasts = items.filter((n) => n.kind === BROADCAST_KIND);
+  return { items: broadcasts, unreadCount: broadcasts.filter((n) => !n.read).length };
+}
+
+export interface BroadcastResult {
+  /** Echoes the client_op_id the send used. */
+  broadcastId: string;
+  /** true when this client_op_id was already sent — nothing new was created. */
+  duplicate: boolean;
+  /** How many DAs received it. */
+  recipients: number;
+  /** The code of the Woreda or Kebele it went to; show the name on screen. */
+  scopeValue: string;
+}
+
+interface BroadcastInput {
+  title: string;
+  body?: string;
+  href?: string;
+  /** The signal source chosen on the form; recipients see it as the notification's tag. */
+  source?: string;
+  clientOpId?: string;
+}
+
+async function sendBroadcast(input: BroadcastInput, scope: "woreda" | "kebele", scopeValue: string): Promise<BroadcastResult> {
+  interface Resp {
+    data: { broadcast_id: string; duplicate: boolean; recipients: number; scope: string; scope_value: string };
+  }
+  const res = await authRequest<Resp>("/da-services/notifications/broadcast", {
+    method: "POST",
+    body: {
+      title: input.title,
+      body: input.body ?? "",
+      href: input.href ?? "/notifications",
+      source: input.source,
+      scope,
+      scope_value: scopeValue,
+      client_op_id: input.clientOpId ?? crypto.randomUUID(),
+    },
+  });
+  return { broadcastId: res.data.broadcast_id, duplicate: res.data.duplicate, recipients: res.data.recipients, scopeValue: res.data.scope_value };
+}
+
+/**
+ * POST /da-services/notifications/broadcast — send an in-app broadcast to every DA in a Woreda.
+ *
+ * Roles: Communications Officer / Admin, and the Woreda must be inside the caller's scope. A DA broadcasts to a Kebele instead
+ * (broadcastToKebele).
+ *
+ * scope_value is the Woreda CODE from Master Data (e.g. "ET120205"), never its name: RBAC woreda_scope holds area
+ * codes, and recipients are matched on them exactly. A Woreda with no active DA is a 400. client_op_id makes the
+ * call idempotent — the same id returns the first result with duplicate=true instead of sending again.
+ */
+export function broadcastToWoreda(input: BroadcastInput & { woredaCode: string }): Promise<BroadcastResult> {
+  return sendBroadcast(input, "woreda", input.woredaCode);
+}
+
+/**
+ * POST /da-services/notifications/broadcast with scope "kebele": a DA's broadcast to the DAs posted to one of their own
+ * Kebeles (an Effective Kebele assignment, listed on /me as `kebeles`). Any other Kebele, or a wider scope, is a 403.
+ */
+export function broadcastToKebele(input: BroadcastInput & { kebeleCode: string }): Promise<BroadcastResult> {
+  return sendBroadcast(input, "kebele", input.kebeleCode);
+}

@@ -1,5 +1,6 @@
 "use client";
 
+import { todayIso } from "@/lib/utils";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -10,7 +11,7 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
-import { DocumentPicker, FormSection, LockedField, PreviewCard, useSessionDraft } from "./InitiateTransition";
+import { DocumentPicker, FormSection, LockedField, PreviewCard, fromTodayNote, useSessionDraft } from "./InitiateTransition";
 import { coverLabel } from "./leave";
 import { LIFECYCLE_DA, SUCCESSOR_OPTIONS, transitionFor } from "./lifecycle";
 import { NOTICE_OPTIONS, OPEN_SEPARATION_ITEMS, SECOND_APPROVER, SEPARATION_CLEARANCE, SEPARATION_FORM, SEPARATION_TYPES } from "./separation";
@@ -86,8 +87,8 @@ export function SeparationForm() {
                   {SEPARATION_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                 </Select>
               </FormField>
-              <FormField label="Last working day" htmlFor="lc-effective" required hint={error("effective")} hintTone="error">
-                <Input id="lc-effective" type="date" value={draft.effective} onChange={(e) => set("effective", e.target.value)} />
+              <FormField label="Last working day" htmlFor="lc-effective" required {...fromTodayNote(draft.effective, error("effective"))}>
+                <Input id="lc-effective" type="date" min={todayIso()} value={draft.effective} onChange={(e) => set("effective", e.target.value)} />
               </FormField>
               <SegmentedField id="lc-notice" label="Notice period" options={NOTICE_OPTIONS} value={draft.notice ?? ""} onChange={(v) => set("notice", v)} tone={transition.tone} />
             </FormSection>

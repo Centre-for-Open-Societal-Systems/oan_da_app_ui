@@ -10,8 +10,8 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
-import { cn } from "@/lib/utils";
-import { DocumentPicker, FormSection, LockedField, PreviewCard, useSessionDraft } from "./InitiateTransition";
+import { cn, todayIso } from "@/lib/utils";
+import { DocumentPicker, FormSection, LockedField, PreviewCard, fromTodayNote, useSessionDraft } from "./InitiateTransition";
 import {
   ACCESS_OPTIONS,
   COVER_KEBELE,
@@ -168,10 +168,10 @@ export function LeaveForm() {
                 </Select>
               </FormField>
               <LockedField id="lc-duration" label="Duration" value={datesSet ? durationLine(draft.effective, draft.target) : "Set the start and end dates"} />
-              <FormField label="Start date" htmlFor="lc-effective" required hint={error("effective")} hintTone="error">
-                <Input id="lc-effective" type="date" value={draft.effective} onChange={(e) => set("effective", e.target.value)} />
+              <FormField label="Start date" htmlFor="lc-effective" required {...fromTodayNote(draft.effective, error("effective"))}>
+                <Input id="lc-effective" type="date" min={todayIso()} value={draft.effective} onChange={(e) => set("effective", e.target.value)} />
               </FormField>
-              <FormField label="End date" htmlFor="lc-target" required hint={error("target")} hintTone="error">
+              <FormField label="End date" htmlFor="lc-target" required hint={error("target") ?? "On or after the start date, within the leave balance."} hintTone={error("target") || (draft.target && missing.target) ? "error" : "muted"}>
                 <Input id="lc-target" type="date" min={draft.effective || undefined} value={draft.target} onChange={(e) => set("target", e.target.value)} />
               </FormField>
               <LockedField id="lc-return" label="Return to work" value={datesSet ? formatDate(returnDate(draft.target)) : "—"} />

@@ -5,8 +5,10 @@ import { Modal } from "@/components/ui/Modal";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
-import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { DatePicker } from "@/components/ui/DatePicker";
+import { TimePicker } from "@/components/ui/TimePicker";
+import { todayIso } from "@/lib/utils";
 import { getFarmer } from "@/features/farmers";
 import { rescheduleVisit, type ApiVisit } from "../api";
 import { RESCHEDULE_REASONS } from "../data";
@@ -32,6 +34,8 @@ function RescheduleForm({ visit, onClose, onRescheduled }: RescheduleVisitModalP
   const farmer = getFarmer(visit.farmerId);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [date, setDate] = useState(todayIso());
+  const [time, setTime] = useState(visit.time || "09:00");
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -79,15 +83,31 @@ function RescheduleForm({ visit, onClose, onRescheduled }: RescheduleVisitModalP
         <VisitFarmerCard visit={visit} phone={farmer?.phone} />
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <FormField label="New date" htmlFor="reschedule-date">
-            <Input id="reschedule-date" name="date" type="date" className="h-10 text-muted" required />
+          <FormField label="New date" htmlFor="reschedule-date" required>
+            <DatePicker
+              id="reschedule-date"
+              name="date"
+              minDate={todayIso()}
+              value={date}
+              clearable={false}
+              onChange={setDate}
+              className="w-full h-10"
+              required
+            />
           </FormField>
-          <FormField label="New time" htmlFor="reschedule-time">
-            <Input id="reschedule-time" name="time" type="time" className="h-10 text-muted" required />
+          <FormField label="New time" htmlFor="reschedule-time" required>
+            <TimePicker
+              id="reschedule-time"
+              name="time"
+              value={time}
+              onChange={setTime}
+              className="w-full h-10"
+              required
+            />
           </FormField>
         </div>
 
-        <FormField label="Reason for rescheduling" htmlFor="reschedule-reason">
+        <FormField label="Reason for rescheduling" htmlFor="reschedule-reason" required>
           <Select id="reschedule-reason" name="reason" className="h-10" defaultValue="" required>
             <option value="" disabled>Select a reason</option>
             {RESCHEDULE_REASONS.map((reason) => (

@@ -1,43 +1,70 @@
 "use client";
 
+import { cn } from "@/lib/utils";
 import type { Farmer } from "../types";
 import { FarmerAvatar } from "./FarmerAvatar";
-import { registryCode } from "./planVisit";
+import { MAX_BATCH_FARMERS, registryCode } from "./planVisit";
+import { SelectedFarmerCard } from "./SelectedFarmerCard";
+import type { VisitItemDetails } from "./VisitItemFields";
 
 interface FarmerPickerProps {
-  selected: Farmer | undefined;
-  onSelect: (farmer: Farmer | undefined) => void;
+  /** The picked farmers, at most MAX_BATCH_FARMERS: one visit is planned for each. */
+  selected: Farmer[];
+  /** Adds a farmer from the results, or removes them when already picked. */
+  onToggle: (farmer: Farmer) => void;
+  onRemove: (farmer: Farmer) => void;
+  /** True once MAX_BATCH_FARMERS farmers are picked: the results can no longer add one. */
+  isFull: boolean;
   matches: Farmer[];
+  /** Shown when there are no farmers at all, e.g. "No farmer assigned" or the loading text. */
+  emptyText: string;
   query: string;
   /** True once a search ran for the current (non-empty) term — shows the match count. */
   showCount: boolean;
   onClearSearch: () => void;
+  /** Batch: each farmer's own visit details (by farmer id), set with "Edit details" on their card. */
+  overrides?: Record<string, VisitItemDetails>;
+  onDetailsChange?: (farmer: Farmer, details: VisitItemDetails | null) => void;
+  readCommon?: () => VisitItemDetails;
 }
 
-// The picked farmer, or the search results / no-match message.
-export function FarmerPicker({ selected, onSelect, matches, query, showCount, onClearSearch }: FarmerPickerProps) {
+// The picked farmers, then the farmer list (narrowed by the search) with a checkbox per row: tick up to
+// MAX_BATCH_FARMERS of them for a batch visit.
+export function FarmerPicker({ selected, onToggle, onRemove, isFull, matches, emptyText, query, showCount, onClearSearch, overrides, onDetailsChange, readCommon }: FarmerPickerProps) {
+  const isPicked = (f: Farmer) => selected.some((s) => s.id === f.id);
+
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-[14px] font-medium text-ink">
-        Farmer <span className="text-danger">*</span>
-      </p>
-      {selected ? (
-        <div className="flex items-center gap-3 rounded-lg border border-brand-border bg-brand-mint px-3.5 py-3">
-          <FarmerAvatar name={selected.name} avatar={selected.avatar} className="h-9 w-9 text-[13px] bg-white" />
-          <div className="min-w-0 flex-1">
-            <p className="text-[14.5px] font-semibold text-ink">{selected.name}</p>
-            <p className="mt-0.5 truncate text-[13px] text-slate-600">
-              {registryCode(selected)} · {selected.kebele} · {selected.crop} {selected.landHa} ha · {selected.livestock} {selected.livestockHeads} heads · last visit 34 days ago
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => onSelect(undefined)}
-            className="h-8 rounded-md border border-brand-green bg-white px-3 text-[13px] font-semibold text-brand-green transition-colors hover:bg-brand-wash"
-          >
-            Change
-          </button>
-        </div>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-[14px] font-medium text-ink">
+          Farmers <span className="text-danger">*</span>
+        </p>
+        <p className={isFull ? "text-[12.5px] font-medium text-orange-600" : "text-[12.5px] text-muted"} aria-live="polite">
+          {selected.length} of {MAX_BATCH_FARMERS} selected · You can select up to {MAX_BATCH_FARMERS} farmers
+        </p>
+      </div>
+
+      {selected.length > 0 && (
+        <ul className="flex flex-col gap-2">
+          {selected.map((f) =>
+            // Own details only make sense in a batch; a single farmer simply uses the form below.
+            selected.length > 1 && onDetailsChange ? (
+              <SelectedFarmerCard key={f.id} farmer={f} onRemove={onRemove} details={overrides?.[f.id]} onDetailsChange={onDetailsChange} readCommon={readCommon} />
+            ) : (
+              <SelectedFarmerCard key={f.id} farmer={f} onRemove={onRemove} />
+            ),
+          )}
+        </ul>
+      )}
+
+      {matches.length > 0 && (
+        <p className={isFull ? "text-[12.5px] font-medium text-orange-600" : "text-[12.5px] text-muted"}>
+          {isFull ? `${MAX_BATCH_FARMERS} farmers selected. Untick one to choose another.` : "Tick the farmers to visit. Select more than one to plan a batch visit."}
+        </p>
+      )}
+
+      {matches.length === 0 && !query.trim() ? (
+        <p className="rounded-lg border border-dashed border-slate-300 bg-surface px-4 py-5 text-center text-[14px] font-semibold text-ink">{emptyText}</p>
       ) : matches.length === 0 ? (
         <div className="flex flex-col items-center gap-1 rounded-lg border border-dashed border-slate-300 bg-surface px-4 py-5 text-center">
           <p className="text-[14px] font-semibold text-ink">No farmers match &ldquo;{query.trim()}&rdquo;</p>
@@ -47,29 +74,53 @@ export function FarmerPicker({ selected, onSelect, matches, query, showCount, on
           </button>
         </div>
       ) : (
-        <ul className="overflow-hidden rounded-lg border border-line">
+        <ul className="max-h-[260px] overflow-y-auto rounded-lg border border-line">
           {showCount && (
             <li className="border-b border-line-soft bg-surface px-3.5 py-2 text-[12.5px] text-muted" aria-live="polite">
               {matches.length} farmer{matches.length === 1 ? "" : "s"} match &ldquo;{query.trim()}&rdquo;
             </li>
           )}
-          {matches.map((f) => (
-            <li key={f.id} className="border-b border-line-soft last:border-0">
-              <button
-                type="button"
-                onClick={() => onSelect(f)}
-                className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-surface"
-              >
-                <FarmerAvatar name={f.name} avatar={f.avatar} />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[14px] font-medium text-ink">{f.name}</span>
-                  <span className="block truncate text-[12.5px] text-muted">
-                    {registryCode(f)} · {f.kebele} · {f.crop} {f.landHa} ha · {f.livestock} {f.livestockHeads} heads
+          {matches.map((f) => {
+            const picked = isPicked(f);
+            const blocked = !picked && isFull;
+            return (
+              <li key={f.id} className="border-b border-line-soft last:border-0">
+                <button
+                  type="button"
+                  onClick={() => onToggle(f)}
+                  disabled={blocked}
+                  aria-pressed={picked}
+                  title={blocked ? `You can select up to ${MAX_BATCH_FARMERS} farmers` : undefined}
+                  className={cn(
+                    "flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent",
+                    picked ? "bg-brand-mint hover:bg-brand-mint" : "hover:bg-surface",
+                  )}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded border transition-colors",
+                      picked ? "border-brand-green bg-brand-green text-white" : "border-slate-300 bg-white",
+                    )}
+                  >
+                    {picked && (
+                      <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
                   </span>
-                </span>
-              </button>
-            </li>
-          ))}
+                  <FarmerAvatar name={f.name} avatar={f.avatar} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[14px] font-medium text-ink">{f.name}</span>
+                    <span className="block truncate text-[12.5px] text-muted">
+                      {registryCode(f)} · {f.kebele} · {f.crop} {f.landHa} ha · {f.livestock} {f.livestockHeads} heads
+                    </span>
+                  </span>
+                  {picked && <span className="shrink-0 text-[12.5px] font-semibold text-brand-green">Selected ✓</span>}
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

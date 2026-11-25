@@ -2,20 +2,27 @@
 
 import { useState, type ReactNode } from "react";
 import { Card } from "@/components/ui/Card";
-import { cn } from "@/lib/utils";
+import { tabClass } from "@/components/ui/PageTabs";
 
 // Advisory shows the Q&A captured on Advisory visits; AdvisoryNotesSection (Part 2 notes) stays unused for now.
 const TABS = ["Overview", "Holdings", "Crop Sown Details", "Livestock Details", "Livestock history", "Visit history", "Documents", "Advisory"] as const;
 export type ProfileTab = (typeof TABS)[number];
 
-// Only the tab switch runs on the client; each panel is rendered by the page and passed in.
-export function ProfileTabs({ panels }: { panels: Record<ProfileTab, ReactNode> }) {
-  const [active, setActive] = useState<ProfileTab>("Overview");
+// Hidden for now: the Overview and Livestock history tabs (their panels are still passed in). Remove one from this list to bring it back.
+const HIDDEN_TABS: ProfileTab[] = ["Overview", "Livestock history"];
+const VISIBLE_TABS = TABS.filter((tab) => !HIDDEN_TABS.includes(tab));
+/** The tab the profile opens on. */
+export const DEFAULT_PROFILE_TAB: ProfileTab = VISIBLE_TABS[0];
+
+// Only the tab switch runs on the client; each panel is rendered by the page and passed in. `onSelect` tells the page
+// which tab was opened, so it can load that tab's data only then.
+export function ProfileTabs({ panels, onSelect }: { panels: Record<ProfileTab, ReactNode>; onSelect?: (tab: ProfileTab) => void }) {
+  const [active, setActive] = useState<ProfileTab>(DEFAULT_PROFILE_TAB);
 
   return (
     <Card className="overflow-hidden border border-line p-0 shadow-card">
-      <div className="flex w-full items-center overflow-x-auto border-b border-line bg-white no-scrollbar" role="tablist">
-        {TABS.map((tab) => {
+      <div className="flex w-full items-center overflow-x-auto border-b border-line bg-white no-scrollbar scroll-smooth" role="tablist">
+        {VISIBLE_TABS.map((tab) => {
           const isActive = active === tab;
           return (
             <button
@@ -23,13 +30,11 @@ export function ProfileTabs({ panels }: { panels: Record<ProfileTab, ReactNode> 
               type="button"
               role="tab"
               aria-selected={isActive}
-              onClick={() => setActive(tab)}
-              className={cn(
-                "shrink-0 whitespace-nowrap border-r border-line px-5 py-3.5 text-[14px] transition-colors first:rounded-tl-xl",
-                isActive
-                  ? "-mb-px border-b-[3px] border-b-brand-green bg-brand-wash font-semibold text-brand-green"
-                  : "font-medium text-ink-soft hover:bg-surface hover:text-ink",
-              )}
+              onClick={() => {
+                setActive(tab);
+                onSelect?.(tab);
+              }}
+              className={tabClass(isActive)}
             >
               {tab}
             </button>
@@ -37,7 +42,7 @@ export function ProfileTabs({ panels }: { panels: Record<ProfileTab, ReactNode> 
         })}
       </div>
 
-      <div key={active} className="animate-fade-in p-4">
+      <div key={active} className="animate-fade-in p-3.5 sm:p-4 md:p-5">
         {active === "Overview" ? panels.Overview : <div className="min-h-[560px]">{panels[active]}</div>}
       </div>
     </Card>

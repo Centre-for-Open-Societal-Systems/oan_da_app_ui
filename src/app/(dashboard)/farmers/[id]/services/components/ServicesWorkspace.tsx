@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import type { Farmer } from "@/features/farmers";
-import { cn } from "@/lib/utils";
+import { cn, todayIso } from "@/lib/utils";
 
 type Tab = "credit" | "marketplace";
 
@@ -42,7 +42,7 @@ export function ServicesWorkspace({ farmer }: { farmer: Farmer }) {
   const [newCredit, setNewCredit] = useState(false);
   const [notice, setNotice] = useState<{ tone: "success" | "warning"; text: string } | null>(null);
   const [credit, setCredit] = useState({ product: "Seasonal input loan", amount: "", tenure: "12", purpose: "", docs: 0 });
-  const [payment, setPayment] = useState({ service: SERVICE_CATALOGUE[0], provider: "", date: "2026-09-17", category: "Mechanisation", payee: "", amount: "", method: "Mobile money", notes: "" });
+  const [payment, setPayment] = useState({ service: SERVICE_CATALOGUE[0], provider: "", date: todayIso(), category: "Mechanisation", payee: "", amount: "", method: "Mobile money", notes: "" });
 
   const submitCredit = () => {
     const offline = typeof navigator !== "undefined" && !navigator.onLine;
@@ -53,26 +53,32 @@ export function ServicesWorkspace({ farmer }: { farmer: Farmer }) {
   return (
     <>
       <PageHeader
-        tabBar={<SegmentTabs<Tab> tabs={[{ key: "credit", label: "Credit" }, { key: "marketplace", label: "Marketplace" }]} active={tab} onChange={setTab} />}
-        title={`Services — ${farmer.name}`}
+        title={`Services - ${farmer.name}`}
         description="Credit and Marketplace are unrelated transactions with different counterparties and lifecycles, so they are kept on separate tabs."
+        showDescription
       />
       {notice && <Banner tone={notice.tone} onDismiss={() => setNotice(null)}>{notice.text}</Banner>}
       <Card className="overflow-hidden p-0 shadow-card">
+        <div className="border-b border-line">
+          <SegmentTabs<Tab> className="rounded-none border-0 shadow-none" tabs={[{ key: "credit", label: "Credit" }, { key: "marketplace", label: "Marketplace" }]} active={tab} onChange={setTab} />
+        </div>
 
         {tab === "credit" && (
           <div className="flex flex-col gap-5 p-5">
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div>
-                <h2 className="flex items-center gap-2 text-[15px] font-semibold text-ink">Active application <Pill tone="amber" dot>{STAGES[APPLICATION.currentStage]}</Pill></h2>
-                <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1.5 text-[13.5px] sm:grid-cols-5">
-                  {[["Reference", APPLICATION.ref], ["Lender", APPLICATION.lender], ["Amount", APPLICATION.amount], ["Tenure", APPLICATION.tenure], ["Product", APPLICATION.product]].map(([k, v]) => (
-                    <div key={k}><dt className="text-[11.5px] font-semibold uppercase tracking-wider text-muted">{k}</dt><dd className="text-ink">{v}</dd></div>
-                  ))}
-                </dl>
-              </div>
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <h2 className="flex flex-wrap items-center gap-3 text-[16px] font-bold text-ink">Active application <Pill tone="amber" dot>{STAGES[APPLICATION.currentStage]}</Pill></h2>
               <Button type="button" variant="brand" size="md" onClick={() => setNewCredit(true)} className="shrink-0">New credit application</Button>
             </div>
+
+            {/* Same columns as the stage cards below, so the details line up with them. */}
+            <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              {[["Reference", APPLICATION.ref], ["Lender", APPLICATION.lender], ["Amount", APPLICATION.amount], ["Tenure", APPLICATION.tenure], ["Product", APPLICATION.product]].map(([k, v]) => (
+                <div key={k}>
+                  <dt className="text-[11.5px] font-medium uppercase tracking-wide text-muted">{k}</dt>
+                  <dd className="mt-1 text-[14px] font-semibold text-ink">{v}</dd>
+                </div>
+              ))}
+            </dl>
 
             {/* 5-stage workflow with per-stage timestamp/actor and a current-stage marker */}
             <ol className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -80,14 +86,21 @@ export function ServicesWorkspace({ farmer }: { farmer: Farmer }) {
                 const done = i < APPLICATION.currentStage;
                 const current = i === APPLICATION.currentStage;
                 return (
-                  <li key={s} className={cn("rounded-lg border p-3", current ? "border-brand-green bg-brand-wash" : done ? "border-brand-border bg-white" : "border-line bg-surface")}>
+                  <li key={s} className={cn("min-h-[114px] rounded-lg border p-4", current ? "border-brand-green bg-brand-mint" : done ? "border-line bg-white" : "border-line bg-surface")}>
                     <div className="flex items-center gap-2">
-                      <span className={cn("flex h-6 w-6 items-center justify-center rounded-full text-[12px] font-bold", done ? "bg-brand-green text-white" : current ? "border-2 border-brand-green text-brand-green" : "border border-slate-300 text-subtle")}>{done ? "✓" : i + 1}</span>
-                      <span className={cn("text-[13px] font-semibold", current || done ? "text-ink" : "text-subtle")}>{s}</span>
+                      {done ? (
+                        <svg className="h-5 w-5 shrink-0 text-brand-green" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+                          <path d="M22 4L12 14.01l-3-3" />
+                        </svg>
+                      ) : (
+                        <span className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full border bg-white text-[11px] font-semibold", current ? "border-brand-green text-brand-green" : "border-slate-300 text-muted")}>{i + 1}</span>
+                      )}
+                      <span className={cn("text-[13.5px] font-semibold", current || done ? "text-ink" : "text-muted")}>{s}</span>
                     </div>
-                    <p className="mt-2 text-[12px] text-muted">{APPLICATION.stages[i].at}</p>
-                    {APPLICATION.stages[i].actor && <p className="text-[12px] text-ink-soft">{APPLICATION.stages[i].actor}</p>}
-                    {current && <p className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-brand-green">Current stage</p>}
+                    <p className="mt-3 text-[12.5px] text-muted">{APPLICATION.stages[i].at}</p>
+                    {APPLICATION.stages[i].actor && <p className="text-[12.5px] text-muted">{APPLICATION.stages[i].actor}</p>}
+                    {current && <p className="mt-1 text-[11px] font-bold uppercase tracking-wide text-brand-green">Current stage</p>}
                   </li>
                 );
               })}
@@ -136,6 +149,7 @@ export function ServicesWorkspace({ farmer }: { farmer: Farmer }) {
                 <Textarea id="mk-notes" rows={2} value={payment.notes} onChange={(e) => setPayment({ ...payment, notes: e.target.value })} />
               </FormField>
             </div>
+            {(!payment.amount || !payment.payee || !payment.provider) && <p className="text-[12.5px] text-muted">Complete every field marked * to enable Pay.</p>}
             <div className="flex flex-wrap items-center justify-between gap-3">
               <Pill tone="slate">Payment gateway WIP · e-Mandate · QR · IPS · payee management · reconciliation</Pill>
               <div className="flex items-center gap-2">
@@ -167,9 +181,10 @@ export function ServicesWorkspace({ farmer }: { farmer: Farmer }) {
           <FormField label="Supporting documents" htmlFor="cr-docs" hint={`${credit.docs} attached`}>
             <button id="cr-docs" type="button" onClick={() => setCredit({ ...credit, docs: credit.docs + 1 })} className="h-11 w-full rounded-lg border border-dashed border-zinc-300 text-[13.5px] font-medium text-slate-700 hover:border-brand-green">Add document / photo</button>
           </FormField>
-          <FormField label="Purpose" htmlFor="cr-purpose" required className="sm:col-span-2">
+          <FormField label="Purpose" htmlFor="cr-purpose" required hint="At least 3 characters." hintTone={credit.purpose.trim().length > 0 && credit.purpose.trim().length < 3 ? "error" : "muted"} className="sm:col-span-2">
             <Textarea id="cr-purpose" rows={3} value={credit.purpose} onChange={(e) => setCredit({ ...credit, purpose: e.target.value })} placeholder="What the loan will fund" />
           </FormField>
+          {(!credit.amount || credit.purpose.trim().length < 3) && <p className="text-[12.5px] text-muted sm:col-span-2">Complete every field marked * to enable Submit application.</p>}
         </div>
         <Banner tone="info" className="mt-4">
           <p><span className="font-semibold">Consent:</span> {farmer.name} consented to share identity, holding and credit data with the partner bank (valid to 30 Jun 2027). Consent can be withdrawn from the farmer profile at any time before submission; a withdrawn consent stops this application.</p>

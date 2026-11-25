@@ -69,7 +69,7 @@ export function DepartmentFormModal({ mode, initial, suggestedCode, onClose, onS
     >
       <h3 className="mb-4 text-[16px] font-semibold text-ink">Department details</h3>
       <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
-        <FormField label="Department Name" htmlFor="dp-name" required hint={errors.name} hintTone="error" className={FIELD}>
+        <FormField label="Department Name" htmlFor="dp-name" required hint={errors.name ?? "At least 3 characters."} hintTone={errors.name || (name.trim().length > 0 && name.trim().length < 3) ? "error" : "muted"} className={FIELD}>
           <Input id="dp-name" value={name} onChange={(e) => { setName(e.target.value); setErrors((x) => ({ ...x, name: undefined })); }} placeholder="Enter department name" />
         </FormField>
         <FormField label="Department Type" htmlFor="dp-type" required hint={errors.type} hintTone="error" className={FIELD}>

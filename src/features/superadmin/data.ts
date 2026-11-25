@@ -82,13 +82,28 @@ export interface SuperAdminUser {
   /** Department name, one of DEPARTMENTS. */
   department: string;
   departmentType: DepartmentType;
-  service: string;
-  registry: string;
+  /** Services the user can work in, from SERVICES. */
+  service: string[];
+  /** Registries and catalogues the user can access, from REGISTRIES. */
+  registry: string[];
+  /** Entities ticked under the chosen registries (see REGISTRY_ENTITIES). */
+  entities: string[];
 }
 
 export const GENDERS = ["Male", "Female"] as const;
 export const SERVICES = ["DA Service", "Agricultural Extension", "Livestock Health", "Crop Advisory", "Market Linkage", "Irrigation Support", "Input Supply"];
 export const REGISTRIES = ["Livestock", "Farmer Registry", "Agent Registry", "Land Registry", "Livestock Catalogue", "Crop Catalogue", "Input Catalogue"];
+
+/** Entities each registry or catalogue holds; the user form lists these once the registry is ticked. Names are unique across registries. */
+export const REGISTRY_ENTITIES: Record<string, string[]> = {
+  Livestock: ["Cattle", "Sheep", "Goat", "Poultry"],
+  "Farmer Registry": ["Farmer Profile", "Household", "Farm Plot", "Cooperative Membership"],
+  "Agent Registry": ["Agent Profile", "Training Record", "Assignment"],
+  "Land Registry": ["Land Holding", "Plot Boundary", "Land Certificate"],
+  "Livestock Catalogue": ["Breed", "Vaccine", "Feed"],
+  "Crop Catalogue": ["Crop", "Variety", "Season"],
+  "Input Catalogue": ["Seed", "Fertilizer", "Pesticide"],
+};
 
 /** Region → zone → woredas, for the cascading Coverage dropdowns. Every kebele is "Kebele 01" … "Kebele 12". */
 export const GEOGRAPHY: Record<string, Record<string, string[]>> = {
@@ -127,8 +142,9 @@ const user = (n: number, name: string, role: RoleName, region: string, zone: str
     mobile: `+251 011 ${231 + n * 3} ${5675 + n * 3}`,
     department: dept.name,
     departmentType: dept.type,
-    service: SERVICES[(n - 1) % SERVICES.length],
-    registry: REGISTRIES[(n - 1) % REGISTRIES.length],
+    service: [SERVICES[(n - 1) % SERVICES.length]],
+    registry: [REGISTRIES[(n - 1) % REGISTRIES.length]],
+    entities: REGISTRY_ENTITIES[REGISTRIES[(n - 1) % REGISTRIES.length]],
   };
 };
 

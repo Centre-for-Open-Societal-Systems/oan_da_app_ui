@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuthStore } from "@/store/useAuthStore";
 import { assignAgent, fetchCoverage, fetchMyAssignment, formatAssignmentDate, listAssignments, listKebeles, toAgentAssignment, type ApiAssignmentRow } from "./api";
+import { areaLabel, areaNameMap, listGeo, woredasInRegion } from "./api";
 
 // Minimal in-memory Storage so the persisted auth store runs under Node.
 class MemoryStorage implements Storage {
@@ -50,6 +51,15 @@ describe("assignments api", () => {
 
     await expect(listAssignments()).resolves.toEqual({ rows: [row], total: 1, summary });
     expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/assignments?limit=500");
+  });
+
+  it("lists one geo level under its parent's code, in a single call", async () => {
+    const zone = { id: "ET1202", code: "ET1202", name: "Agnewak", field_name: "zone", parent: "ET12", sort_order: 0 };
+    fetchMock.mockResolvedValueOnce(json({ status: "success", data: [zone], meta: { current_page: 1, total_pages: 1, total: 1 } }));
+
+    await expect(listGeo({ fieldName: "zone", parent: "ET12" })).resolves.toEqual([zone]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/get_master_data?data_type=geo&field_name=zone&parent=ET12");
   });
 
   it("asks for coverage, kebeles and the DA's own posting", async () => {
@@ -109,5 +119,24 @@ describe("toAgentAssignment", () => {
   it("formats dates", () => {
     expect(formatAssignmentDate("2026-10-20")).toBe("20 Oct 2026");
     expect(formatAssignmentDate(null)).toBe("—");
+  });
+});
+
+describe("scope area helpers", () => {
+  const area = (code: string, level: "Region" | "Woreda", name_en: string) => ({ code, level, parent_area: null, name_en }) as import("./api").AdminArea;
+  const regions = [area("ET04", "Region", "Oromia"), area("ET01", "Region", "Tigray")];
+  const woredas = [area("ET040301", "Woreda", "Bako Tibe"), area("ET010101", "Woreda", "Tahtay Adiyabo"), area("ET040302", "Woreda", "Ambo")];
+
+  it("picks a region's woredas by code prefix", () => {
+    expect(woredasInRegion(woredas, "ET04").map((w) => w.code)).toEqual(["ET040301", "ET040302"]);
+    expect(woredasInRegion(woredas, "")).toEqual([]);
+  });
+
+  it("labels known codes with their name and leaves other values alone", () => {
+    const names = areaNameMap({ regions, woredas });
+    expect(areaLabel(names, "ET04")).toBe("Oromia (ET04)");
+    expect(areaLabel(names, "ET010101")).toBe("Tahtay Adiyabo (ET010101)");
+    expect(areaLabel(names, "Bako Tibe")).toBe("Bako Tibe");
+    expect(areaLabel(names, "")).toBe("—");
   });
 });

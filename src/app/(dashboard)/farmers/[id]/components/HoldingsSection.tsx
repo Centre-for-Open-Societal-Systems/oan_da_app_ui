@@ -5,6 +5,7 @@ import { PLOTS } from "@/features/farmers";
 import type { Plot } from "@/features/farmers";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { DataTable, type Column } from "@/components/ui/DataTable";
 import { SectionCard } from "./SectionCard";
 
 const mapUrl = (p: Plot) => `https://www.openstreetmap.org/?mlat=${p.lat}&mlon=${p.lng}#map=16/${p.lat}/${p.lng}`;
@@ -12,45 +13,56 @@ const mapUrl = (p: Plot) => `https://www.openstreetmap.org/?mlat=${p.lat}&mlon=$
 // Registry plots have no centroid yet (lat/lng NaN): the details still open, without the map link or GPS row.
 const hasLocation = (p: Plot) => Number.isFinite(p.lat) && Number.isFinite(p.lng);
 
+/** A plot as listed: the registry's plot id is not for people, so plots go by their place in the list. */
+type PlotRow = Plot & { label: string };
+
 /** `plots` from GET /farmers/{id}/plots; the sample plots when omitted. */
 export function HoldingsSection({ plots = PLOTS }: { plots?: Plot[] }) {
-  const [viewing, setViewing] = useState<Plot | null>(null);
+  const [viewing, setViewing] = useState<PlotRow | null>(null);
+
+  const columns: Column<PlotRow>[] = [
+    { key: "plot", header: "Plot", cell: (row) => <span className="font-medium text-ink">{row.label}</span> },
+    { key: "use", header: "Land Use", cell: (row) => row.crop },
+    { key: "area", header: "Area", align: "center", cell: (row) => `${row.areaHa} ha` },
+    { key: "soil", header: "Soil Fertility", cell: (row) => row.soil },
+    { key: "kebele", header: "Kebele", cell: (row) => row.zone },
+    { key: "tenure", header: "Ownership", cell: (row) => row.tenure },
+    {
+      key: "action",
+      header: "Action",
+      align: "center",
+      cell: (row) => (
+        <button
+          type="button"
+          aria-label={`View ${row.label} on map`}
+          title="Plot details and map"
+          onClick={() => setViewing(row)}
+          className="rounded-md p-1.5 text-muted transition-colors hover:bg-surface hover:text-brand-green"
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14" />
+          </svg>
+        </button>
+      ),
+    },
+  ];
 
   return (
-    <SectionCard title="Holdings and Plots" bodyClassName="flex flex-col gap-3">
-      {plots.length === 0 && <p className="py-4 text-center text-[13.5px] text-muted">No plots recorded in the Farmer Registry.</p>}
-      {plots.map((plot) => (
-        <div
-          key={plot.code}
-          className="flex items-center justify-between rounded-lg border border-line-soft bg-surface px-4 py-3"
-        >
-          <div>
-            <p className="text-[14px] font-semibold text-ink">
-              {plot.code} · {plot.crop}
-            </p>
-            <p className="mt-0.5 text-[13px] text-muted">
-              {plot.areaHa} ha · {plot.soil} · {plot.zone}
-            </p>
-          </div>
-          <button
-            type="button"
-            aria-label={`View ${plot.code} on map`}
-            title="Plot details and map"
-            onClick={() => setViewing(plot)}
-            className="rounded-md p-1.5 text-muted transition-colors hover:bg-white hover:text-brand-green"
-          >
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14" />
-            </svg>
-          </button>
-        </div>
-      ))}
+    <SectionCard title="Holdings and Plots" bodyClassName="p-0">
+      <DataTable
+        columns={columns}
+        rows={plots.map((plot, index) => ({ ...plot, label: `Plot ${index + 1}` }))}
+        rowKey={(row) => row.code}
+        minWidth="720px"
+        itemLabel="plots"
+        emptyTitle="No plots recorded in the Farmer Registry."
+      />
 
       {viewing && (
         <Modal
           isOpen
           onClose={() => setViewing(null)}
-          title={`${viewing.code} · ${viewing.crop}`}
+          title={`${viewing.label} · ${viewing.crop}`}
           subtitle={`${viewing.zone} · ${viewing.areaHa} ha`}
           footer={
             <>

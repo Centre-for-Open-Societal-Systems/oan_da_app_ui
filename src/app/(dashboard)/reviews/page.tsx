@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { RolePerformance } from "../performance/components/RolePerformance";
 import { ReviewsWorkspace } from "./components/ReviewsWorkspace";
+import { SupervisorReviews } from "./components/SupervisorReviews";
 
 export const metadata: Metadata = {
   title: "Reviews | OpenAgriNet",
@@ -11,5 +13,6 @@ const TABS = ["Reviews", "Goals", "Dev plan", "Coaching", "Recognition", "Trends
 export default async function ReviewsPage(props: PageProps<"/reviews">) {
   const { tab } = await props.searchParams;
   const activeTab = typeof tab === "string" ? TABS.find((item) => item.toLowerCase() === tab.toLowerCase()) ?? "Reviews" : "Reviews";
-  return <ReviewsWorkspace key={activeTab} initialTab={activeTab} />;
+  // Supervisors get the coaching-review history; Admin keeps the registry-style workspace.
+  return <RolePerformance supervisor={<SupervisorReviews />} agent={<ReviewsWorkspace key={activeTab} initialTab={activeTab} />} />;
 }

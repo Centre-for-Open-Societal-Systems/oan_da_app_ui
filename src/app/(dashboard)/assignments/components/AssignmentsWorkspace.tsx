@@ -1,5 +1,6 @@
 "use client";
 
+import { todayIso } from "@/lib/utils";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
@@ -98,6 +99,9 @@ export function AssignmentsWorkspace() {
   const role = useAuthStore((s) => s.role);
   const canAssign = role === "Supervisor" || role === "Admin";
   const isDA = role === "DA";
+  // A Supervisor with one Woreda in scope (from /me) assigns inside it only, so the form starts on it and keeps it.
+  const scopeWoredas = useAuthStore((s) => s.profile?.scope?.woredas);
+  const ownWoreda = role === "Supervisor" && scopeWoredas?.length === 1 ? scopeWoredas[0] : "";
   const [reload, setReload] = useState(0);
   const [list, setList] = useState<Loaded<{ rows: AgentAssignment[]; summary: AssignmentSummary | null }> & { key: number } | null>(null);
   const [coverage, setCoverage] = useState<Loaded<CoverageResponse> | null>(null);
@@ -121,7 +125,7 @@ export function AssignmentsWorkspace() {
     let current = true;
     listAreas({ level: "Woreda" })
       .then((areas) => current && setWoredaAreas(areas))
-      .catch(() => {});
+      .catch(() => { });
     return () => {
       current = false;
     };
@@ -247,8 +251,12 @@ export function AssignmentsWorkspace() {
   const openAssign = (r: AgentAssignment) =>
     openForm({ daId: r.daId, woreda: r.woredaCode ?? "", kebele: r.kebeleCode ?? "", effectiveDate: isoToday(), reason: "", mode: r.mode ?? "Automatic" });
 
-  // Header "Assign agent": every field starts empty and the officer fills it in, agent included.
-  const openNewAssign = () => openForm({ daId: "", woreda: rows.find((r) => r.woredaCode)?.woredaCode ?? "", kebele: "", effectiveDate: "", reason: "", mode: "", pickAgent: true });
+  // Header "Assign agent": the Woreda starts on the officer's own (or the first in the list); Kebele and agent are picked after it.
+  const openNewAssign = () =>
+    openForm({ daId: "", woreda: ownWoreda || (rows.find((r) => r.woredaCode)?.woredaCode ?? ""), kebele: "", effectiveDate: isoToday(), reason: "", mode: "", pickAgent: true });
+
+  // Agents of the picked Woreda; one with no posting yet has no Woreda and is offered too (the list is already scoped).
+  const agentsInWoreda = (woreda: string) => rows.filter((r) => r.status !== "Separated" && (!r.woredaCode || r.woredaCode === woreda));
 
   const draftAgent = draft ? rows.find((r) => r.daId === draft.daId) : undefined;
   const draftKebeles = kebeles && kebeles.woreda === draft?.woreda ? kebeles : null;
@@ -292,12 +300,25 @@ export function AssignmentsWorkspace() {
     }
   };
 
+  const snoColumn: Column<AgentAssignment> = {
+    key: "sno",
+    header: "S.No.",
+    align: "center",
+    className: "w-16 min-w-[64px] whitespace-nowrap",
+    cell: (r) => (
+      <span className="text-[13px] font-medium text-muted">
+        {visible.indexOf(r) + 1}
+      </span>
+    ),
+  };
+
   const assignedByColumn: Column<AgentAssignment> = { key: "assignedBy", header: "Assigned by", cell: (r) => r.assignedBy ?? <span className="text-subtle">—</span> };
 
   const daIdColumn: Column<AgentAssignment> = { key: "daId", header: "DA-ID", cell: (r) => <span className="font-mono text-[13px] text-ink-soft">{r.daId}</span> };
 
   // A DA sees DA-ID then who assigned them, with no Agent column (the agent is always themselves).
   const columns: Column<AgentAssignment>[] = [
+    snoColumn,
     ...(isDA
       ? [daIdColumn, assignedByColumn]
       : [{ key: "agent", header: "Agent", cell: (r: AgentAssignment) => <Link href={`/agents/${r.daId}`} className="font-medium text-ink hover:text-brand-green">{r.agent}</Link> }, daIdColumn]),
@@ -306,14 +327,14 @@ export function AssignmentsWorkspace() {
     { key: "farmers", header: "Farmers", align: "right", cell: (r) => r.farmers.toLocaleString() },
     {
       key: "status",
-      header: (
-        <span className="inline-flex items-center gap-1.5">
-          <FilterDropdown label="Status" allLabel="All Status" options={statusOptions} selected={filters.status} onApply={setFilter("status")} />
-          <span className="text-subtle">/</span>
-          <FilterDropdown label="Assignment" allLabel="All assignment states" options={assignmentOptions} selected={filters.assignment} onApply={setFilter("assignment")} />
-        </span>
-      ),
-      cell: (r) => <div className="flex flex-col items-start gap-1"><Pill tone={AGENT_STATUS_TONE[r.status]} dot>{r.status}</Pill><Pill tone={ASSIGNMENT_TONE[r.assignmentStatus]}>{r.assignmentStatus}{r.geofence === "Out-of-bounds" ? " · out-of-bounds" : ""}</Pill></div> },
+      header: <FilterDropdown label="Status" allLabel="All Status" options={statusOptions} selected={filters.status} onApply={setFilter("status")} />,
+      cell: (r) => <Pill tone={AGENT_STATUS_TONE[r.status]} dot>{r.status}</Pill>,
+    },
+    {
+      key: "assignment",
+      header: <FilterDropdown label="Assignment" allLabel="All assignment states" options={assignmentOptions} selected={filters.assignment} onApply={setFilter("assignment")} />,
+      cell: (r) => <Pill tone={ASSIGNMENT_TONE[r.assignmentStatus]}>{r.assignmentStatus}{r.geofence === "Out-of-bounds" ? " · out-of-bounds" : ""}</Pill>,
+    },
     ...(isDA ? [] : [assignedByColumn]),
     {
       key: "actions", header: "Actions", align: "center",
@@ -352,28 +373,39 @@ export function AssignmentsWorkspace() {
       {isDA ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="My kebele" value={mine?.kebele ?? "—"} hint={mine ? `${mine.woreda} woreda` : "Not assigned yet"} accent="border-l-brand-green" tile="bg-brand-tint text-brand-green" icon={icon("M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0zM12 13a3 3 0 100-6 3 3 0 000 6z")} />
-          <StatCard label="Linked farmers" value={(mine?.farmers ?? 0).toLocaleString()} accent="border-l-blue-600" tile="bg-blue-50 text-blue-600" icon={icon("M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8z")} />
+          <StatCard label="Linked farmers" value={(mine?.farmers ?? 0).toLocaleString()} hint={mine && mine.farmers === 0 ? "No farmer assigned" : undefined} accent="border-l-blue-600" tile="bg-blue-50 text-blue-600" icon={icon("M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8z")} />
           <StatCard label="Effective since" value={mine?.effectiveDate ?? "—"} accent="border-l-amber-600" tile="bg-warning-wash text-amber-600" icon={icon("M8 3v4M16 3v4M3 10h18M5 5h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z")} />
           <StatCard label="Assigned by" value={mine?.assignedBy ?? "—"} hint="Woreda supervisor" accent="border-l-violet-600" tile="bg-violet-50 text-violet-600" icon={icon("M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM17 11l2 2 4-4")} />
         </div>
       ) : (
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Agents" value={String(summary?.agents ?? rows.length)} accent="border-l-brand-green" tile="bg-brand-tint text-brand-green" icon={icon("M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8z")} />
-        <StatCard label="Kebeles covered" value={String(kebelesCovered)} accent="border-l-blue-600" tile="bg-blue-50 text-blue-600" icon={icon("M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0zM12 13a3 3 0 100-6 3 3 0 000 6z")} />
-        <StatCard label="Unassigned" value={String(unassigned)} accent="border-l-amber-600" tile="bg-warning-wash text-amber-600" icon={icon("M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM22 11l-4 4M18 11l4 4")} />
-        <StatCard label="Average load" value={avgLoad.toLocaleString()} hint="farmers per assigned agent" accent="border-l-violet-600" tile="bg-violet-50 text-violet-600" icon={icon("M18 20V10M12 20V4M6 20v-6")} />
-      </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Agents" value={String(summary?.agents ?? rows.length)} accent="border-l-brand-green" tile="bg-brand-tint text-brand-green" icon={icon("M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8z")} />
+          <StatCard label="Kebeles covered" value={String(kebelesCovered)} accent="border-l-blue-600" tile="bg-blue-50 text-blue-600" icon={icon("M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0zM12 13a3 3 0 100-6 3 3 0 000 6z")} />
+          <StatCard label="Unassigned" value={String(unassigned)} accent="border-l-amber-600" tile="bg-warning-wash text-amber-600" icon={icon("M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM22 11l-4 4M18 11l4 4")} />
+          <StatCard label="Average load" value={avgLoad.toLocaleString()} hint="farmers per assigned agent" accent="border-l-violet-600" tile="bg-violet-50 text-violet-600" icon={icon("M18 20V10M12 20V4M6 20v-6")} />
+        </div>
       )}
 
       {outcome && <Banner tone={outcome.tone} title={outcome.title} onDismiss={() => setOutcome(null)}>{outcome.body}</Banner>}
       {listError && <Banner tone="error" title={isDA ? "Could not load your assignment" : "Could not load assignments"}>{listError}</Banner>}
 
       <Card className="overflow-hidden p-0 shadow-card">
-        <div className="flex flex-col gap-3 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
-          <h2 className="text-[15px] font-semibold text-ink">{isDA ? "My assignment from supervisor" : "Agents by Kebele and Woreda"}</h2>
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end">
-            <SearchInput value={query} onChange={setQuery} placeholder={SEARCH_PLACEHOLDER} />
-            <AdvancedFiltersButton activeCount={countActive(filters)} onClick={() => setIsFiltersOpen(true)} />
+        <div className="flex flex-col gap-2.5 sm:gap-3 p-3.5 sm:p-4 lg:flex-row lg:items-center lg:justify-between border-b border-line-soft">
+          <h2 className="text-[14px] sm:text-[15px] font-semibold text-ink shrink-0">
+            {isDA ? "My assignment from supervisor" : "Agents by Kebele and Woreda"}
+          </h2>
+          <div className="flex w-full items-center gap-2 sm:gap-2.5 lg:w-auto lg:justify-end">
+            <SearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder={SEARCH_PLACEHOLDER}
+              className="flex-1 min-w-0 sm:w-auto lg:w-[260px] xl:w-[280px] lg:flex-initial [&_input]:w-full"
+            />
+            <AdvancedFiltersButton
+              activeCount={countActive(filters)}
+              onClick={() => setIsFiltersOpen(true)}
+              className="shrink-0 h-9 sm:h-10"
+            />
           </div>
         </div>
         <DataTable
@@ -381,7 +413,7 @@ export function AssignmentsWorkspace() {
           columns={columns}
           rows={visible}
           rowKey={(r) => r.daId}
-          minWidth="1000px"
+          minWidth="1080px"
           state={loading ? "loading" : listError ? "error" : "ready"}
           onRetry={() => setReload((n) => n + 1)}
           emptyTitle={rows.length === 0 ? (isDA ? "No assignment yet" : "No agents in this Woreda") : "No agents match the selected filters"}
@@ -408,48 +440,72 @@ export function AssignmentsWorkspace() {
 
       {/* Read-only Kebele coverage summary — managed separately (§3.5); not part of what a DA receives from their supervisor. */}
       {!isDA && (
-      <Card className="overflow-hidden p-0 shadow-card">
-        <div className="flex flex-col gap-3 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h2 className="flex items-center gap-2 text-[15px] font-semibold text-ink">Kebele coverage summary <Pill tone="slate">Read-only</Pill></h2>
-            <p className="mt-0.5 text-[12.5px] text-ink-soft">Service coverage across kebeles{coverageWoredaName ? ` in ${coverageWoredaName}` : ""}. This reporting view is managed separately and is not edited from the assignment screen.</p>
+        <Card className="overflow-hidden p-0 shadow-card">
+          <div className="flex flex-col gap-2.5 sm:gap-3 p-3.5 sm:p-4 lg:flex-row lg:items-center lg:justify-between border-b border-line-soft">
+            <div>
+              <h2 className="flex items-center gap-2 text-[14px] sm:text-[15px] font-semibold text-ink">
+                Kebele coverage summary <Pill tone="slate">Read-only</Pill>
+              </h2>
+              <p className="mt-0.5 text-[12px] sm:text-[12.5px] text-ink-soft">
+                Service coverage across kebeles{coverageWoredaName ? ` in ${coverageWoredaName}` : ""}. This reporting view is managed separately and is not edited from the assignment screen.
+              </p>
+            </div>
+            <div className="flex w-full items-center gap-2 sm:gap-2.5 lg:w-auto lg:justify-end">
+              <SearchInput
+                value={coverageQuery}
+                onChange={setCoverageQuery}
+                placeholder={COVERAGE_SEARCH_PLACEHOLDER}
+                className="flex-1 min-w-0 sm:w-auto lg:w-[260px] xl:w-[280px] lg:flex-initial [&_input]:w-full"
+              />
+              <AdvancedFiltersButton
+                activeCount={countActive(coverageFilters)}
+                onClick={() => setIsCoverageFiltersOpen(true)}
+                className="shrink-0 h-9 sm:h-10"
+              />
+            </div>
           </div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end">
-            <SearchInput value={coverageQuery} onChange={setCoverageQuery} placeholder={COVERAGE_SEARCH_PLACEHOLDER} />
-            <AdvancedFiltersButton activeCount={countActive(coverageFilters)} onClick={() => setIsCoverageFiltersOpen(true)} />
-          </div>
-        </div>
-        <DataTable itemLabel="kebeles"
-          minWidth="720px"
-          rowKey={(k) => k.kebele}
-          rows={coverageRows}
-          state={!coverage ? "loading" : coverage.error ? "error" : "ready"}
-          onRetry={() => setReload((n) => n + 1)}
-          emptyTitle={coverageAll.length === 0 ? "No kebeles in the area master for this Woreda" : "No kebeles match the selected filters"}
-          emptyHint={coverageAll.length === 0 ? undefined : "Clear a filter or try a different search."}
-          columns={[
-            { key: "kebele", header: "Kebele", cell: (k) => <span className="font-medium text-ink">{k.kebele}</span> },
-            { key: "woreda", header: <FilterDropdown label="Woreda" allLabel="All woredas" options={coverageWoredaOptions} selected={coverageFilters.woreda} onApply={setCoverageFilter("woreda")} />, cell: (k) => k.woreda },
-            { key: "agents", header: "Agents", align: "right", cell: (k) => k.agents },
-            { key: "farmers", header: "Linked farmers", align: "right", cell: (k) => k.farmers.toLocaleString() },
-            { key: "hh", header: "Households", align: "right", cell: (k) => (k.households == null ? <span className="text-subtle">—</span> : k.households.toLocaleString()) },
-            { key: "cov", header: <FilterDropdown label="Coverage" allLabel="All coverage states" options={coverageOptions} selected={coverageFilters.coverage} onApply={setCoverageFilter("coverage")} />, cell: (k) => <Pill tone={k.coverage === "Full" ? "green" : k.coverage === "Uncovered" ? "red" : "amber"}>{k.coverage}</Pill> },
-          ]}
-        />
+          <DataTable itemLabel="kebeles"
+            minWidth="720px"
+            rowKey={(k) => k.kebele}
+            rows={coverageRows}
+            state={!coverage ? "loading" : coverage.error ? "error" : "ready"}
+            onRetry={() => setReload((n) => n + 1)}
+            emptyTitle={coverageAll.length === 0 ? "No kebeles in the area master for this Woreda" : "No kebeles match the selected filters"}
+            emptyHint={coverageAll.length === 0 ? undefined : "Clear a filter or try a different search."}
+            columns={[
+              {
+                key: "sno",
+                header: "S.No.",
+                align: "center",
+                className: "w-16 min-w-[64px] whitespace-nowrap",
+                cell: (k) => (
+                  <span className="text-[13px] font-medium text-muted">
+                    {coverageRows.indexOf(k) + 1}
+                  </span>
+                ),
+              },
+              { key: "kebele", header: "Kebele", cell: (k) => <span className="font-medium text-ink">{k.kebele}</span> },
+              { key: "woreda", header: <FilterDropdown label="Woreda" allLabel="All woredas" options={coverageWoredaOptions} selected={coverageFilters.woreda} onApply={setCoverageFilter("woreda")} />, cell: (k) => k.woreda },
+              { key: "agents", header: "Agents", align: "right", cell: (k) => k.agents },
+              { key: "farmers", header: "Linked farmers", align: "right", cell: (k) => k.farmers.toLocaleString() },
+              { key: "hh", header: "Households", align: "right", cell: (k) => (k.households == null ? <span className="text-subtle">—</span> : k.households.toLocaleString()) },
+              { key: "cov", header: <FilterDropdown label="Coverage" allLabel="All coverage states" options={coverageOptions} selected={coverageFilters.coverage} onApply={setCoverageFilter("coverage")} />, cell: (k) => <Pill tone={k.coverage === "Full" ? "green" : k.coverage === "Uncovered" ? "red" : "amber"}>{k.coverage}</Pill> },
+            ]}
+          />
 
-        <AdvancedFiltersDrawer
-          isOpen={isCoverageFiltersOpen}
-          onClose={() => setIsCoverageFiltersOpen(false)}
-          fields={coverageFilterFields}
-          filters={coverageFilters}
-          onApply={(next) =>
-            setCoverageFilters({
-              woreda: next.woreda ?? new Set(),
-              coverage: next.coverage ?? new Set(),
-            })
-          }
-        />
-      </Card>
+          <AdvancedFiltersDrawer
+            isOpen={isCoverageFiltersOpen}
+            onClose={() => setIsCoverageFiltersOpen(false)}
+            fields={coverageFilterFields}
+            filters={coverageFilters}
+            onApply={(next) =>
+              setCoverageFilters({
+                woreda: next.woreda ?? new Set(),
+                coverage: next.coverage ?? new Set(),
+              })
+            }
+          />
+        </Card>
       )}
 
       {draft && (
@@ -458,16 +514,18 @@ export function AssignmentsWorkspace() {
         >
           {saveError && <Banner tone="error" title="Assignment not saved" className="mb-4">{saveError}</Banner>}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {draft.pickAgent && (
-              <FormField label="Agent" htmlFor="as-agent" required className="sm:col-span-2" hint={draftAgent?.kebele ? `Currently in ${draftAgent.kebele} — committing supersedes that assignment.` : undefined}>
-                <Select id="as-agent" value={draft.daId} onChange={(e) => setDraft({ ...draft, daId: e.target.value })}>
-                  <option value="">Select agent</option>
-                  {rows.filter((r) => r.status !== "Separated").map((r) => <option key={r.daId} value={r.daId}>{r.agent} · {r.daId}{r.kebele ? ` (${r.kebele})` : " (unassigned)"}</option>)}
-                </Select>
-              </FormField>
-            )}
-            <FormField label="Woreda" htmlFor="as-woreda" required>
-              <Select id="as-woreda" value={draft.woreda} onChange={(e) => setDraft({ ...draft, woreda: e.target.value, kebele: "" })}>
+            <FormField label="Woreda" htmlFor="as-woreda" required hint={ownWoreda ? "Your Woreda." : undefined}>
+              <Select
+                id="as-woreda"
+                value={draft.woreda}
+                disabled={!!ownWoreda}
+                onChange={(e) => {
+                  const woreda = e.target.value;
+                  // A picked agent from another Woreda no longer fits.
+                  const keepAgent = !draft.pickAgent || agentsInWoreda(woreda).some((r) => r.daId === draft.daId);
+                  setDraft({ ...draft, woreda, kebele: "", daId: keepAgent ? draft.daId : "" });
+                }}
+              >
                 <option value="">Select woreda</option>
                 {woredaAreas.map((w) => <option key={w.code} value={w.code}>{w.name_en}</option>)}
                 {draft.woreda && !woredaAreas.some((w) => w.code === draft.woreda) && <option value={draft.woreda}>{draft.woreda}</option>}
@@ -479,16 +537,25 @@ export function AssignmentsWorkspace() {
                 {draftKebeles?.items.map((k) => <option key={k.code} value={k.code}>{k.name_en}</option>)}
               </Select>
             </FormField>
-            <FormField label="Effective date" htmlFor="as-date" required>
-              <Input id="as-date" type="date" value={draft.effectiveDate} onChange={(e) => setDraft({ ...draft, effectiveDate: e.target.value })} />
+            {draft.pickAgent && (
+              <FormField label="Agent" htmlFor="as-agent" required className="sm:col-span-2" hint={draftAgent?.kebele ? `Currently in ${draftAgent.kebele} — committing supersedes that assignment.` : undefined}>
+                <Select id="as-agent" value={draft.daId} disabled={!draft.woreda} onChange={(e) => setDraft({ ...draft, daId: e.target.value })}>
+                  <option value="">{draft.woreda ? (agentsInWoreda(draft.woreda).length === 0 ? "No agents in this Woreda" : "Select agent") : "Select woreda first"}</option>
+                  {agentsInWoreda(draft.woreda).map((r) => <option key={r.daId} value={r.daId}>{r.agent} · {r.daId}{r.kebele ? ` (${r.kebele})` : " (unassigned)"}</option>)}
+                </Select>
+              </FormField>
+            )}
+            <FormField label="Effective date" htmlFor="as-date" required hint="Today or later." hintTone={!!draft.effectiveDate && draft.effectiveDate < todayIso() ? "error" : "muted"}>
+              <Input id="as-date" type="date" min={todayIso()} value={draft.effectiveDate} onChange={(e) => setDraft({ ...draft, effectiveDate: e.target.value })} />
             </FormField>
             <FormField label="Farmer association" htmlFor="as-mode" required hint={draft.mode === "Automatic" ? "Farmers in the kebele task list are linked automatically." : draft.mode === "Manual" ? "You select the farmers after commit." : undefined}>
               <Select id="as-mode" value={draft.mode} onChange={(e) => setDraft({ ...draft, mode: e.target.value as AssociationMode | "" })}><option value="">Select farmer association</option><option>Automatic</option><option>Manual</option></Select>
             </FormField>
-            <FormField label="Reason" htmlFor="as-reason" required className="sm:col-span-2" hint="Recorded with the assignment; reassignment supersedes the prior assignment (effective-dated).">
+            <FormField label="Reason" htmlFor="as-reason" required className="sm:col-span-2" hint="At least 3 characters. Recorded with the assignment; reassignment supersedes the prior assignment (effective-dated)." hintTone={draft.reason.trim().length > 0 && draft.reason.trim().length < 3 ? "error" : "muted"}>
               <Input id="as-reason" value={draft.reason} onChange={(e) => setDraft({ ...draft, reason: e.target.value })} placeholder="Enter reason" />
             </FormField>
           </div>
+          {!saving && (!draftAgent || !draft.woreda || !draft.kebele || !draft.mode || !draft.effectiveDate || draft.reason.trim().length < 3) && <p className="mt-3 text-[12.5px] text-muted">Complete every field marked * to enable Validate &amp; commit.</p>}
           {draft.kebele && (
             <div className="mt-4 rounded-lg border border-line bg-surface p-3 text-[13px] text-ink-soft">
               Geofence validation runs on commit: <span className="font-semibold text-ink">In-boundary → Validated → Effective</span>, or <span className="font-semibold text-danger">Out-of-bounds → Flagged</span> with the reason.

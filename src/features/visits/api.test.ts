@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuthStore } from "@/store/useAuthStore";
-import { canAddEvidence, canCancel, canLogOutcome, canReschedule, canStartVisit, cancelVisit, evidenceProblem, fetchActivityReport, fetchVisit, formatVisitTime, listVisits, rescheduleVisit, startVisit, submitVisitOutcome, toVisitRecord, uploadVisitEvidence, type ApiVisit } from "./api";
+import { canActOnVisit, canAddEvidence, canCancel, canLogOutcome, canReschedule, canStartVisit, cancelVisit, evidenceProblem, fetchActivityReport, fetchVisit, formatVisitTime, listFarmerAdvisory, listVisits, rescheduleVisit, startVisit, submitVisitOutcome, toVisitRecord, uploadVisitEvidence, type ApiVisit } from "./api";
 
 // Minimal in-memory Storage so the persisted auth store runs under Node.
 class MemoryStorage implements Storage {
@@ -45,6 +45,25 @@ describe("listVisits", () => {
     await expect(listVisits({ date: "2026-10-16" })).resolves.toEqual({ items: [apiVisit], total: 1 });
     expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/visits?date=2026-10-16");
   });
+
+  it("passes da_id and leaves it out when there is none", async () => {
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({ data: [], meta: { total: 0 } })));
+
+    await listVisits({ date: "2026-10-16", da_id: "DA-000003" });
+    await listVisits({ date: "2026-10-16", da_id: undefined });
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/visits?date=2026-10-16&da_id=DA-000003");
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/v1/da-services/visits?date=2026-10-16");
+  });
+});
+
+describe("canActOnVisit", () => {
+  it("lets a DA act only on their own visit and leaves officers alone", () => {
+    const visit = { agent: "DA-000003" };
+    expect(canActOnVisit(visit, true, "DA-000003")).toBe(true);
+    expect(canActOnVisit(visit, true, "DA-000009")).toBe(false);
+    expect(canActOnVisit(visit, true, null)).toBe(false);
+    expect(canActOnVisit(visit, false, null)).toBe(true);
+  });
 });
 
 describe("toVisitRecord", () => {
@@ -64,6 +83,7 @@ describe("toVisitRecord", () => {
       durationMin: 60,
       assignedBy: undefined,
       physicalStatus: "Planned",
+      visitType: "Advisory",
     });
   });
 
@@ -156,6 +176,15 @@ describe("visit detail and outcome", () => {
     expect(JSON.parse(init!.body as string)).toEqual(body);
   });
 
+  it("sends an Advisory visit's answers with the outcome", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ data: { ...apiVisit, ui_status: "Completed" } })));
+    const advisory_qa = [{ question: "When to sow teff?", answer: "After the first rains" }, { question: "Which fertiliser?", answer: "" }];
+
+    await submitVisitOutcome("DA-VIS-1", { observed: "Field ready", next_action: { type: "None" }, advisory_qa, client_op_id: "op-3" });
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1]!.body as string).advisory_qa).toEqual(advisory_qa);
+  });
+
   it("offers the outcome once checked in", () => {
     expect(canLogOutcome({ physicalStatus: "In progress" })).toBe(true);
     expect(canLogOutcome({ physicalStatus: "Planned" })).toBe(false);
@@ -164,6 +193,32 @@ describe("visit detail and outcome", () => {
   it("formats site-local timestamps without shifting them", () => {
     expect(formatVisitTime("2026-10-15T15:48:22.563566")).toBe("15 Oct, 15:48");
     expect(formatVisitTime(null)).toBe("");
+  });
+});
+
+describe("listFarmerAdvisory", () => {
+  const rows = (data: unknown[]) => new Response(JSON.stringify({ data, meta: { total: data.length } }));
+
+  it("returns the question rows with their dates, in the order the API sends them", async () => {
+    fetchMock.mockResolvedValueOnce(
+      rows([
+        { question: "Which seed rate?", answer: "25 kg/ha", creation: "2026-10-20 09:00:00.1", modified: "2026-10-21 11:30:00.2" },
+        { question: "Which fertiliser?", answer: null, creation: "2026-10-10 09:00:00.3", modified: "2026-10-10 09:00:00.3" },
+      ]),
+    );
+
+    await expect(listFarmerAdvisory("FRM-000103")).resolves.toEqual([
+      { question: "Which seed rate?", answer: "25 kg/ha", createdAt: "2026-10-20 09:00:00.1", modifiedAt: "2026-10-21 11:30:00.2" },
+      { question: "Which fertiliser?", answer: "", createdAt: "2026-10-10 09:00:00.3", modifiedAt: "2026-10-10 09:00:00.3" },
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/farmers/FRM-000103/advisory?limit=500");
+  });
+
+  it("gives nothing for a farmer with no questions", async () => {
+    fetchMock.mockResolvedValueOnce(rows([]));
+    await expect(listFarmerAdvisory("FRM-000104")).resolves.toEqual([]);
+    expect(formatVisitTime("2026-11-17 15:29:29.432267")).toBe("17 Nov, 15:29");
   });
 });
 

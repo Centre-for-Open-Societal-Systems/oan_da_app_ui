@@ -7,11 +7,10 @@ import { RowAction } from "@/components/ui/RowAction";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { cn } from "@/lib/utils";
+import { DatePicker } from "@/components/ui/DatePicker";
+import { cn, todayIso } from "@/lib/utils";
 import { CERTIFICATE_TYPES, fileMeta, formatFileSize, type Certificate } from "@/features/farmers";
 import { Banner } from "@/components/ui/Banner";
-
-type Source = "external" | "agrilearn";
 
 interface UploadCertificateModalProps {
   isOpen: boolean;
@@ -24,11 +23,6 @@ const MAX_SIZE_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["application/pdf", "image/jpeg", "image/png"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-const SOURCES: { value: Source; label: string; hint: string }[] = [
-  { value: "external", label: "External certificate", hint: "Issued outside Agrilearn" },
-  { value: "agrilearn", label: "Agrilearn", hint: "Synced automatically - no upload needed" },
-];
-
 // "2026-02-18" -> "18 Feb 2026"
 function formatDate(iso: string) {
   const [y, m, d] = iso.split("-");
@@ -37,12 +31,22 @@ function formatDate(iso: string) {
 
 export function UploadCertificateModal({ isOpen, onClose, onSubmit }: UploadCertificateModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [source, setSource] = useState<Source>("external");
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [issueDate, setIssueDate] = useState(todayIso());
+  const [expiryDate, setExpiryDate] = useState("2028-02-18");
 
-  const isExternal = source === "external";
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
+    if (isOpen) {
+      setFile(null);
+      setFileError(null);
+      setIssueDate(todayIso());
+      setExpiryDate("2028-02-18");
+    }
+  }
 
   const pickFile = (candidate: File | undefined) => {
     if (!candidate) return;
@@ -70,9 +74,10 @@ export function UploadCertificateModal({ isOpen, onClose, onSubmit }: UploadCert
   };
 
   const reset = () => {
-    setSource("external");
     setFile(null);
     setFileError(null);
+    setIssueDate(todayIso());
+    setExpiryDate("2028-02-18");
   };
 
   const handleClose = () => {
@@ -82,15 +87,13 @@ export function UploadCertificateModal({ isOpen, onClose, onSubmit }: UploadCert
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (isExternal && !file) {
+    if (!file) {
       setFileError("Choose a certificate file to upload.");
       return;
     }
     const data = new FormData(e.currentTarget);
     const name = String(data.get("name") ?? "").trim();
     const organisation = String(data.get("organisation") ?? "").trim();
-    const issueDate = String(data.get("issueDate") ?? "");
-    const expiryDate = String(data.get("expiryDate") ?? "");
     if (!name || !organisation || !issueDate) return;
 
     const issued = `issued ${formatDate(issueDate)}`;
@@ -99,10 +102,10 @@ export function UploadCertificateModal({ isOpen, onClose, onSubmit }: UploadCert
     onSubmit({
       id: `${Date.now()}-${name}`,
       title: name,
-      status: isExternal ? "pending" : "auto",
-      issuer: isExternal ? `${organisation} · ${issued}${expires}` : `Agrilearn · ${issued}`,
-      fileMeta: file ? fileMeta(file) : undefined,
-      url: file ? URL.createObjectURL(file) : undefined,
+      status: "pending",
+      issuer: `${organisation} · ${issued}${expires}`,
+      fileMeta: fileMeta(file),
+      url: URL.createObjectURL(file),
     });
     handleClose();
   };
@@ -112,7 +115,7 @@ export function UploadCertificateModal({ isOpen, onClose, onSubmit }: UploadCert
       isOpen={isOpen}
       onClose={handleClose}
       title="Upload Certificate"
-      subtitle="Add an external certificate to your record"
+      subtitle="Add a certificate to your record"
       size="lg"
       bodyClassName="px-4 py-4 sm:px-6"
       footer={
@@ -121,57 +124,17 @@ export function UploadCertificateModal({ isOpen, onClose, onSubmit }: UploadCert
             Cancel
           </Button>
           <Button type="submit" form={FORM_ID} variant="brand" className="gap-2">
-            {isExternal && (
-              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" />
-              </svg>
-            )}
-            {isExternal ? "Upload & submit for verification" : "Add Agrilearn record"}
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" />
+            </svg>
+            Upload &amp; submit for verification
           </Button>
         </>
       }
     >
       <form id={FORM_ID} className="flex flex-col gap-4" onSubmit={handleSubmit}>
-        {/* Source */}
-        <div className="flex flex-col gap-2">
-          <p className="text-[14px] font-medium text-ink">Certificate source</p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {SOURCES.map((s) => {
-              const active = s.value === source;
-              return (
-                <button
-                  key={s.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={active}
-                  onClick={() => setSource(s.value)}
-                  className={cn(
-                    "flex items-start gap-3 rounded-lg border px-3.5 py-3 text-left transition-colors",
-                    active ? "border-brand-green bg-brand-mint" : "border-line bg-white hover:border-slate-300",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2",
-                      active ? "border-brand-green" : "border-slate-300",
-                    )}
-                    aria-hidden="true"
-                  >
-                    {active && <span className="h-2 w-2 rounded-full bg-brand-green" />}
-                  </span>
-                  <span>
-                    <span className={cn("block text-[13.5px] font-semibold", active ? "text-brand-green" : "text-ink")}>{s.label}</span>
-                    <span className={cn("mt-0.5 block text-[12.5px]", active ? "text-brand-green" : "text-muted")}>{s.hint}</span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
         {/* File */}
-        {isExternal && (
-          <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
             <p className="text-[14px] font-medium text-ink">
               Certificate file <span className="text-danger">*</span>
             </p>
@@ -213,8 +176,7 @@ export function UploadCertificateModal({ isOpen, onClose, onSubmit }: UploadCert
             {fileError && <p className="text-[12.5px] text-danger">{fileError}</p>}
 
             <input ref={inputRef} type="file" accept="application/pdf,image/jpeg,image/png" className="hidden" onChange={handleInputChange} />
-          </div>
-        )}
+        </div>
 
         <FormField label="Certificate name" htmlFor="cert-name" required>
           <Input id="cert-name" name="name" className="h-10" defaultValue="Integrated Pest Management" required />
@@ -235,10 +197,27 @@ export function UploadCertificateModal({ isOpen, onClose, onSubmit }: UploadCert
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <FormField label="Issue date" htmlFor="cert-issued" required>
-            <Input id="cert-issued" name="issueDate" type="date" className="h-10" defaultValue="2026-02-18" required />
+            <DatePicker
+              id="cert-issued"
+              name="issueDate"
+              value={issueDate}
+              onChange={setIssueDate}
+              placeholder="Select issue date"
+              maxDate={todayIso()}
+              className="h-10 w-full"
+              required
+            />
           </FormField>
           <FormField label="Expiry date" htmlFor="cert-expires">
-            <Input id="cert-expires" name="expiryDate" type="date" className="h-10" defaultValue="2028-02-18" />
+            <DatePicker
+              id="cert-expires"
+              name="expiryDate"
+              value={expiryDate}
+              onChange={setExpiryDate}
+              placeholder="Select expiry date"
+              minDate={issueDate || undefined}
+              className="h-10 w-full"
+            />
           </FormField>
           <FormField label="Credential / reference ID" htmlFor="cert-ref">
             <Input id="cert-ref" name="reference" className="h-10" defaultValue="ATI-IPM-2026-0417" />
@@ -249,17 +228,10 @@ export function UploadCertificateModal({ isOpen, onClose, onSubmit }: UploadCert
           <Input id="cert-notes" name="notes" className="h-10" defaultValue="5-day residential course · field assessment passed" />
         </FormField>
 
-        {isExternal ? (
-          <Banner tone="warning">
-            External certificates are submitted to your Woreda Extension Officer for verification. The record shows
-            &ldquo;Pending verification&rdquo; until approved, and is not counted toward qualification tiers until then.
-          </Banner>
-        ) : (
-          <Banner tone="info">
-            Agrilearn certificates are synced automatically and marked verified — add a record here only if it has not
-            appeared after 24 hours.
-          </Banner>
-        )}
+        <Banner tone="warning">
+          Certificates are submitted to your Woreda Extension Officer for verification. The record shows
+          &ldquo;Pending verification&rdquo; until approved, and is not counted toward qualification tiers until then.
+        </Banner>
       </form>
     </Modal>
   );

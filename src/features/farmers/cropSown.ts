@@ -1,6 +1,8 @@
 import { CURRENT_AGENT, FARMERS, PLOTS } from "./data";
 import { registryCode } from "./components/planVisit";
 import type { Farmer } from "./types";
+import type { SpecRule } from "./cropSownSpec";
+import { applySpec } from "./cropSownSpecApply";
 
 // Crop Sown Registry: the tab → section → field list from the registry spec, shared by the Submit Crop Report
 // form and the farmer profile's "Crop Sown Details" tab. `key` is the registry's field name. Values are sample
@@ -13,6 +15,15 @@ export interface CropSownFieldDef {
   label: string;
   type: CropSownFieldType;
   options?: readonly string[];
+  /** The registry's value behind each option label, when it lists the choices itself. */
+  optionValues?: Record<string, string | boolean>;
+  /** Master Data codes by label for a catalog field, used when the intake-form route has not supplied the choices. */
+  fallbackValues?: Record<string, string>;
+  /** The registry's flags and rules for the field (see cropSownSpec). */
+  required?: boolean;
+  readOnly?: boolean;
+  numeric?: "integer" | "decimal";
+  rules?: SpecRule[];
 }
 
 export interface CropSownSectionDef {
@@ -166,29 +177,25 @@ const clusterDefs = (actual: boolean): Def[] => [
   ...STAFF,
 ];
 
-export const CROP_SOWN_FORM: CropSownTabDef[] = [
-  {
-    key: "crop-sown",
-    label: "Crop Sown",
-    sections: [
-      section("identity", "Farmer Identity", [
-        ["farmer_id", "Farmer ID", "text"],
-        ["farmer_name", "Farmer Name", "text"],
-        ["fayda_fan_id", "Fayda ID (FAN)", "text"],
-        ["crop_year", "Crop Year", "text"],
-        ["production_season", "Production Season", "select", SEASONS],
-      ]),
-      section("address", "Address / Location", [
-        ["geo_code_hierarchy_json", "Location Hierarchy", "geo"],
-        ["latitude", "Geo Latitude", "text"],
-        ["longitude", "Geo Longitude", "text"],
-      ]),
-    ],
-  },
+// The registry has four intake forms (Planning, Cultivation, Sowing, Harvesting), each one page that opens with the farmer
+// identity and the crop year / season it is filed under. Planning also carries the location.
+const IDENTITY = () =>
+  section("identity", "Farmer Identity", [
+    ["farmer_id", "Farmer ID", "text"],
+    ["farmer_name", "Farmer Name", "text"],
+    ["fayda_fan_id", "Fayda ID (FAN)", "text"],
+    ["crop_year", "Crop Year", "text"],
+    ["production_season", "Production Season", "select", SEASONS],
+  ]);
+const ADDRESS = () => section("address", "Address / Location", [["geo_code_hierarchy_json", "Location Hierarchy", "geo"], ["latitude", "Geo Latitude", "text"], ["longitude", "Geo Longitude", "text"]]);
+
+const PORTAL_FORM: CropSownTabDef[] = [
   {
     key: "planning",
     label: "Planning",
     sections: [
+      IDENTITY(),
+      ADDRESS(),
       section("planning", "Crop Planning Details", [
         ["is_plot_not_registered", "Is Plot Not Registered?", "select", YES_NO],
         ["land_id", "Land ID", "text"],
@@ -227,6 +234,7 @@ export const CROP_SOWN_FORM: CropSownTabDef[] = [
     key: "cultivation",
     label: "Cultivation / Land Preparation",
     sections: [
+      IDENTITY(),
       section("cultivation", "Cultivation / Land Preparation Details", [
         ["is_plot_not_registered", "Is Plot Not Registered?", "select", YES_NO],
         ["land_id", "Land ID", "text"],
@@ -261,6 +269,7 @@ export const CROP_SOWN_FORM: CropSownTabDef[] = [
     key: "sowing",
     label: "Sowing",
     sections: [
+      IDENTITY(),
       section("sowing", "Sowing Details", [
         ["land_id", "Land ID", "text"],
         ["cluster_status", "Cluster / Non Cluster Status", "multiselect", CLUSTER_STATUS],
@@ -330,6 +339,7 @@ export const CROP_SOWN_FORM: CropSownTabDef[] = [
     key: "harvesting",
     label: "Harvesting",
     sections: [
+      IDENTITY(),
       section("harvest", "Harvest Details", [
         ["land_id", "Land ID", "text"],
         ["cluster_status", "Cluster / Non Cluster Status", "multiselect", CLUSTER_STATUS],
@@ -360,6 +370,22 @@ export const CROP_SOWN_FORM: CropSownTabDef[] = [
   },
 ];
 
+/** The Crop Sown form: the portal's tabs and sections with the registry's own field definitions (see cropSownSpecApply). */
+export const CROP_SOWN_FORM: CropSownTabDef[] = applySpec(PORTAL_FORM);
+
+export const CROP_SOWN_INTRO_TAB = "crop-sown";
+const INTRO_SECTIONS = ["identity", "address"];
+
+/**
+ * The tabs the Submit Crop Report form shows, as in the design: every registry form opens with the identity, so the form
+ * asks for it once, with the address, on an opening "Crop Sown" tab; each stage tab holds only its own sections. Values
+ * are keyed by section, so a stage still saves them (see STAGE_PLANS).
+ */
+export const CROP_SOWN_TABS: CropSownTabDef[] = [
+  { key: CROP_SOWN_INTRO_TAB, label: "Crop Sown", sections: CROP_SOWN_FORM[0].sections.filter((s) => INTRO_SECTIONS.includes(s.id)) },
+  ...CROP_SOWN_FORM.map((tab) => ({ ...tab, sections: tab.sections.filter((s) => !INTRO_SECTIONS.includes(s.id)) })),
+];
+
 // ── Sample record ───────────────────────────────────────────────────────────────────────────────────────
 
 const ZONE_BY_WOREDA: Record<string, string> = { "Adea woreda": "East Shewa", "Lume woreda": "East Shewa" };
@@ -373,8 +399,8 @@ const round = (n: number, digits = 1) => Number(n.toFixed(digits));
  * these as soon as the farmer is found and shows them read-only; the DA enters only the rest.
  */
 const REGISTRY_KEYS = new Set([
-  "farmer_id", "farmer_name", "fayda_fan_id", "geo_code_hierarchy_json", "latitude", "longitude",
-  "is_plot_not_registered", "land_id", "plot_category", "ownership_type", "land_area", "soil_fertility_type",
+  "farmer_id", "farmer_name", "geo_code_hierarchy_json", "latitude", "longitude",
+  "is_plot_registered", "land_id", "plot_category", "ownership_type", "land_area", "soil_fertility_type",
   "region", "zone", "woreda", "kebele", "gps_coordinate",
   "commodity", "crop_category", "crop_variety", "local_name", "scientific_name",
   "cluster_id", "cluster_name", "cluster_status", "establishing_date", "establishing_date_ec", "sub_kebele",
@@ -405,7 +431,7 @@ export function getCropSownRecord(farmer: Farmer): CropSownValues {
 
   const common = {
     land_id: landId,
-    is_plot_not_registered: "No",
+    is_plot_registered: "Yes",
     land_area: farmer.landHa,
     region: farmer.region,
     zone,
@@ -641,9 +667,8 @@ export interface CropSownTab {
   sections: CropSownSection[];
 }
 
-/** The farmer's record laid out tab → section → field, ready to display. */
-export function getCropSownDetails(farmer: Farmer): CropSownTab[] {
-  const record = getCropSownRecord(farmer);
+/** Crop Sown values laid out tab → section → field, ready to display. */
+export function cropSownTabs(record: CropSownValues): CropSownTab[] {
   return CROP_SOWN_FORM.map((tab) => ({
     key: tab.key,
     label: tab.label,

@@ -7,26 +7,7 @@ export const AGENT_PROFILE = {
   location: "Bako Tibe kebele, Bako Tibe woreda, Oromia",
   email: "tadesse.alemu@gmail.com",
   phone: "+251 91 234 5678",
-  joinedOn: "12 Jul 2022",
   status: "Active",
-};
-
-export const AGENT_STATS = {
-  yearsOfService: "4.2",
-  serviceSince: "Since Jul 2022",
-  kebelesAssigned: 2,
-  kebeles: "Bako Tibe, Gedo",
-  certifications: 3,
-  certificationsPending: 1,
-};
-
-// Read-only summary mirrored from Agrilearn.
-export const LEARNING_SUMMARY = {
-  completed: 6,
-  assigned: 8,
-  certificationsCurrent: 3,
-  note: "1 mandatory course (Climate-Smart Agriculture) due 30 Sep. Reflected read-only from Agrilearn.",
-  agrilearnUrl: "#",
 };
 
 export interface LeaveBalance {

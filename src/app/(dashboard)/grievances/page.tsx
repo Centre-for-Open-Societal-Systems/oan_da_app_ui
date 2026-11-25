@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function GrievancesPage() {
   return (
-    <div className="flex w-full flex-col gap-4">
+    <div className="flex w-full flex-col gap-3.5 sm:gap-4 md:gap-5">
       <GrievancesTable />
     </div>
   );
