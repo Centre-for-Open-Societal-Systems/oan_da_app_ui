@@ -23,8 +23,8 @@ export function VisitEvidence({ visitId, existing = [] }: VisitEvidenceProps) {
   const [gps, setGps] = useState<Gps | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Stored from this dialog; listed above what the visit already had.
-  const [uploaded, setUploaded] = useState<VisitAttachment[]>([]);
+  // Stored from this dialog, with the file picked (so it can be opened again); listed above what the visit already had.
+  const [uploaded, setUploaded] = useState<(VisitAttachment & { local: File })[]>([]);
   const earlier = existing.filter((a) => !uploaded.some((u) => u.file === a.file));
 
   // Position for the geo-tag, asked once when the section opens; uploads go without one if it never comes.
@@ -49,7 +49,7 @@ export function VisitEvidence({ visitId, existing = [] }: VisitEvidenceProps) {
     try {
       const stored = await uploadVisitEvidence(visitId, { file, kind, gps: gps ?? undefined });
       // The same bytes sent again come back as the row already stored; list it once.
-      setUploaded((prev) => [stored, ...prev.filter((a) => a.name !== stored.name)]);
+      setUploaded((prev) => [{ ...stored, local: file }, ...prev.filter((a) => a.name !== stored.name)]);
       setFile(null);
       if (inputRef.current) inputRef.current.value = "";
     } catch (err) {
@@ -91,7 +91,13 @@ export function VisitEvidence({ visitId, existing = [] }: VisitEvidenceProps) {
       {uploaded.length + earlier.length > 0 && (
         <ul className="divide-y divide-line-soft border-t border-line">
           {uploaded.map((a) => (
-            <EvidenceRow key={a.name} kind={a.kind} file={a.file} detail={`${a.gps.lat != null && a.gps.lng != null ? "Geo-tagged" : "No geo-tag"} · ${a.sync_state}`} />
+            <EvidenceRow
+              key={a.name}
+              kind={a.kind}
+              file={a.file}
+              detail={`${a.gps.lat != null && a.gps.lng != null ? "Geo-tagged" : "No geo-tag"} · ${a.sync_state}`}
+              onView={() => openLocalFile(a.local)}
+            />
           ))}
           {earlier.map((a) => (
             <EvidenceRow key={a.file} kind={a.kind} file={a.file} detail={a.captured_at ? `Captured ${formatVisitTime(a.captured_at)}` : ""} />
@@ -102,14 +108,41 @@ export function VisitEvidence({ visitId, existing = [] }: VisitEvidenceProps) {
   );
 }
 
-function EvidenceRow({ kind, file, detail }: { kind: string; file: string; detail: string }) {
+/** Opens a file picked on this device in a new tab (image or PDF viewer). */
+function openLocalFile(file: File) {
+  const url = URL.createObjectURL(file);
+  window.open(url, "_blank", "noopener");
+  // The tab has the bytes long before this; freeing the URL earlier would blank a slow PDF viewer.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+// A saved file can be opened only once the backend serves visit evidence (it has no view route yet).
+const NO_VIEW_ROUTE = "Opening a saved file needs the visit evidence view API (not available yet).";
+
+function EvidenceRow({ kind, file, detail, onView }: { kind: string; file: string; detail: string; onView?: () => void }) {
+  const name = file.split("/").pop();
   return (
     <li className="flex items-center justify-between gap-3 px-4 py-2.5 text-[13.5px]">
       <span className="min-w-0 truncate text-ink">
         <span className="mr-2 rounded bg-slate-100 px-1.5 py-0.5 text-[11.5px] font-medium text-slate-600">{kind}</span>
-        {file.split("/").pop()}
+        {name}
       </span>
-      {detail && <span className="shrink-0 text-[12px] text-muted">{detail}</span>}
+      <span className="flex shrink-0 items-center gap-3">
+        {detail && <span className="text-[12px] text-muted">{detail}</span>}
+        <button
+          type="button"
+          onClick={onView}
+          disabled={!onView}
+          aria-label={`View ${name}`}
+          title={onView ? `View ${name}` : NO_VIEW_ROUTE}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:border-brand-green hover:text-brand-green disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-200 disabled:hover:text-slate-500"
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        </button>
+      </span>
     </li>
   );
 }

@@ -15,6 +15,7 @@ import { RESCHEDULE_REASONS } from "../data";
 import type { VisitRecord } from "../types";
 import { VisitFarmerCard } from "./VisitFarmerCard";
 import { VisitStatusPill } from "./VisitStatusPill";
+import { visitStatusLabel } from "../api";
 
 interface RescheduleVisitModalProps {
   visit: VisitRecord | null;
@@ -64,7 +65,7 @@ function RescheduleForm({ visit, onClose, onRescheduled }: RescheduleVisitModalP
       isOpen
       onClose={onClose}
       title="Reschedule Visit"
-      titleAddon={<VisitStatusPill status={visit.status} className="min-w-0" />}
+      titleAddon={<VisitStatusPill status={visitStatusLabel(visit)} className="min-w-0" />}
       size="xl"
       footer={
         <>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Farmer } from "../types";
 import { useAuthStore } from "@/store/useAuthStore";
 import { listAgents, type ApiAgent } from "@/features/agents";
@@ -8,7 +8,10 @@ import { apiFarmerToFarmer, describeFarmerError, listFarmers } from "../farmersA
 import {
   ADVISORY_VISIT,
   durationMinutes,
+  EMPTY_LOCATION,
   formatWhen,
+  parseLocation,
+  type PlotLocation,
   joinNames,
   matchFarmers,
   mergeBatchRows,
@@ -24,6 +27,7 @@ import {
   VISIT_TYPES,
   type AdvisoryQa,
   type PlanVisitResult,
+  type PriorityLevel,
   type VisitPreset,
 } from "./planVisit";
 
@@ -35,8 +39,11 @@ const newOpId = () => (typeof crypto.randomUUID === "function" ? crypto.randomUU
 // Farmer search / selection (up to MAX_BATCH_FARMERS farmers), visit type and outcome state for the plan-visit form.
 export function usePlanVisit(initial: Farmer[], preset: VisitPreset | undefined) {
   const [selected, setSelected] = useState<Farmer[]>(() => initial.slice(0, MAX_BATCH_FARMERS));
-  // The form does not ask for a priority: a Priority-list preset sends its level and reason, others the default (Medium).
-  const presetPriority = preset ? PRIORITY_BY_LEVEL[preset.level] : "";
+  // Priority and its reason are asked on the form; a Priority-list preset fills them in, others start at Medium.
+  const [priority, setPriority] = useState<PriorityLevel>(preset ? splitPriority(PRIORITY_BY_LEVEL[preset.level]).level : "Medium");
+  const [priorityReason, setPriorityReason] = useState(preset?.reason ?? "");
+  // Sent as notify_farmer_sms; ticked by default, the DA can untick it.
+  const [notifySms, setNotifySms] = useState(true);
   const [visitType, setVisitType] = useState(preset && VISIT_TYPES.includes(preset.visitType) ? preset.visitType : VISIT_TYPES[0]);
   const [query, setQuery] = useState("");
   const [searched, setSearched] = useState(false);
@@ -56,10 +63,16 @@ export function usePlanVisit(initial: Farmer[], preset: VisitPreset | undefined)
       else delete next[farmer.id];
       return next;
     });
+  // Each farmer's plot reference and latitude / longitude (by farmer id), sent as plot_ref and location.
+  const [locations, setLocations] = useState<Record<string, PlotLocation>>({});
+  const setLocation = useCallback(
+    (farmer: Farmer, patch: Partial<PlotLocation>) => setLocations((prev) => ({ ...prev, [farmer.id]: { ...(prev[farmer.id] ?? EMPTY_LOCATION), ...patch } })),
+    [],
+  );
   /** The common form's current values, the starting point of a farmer's own details. */
   const commonDetails = (): VisitItemDetails => {
     const d = readVisitDetails();
-    return { visit_type: visitType, priority: splitPriority(presetPriority).level, date: d.date, time: d.time, duration_min: durationMinutes(d.duration), purpose: d.purpose };
+    return { visit_type: visitType, priority, date: d.date, time: d.time, duration_min: durationMinutes(d.duration), purpose: d.purpose };
   };
   // Whose plan the batch went to, reused when a failed farmer is resubmitted from the result.
   const [owner, setOwner] = useState<Owner | null>(null);
@@ -172,9 +185,19 @@ export function usePlanVisit(initial: Farmer[], preset: VisitPreset | undefined)
         setError("Your account could not be read. Sign in again and retry.");
         return;
       }
+      // Every farmer's latitude / longitude must be complete and in range before anything is sent.
+      for (const f of selected) {
+        const { error: bad } = parseLocation(locations[f.id] ?? EMPTY_LOCATION);
+        if (bad) {
+          setError(selected.length > 1 ? `${f.name}: ${bad}` : bad);
+          return;
+        }
+      }
       const details = readVisitDetails();
-      const priority = splitPriority(presetPriority);
+      const reason = priorityReason.trim();
       const requests = selected.map((f) => {
+        const loc = locations[f.id] ?? EMPTY_LOCATION;
+        const { location } = parseLocation(loc);
         const code = registryCode(f);
         // A farmer's own details (set with "Edit details" on their card) win over the common form below.
         const own = selected.length > 1 ? overrides[f.id] : undefined;
@@ -187,16 +210,17 @@ export function usePlanVisit(initial: Farmer[], preset: VisitPreset | undefined)
           visit_type: visitType,
           purpose: details.purpose,
           duration_min: durationMinutes(details.duration),
-          priority: priority.level,
-          priority_reason: preset?.reason ?? priority.reason,
-          // The success message promises the farmer an SMS.
-          notify_farmer_sms: true,
+          priority,
+          ...(reason && { priority_reason: reason }),
+          ...(loc.plotRef && { plot_ref: loc.plotRef }),
+          ...(location && { location }),
+          notify_farmer_sms: notifySms,
           ...(isAdvisory && { advisory_qa: items }),
           client_op_id: selected.length === 1 ? clientOpId : `${clientOpId}-${code}`,
           ...own,
         };
         // The priority reason describes the common priority only.
-        if (own && own.priority !== priority.level) request.priority_reason = undefined;
+        if (own && own.priority !== priority) delete request.priority_reason;
         // Advisory Q&A from the form goes with any farmer whose own type is Advisory.
         if (own?.visit_type === ADVISORY_VISIT && items.length > 0) request.advisory_qa = items;
         else if (own && own.visit_type !== ADVISORY_VISIT) delete request.advisory_qa;
@@ -250,5 +274,5 @@ export function usePlanVisit(initial: Farmer[], preset: VisitPreset | undefined)
     await send(rows, owner);
   };
 
-  return { overrides, setOverride, commonDetails, view, batch, discard, discardFailed, resubmit, retryFailed, isOfficer, agents, agentsError, assignee, setAssignee, selected, toggle, remove, isFull, visitType, setVisitType, advisoryQa, setAdvisoryQa, query, changeQuery, searched, term, matches, emptyText, runSearch, result, finish, submitting, error };
+  return { priority, setPriority, priorityReason, setPriorityReason, notifySms, setNotifySms, locations, setLocation, overrides, setOverride, commonDetails, view, batch, discard, discardFailed, resubmit, retryFailed, isOfficer, agents, agentsError, assignee, setAssignee, selected, toggle, remove, isFull, visitType, setVisitType, advisoryQa, setAdvisoryQa, query, changeQuery, searched, term, matches, emptyText, runSearch, result, finish, submitting, error };
 }

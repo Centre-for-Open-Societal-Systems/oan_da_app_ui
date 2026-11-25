@@ -6,9 +6,11 @@ interface PlanVisitSuccessProps {
   isSchedule: boolean;
   /** Questions captured on an Advisory visit; 0 for other visit types. */
   questionCount?: number;
+  /** The farmer was to be told by SMS (notify_farmer_sms). */
+  notifySms?: boolean;
 }
 
-export function PlanVisitSuccess({ result, visitType, isSchedule, questionCount = 0 }: PlanVisitSuccessProps) {
+export function PlanVisitSuccess({ result, visitType, isSchedule, questionCount = 0, notifySms = true }: PlanVisitSuccessProps) {
   const questions = questionCount > 0 ? ` with ${questionCount} farmer question${questionCount === 1 ? "" : "s"}` : "";
   const many = (result.count ?? 1) > 1;
   const visits = many ? `${visitType} visits` : `${visitType} visit`;
@@ -25,7 +27,7 @@ export function PlanVisitSuccess({ result, visitType, isSchedule, questionCount 
       <p className="mt-2 max-w-[420px] text-[14px] leading-relaxed text-ink-soft">
         {result.kind === "draft"
           ? `${visits}${result.farmer ? ` with ${result.farmer}` : ""} for ${result.when}${questions} ${many ? "are" : "is"} saved as a draft on this device. Open Plan visit again to finish it.`
-          : `${visits}${result.farmer ? ` with ${result.farmer}` : ""} on ${result.when}${questions}${result.visitId ? ` ${many ? "are" : "is"} saved as ${result.visitId}` : ""}. ${many ? "Each farmer is" : "The farmer is"} notified by SMS.`}
+          : `${visits}${result.farmer ? ` with ${result.farmer}` : ""} on ${result.when}${questions}${result.visitId ? ` ${many ? "are" : "is"} saved as ${result.visitId}` : ""}.${notifySms ? ` ${many ? "Each farmer is" : "The farmer is"} notified by SMS.` : ""}`}
       </p>
     </div>
   );

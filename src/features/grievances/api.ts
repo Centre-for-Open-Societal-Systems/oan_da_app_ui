@@ -234,22 +234,42 @@ export async function submitGrievance(body: SubmitGrievanceRequest): Promise<Sub
 }
 
 // --- administrative area ----------------------------------------------------
-// The create endpoint validates administrative_area against the Grievance Service's own area list, as
-// `kebele-<code>` (e.g. "kebele-ET140108101008"). Those codes are not the DA record's Kebele codes.
+// The create endpoint takes administrative_area as `kebele-<code>` (e.g. "kebele-ET140108101008"). The pickers
+// read Region > Zone > Woreda > Kebele from the geo Master Data (listKbGeo → GET /da-services/get_master_data).
 
-/** One row of the Grievance Service's area list. */
-export interface GrievanceArea {
-  /** "region-ET14", "kebele-ET140108101008", … */
-  area_id: string;
-  area_name: string;
+/** One area of the picker: its geo code and display name ("" when only the code is known). */
+export interface AreaPick {
   code: string;
+  name: string;
 }
 
-/** The areas under `parent` (the regions without one), read through this app's /api/grievance-areas. */
-export async function fetchGrievanceAreas(parent?: string): Promise<GrievanceArea[]> {
-  const res = await fetch(`/api/grievance-areas${parent ? `?parent=${encodeURIComponent(parent)}` : ""}`);
-  if (!res.ok) throw new Error("Could not load the areas. Please try again.");
-  return ((await res.json()) as { areas: GrievanceArea[] }).areas;
+export type AreaLevel = "region" | "zone" | "woreda" | "kebele";
+/** The levels fixed by the signed-in user's own area; the levels left out are picked. */
+export type AreaPreset = Partial<Record<AreaLevel, AreaPick>>;
+
+type Ref = { id: string; name: string } | null | undefined;
+const WOREDA_CODE = /^ET\d{6}$/;
+const toPick = (ref: Ref): AreaPick | undefined => (ref?.id ? { code: ref.id, name: ref.name ?? "" } : undefined);
+
+/**
+ * The area a grievance is pre-filled with, from the user's own location (/me): a DA's down to their Kebele, a
+ * Supervisor's down to their Woreda (the Kebele is then picked). Other roles pick every level. A Region or Zone
+ * /me leaves out comes from the Woreda's P-code prefix (Region ET04 > Zone ET0401 > Woreda ET040101).
+ */
+export function grievanceAreaPreset(
+  role: string | null | undefined,
+  location: { region: Ref; zone: Ref; woreda: Ref; kebele: Ref } | null | undefined,
+  scopeWoreda?: string | null,
+): AreaPreset {
+  if (role !== "DA" && role !== "Supervisor") return {};
+  const woreda = toPick(location?.woreda) ?? (scopeWoreda ? { code: scopeWoreda, name: "" } : undefined);
+  if (!woreda) return {};
+  const fromCode = WOREDA_CODE.test(woreda.code);
+  const region = toPick(location?.region) ?? (fromCode ? { code: woreda.code.slice(0, 4), name: "" } : undefined);
+  const zone = toPick(location?.zone) ?? (fromCode ? { code: woreda.code.slice(0, 6), name: "" } : undefined);
+  if (!region || !zone) return {};
+  const kebele = role === "DA" ? toPick(location?.kebele) : undefined;
+  return kebele ? { region, zone, woreda, kebele } : { region, zone, woreda };
 }
 
 /** administrative_area the create endpoint expects for a Kebele: `kebele-<geo value_id>`. */
@@ -343,6 +363,16 @@ export function caseFromApi(grievance: Grievance, detail?: ApiGrievanceDetail, t
 }
 
 /**
+ * An Ethiopian mobile in the form the Grievance Service's Phone field accepts ("+251911234567"), or null when `input`
+ * is not one. Takes 0911234567, 911234567, 251911234567 or +251 911 234 567 (Safaricom 07… too).
+ */
+export function toEthiopianMobile(input: string): string | null {
+  const digits = input.replace(/[\s().-]/g, "");
+  const m = digits.match(/^(?:\+?251|0)?([79]\d{8})$/);
+  return m ? `+251${m[1]}` : null;
+}
+
+/**
  * Submitter details for a DA raising a grievance for themselves, from the registry record GET /me returns
  * (`agent`). The account name stands in when the record has no name; anything else missing comes back empty.
  */
@@ -351,7 +381,5 @@ export function selfSubmitter(agent: Record<string, unknown> | null | undefined,
   return {
     name: text(agent?.full_name) || accountName.trim(),
     mobile: text(agent?.phone) || text(agent?.mobile),
-    woredaCode: text(agent?.woreda),
-    kebeleName: text(agent?.kebele_name),
   };
 }

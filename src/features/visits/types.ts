@@ -4,7 +4,12 @@ export interface VisitRecord {
   id: string;
   date: string;
   time: string;
+  /** The DA's name (their DA-ID until the backend sends the name). */
   agent: string;
+  /** The DA's DA-ID; absent on sample records. */
+  daId?: string;
+  /** Frappe User (email) the visit belongs to; absent until the backend sends it. */
+  ownerUser?: string;
   farmerId: string;
   farmerName: string;
   farmerEmail: string;
@@ -18,6 +23,8 @@ export interface VisitRecord {
   assignedBy?: string;
   /** Backend physical status (e.g. "In progress"); absent on sample records. */
   physicalStatus?: string;
+  /** The planned day, "2026-11-24"; absent on sample records. */
+  scheduledDate?: string;
   /** Visit type chosen at planning (Crop Survey, Advisory …); absent on sample records. */
   visitType?: string;
 }

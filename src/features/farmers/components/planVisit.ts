@@ -14,6 +14,9 @@ export interface AdvisoryQa {
 }
 
 export const DURATIONS = ["30 min", "45 min", "60 min", "90 min"];
+/** The visit priority the DA picks on the form (sent as `priority`). */
+export const PRIORITY_LEVELS = ["High", "Medium", "Low"] as const;
+export type PriorityLevel = (typeof PRIORITY_LEVELS)[number];
 export const PRIORITIES = ["High — overdue by 4 days", "Medium — due this week", "Low — routine"];
 export const PRIORITY_BY_LEVEL = { high: PRIORITIES[0], medium: PRIORITIES[1], low: PRIORITIES[2] } as const;
 
@@ -115,6 +118,30 @@ export async function planFarmers(
     else outcome.failed.push({ farmer, reason: failedReason.get(body.farmer_id) || PLAN_FAILED });
   }
   return outcome;
+}
+
+/** A farmer's visit location as typed: the plot (plot_ref) and the plot's latitude / longitude. */
+export interface PlotLocation {
+  plotRef: string;
+  lat: string;
+  lng: string;
+}
+export const EMPTY_LOCATION: PlotLocation = { plotRef: "", lat: "", lng: "" };
+
+/**
+ * The typed latitude / longitude as the visit's `location`: undefined when both are empty, an error when only one is
+ * given, either is not a number or is out of range (lat -90..90, lng -180..180).
+ */
+export function parseLocation({ lat, lng }: Pick<PlotLocation, "lat" | "lng">): { location?: { lat: number; lng: number }; error?: string } {
+  const a = lat.trim();
+  const b = lng.trim();
+  if (!a && !b) return {};
+  if (!a || !b) return { error: "Enter both latitude and longitude, or neither." };
+  const la = Number(a);
+  const lo = Number(b);
+  if (!Number.isFinite(la) || la < -90 || la > 90) return { error: "Latitude must be a number from -90 to 90." };
+  if (!Number.isFinite(lo) || lo < -180 || lo > 180) return { error: "Longitude must be a number from -180 to 180." };
+  return { location: { lat: la, lng: lo } };
 }
 
 /** "45 min" → 45. */

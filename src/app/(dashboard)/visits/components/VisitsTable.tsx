@@ -18,7 +18,7 @@ import { FarmerAvatar } from "@/features/farmers";
 import { VisitStatusPill } from "@/features/visits";
 import { VisitDetailsModal } from "@/features/visits";
 import { RescheduleVisitModal } from "@/features/visits";
-import { CancelVisitModal, canActOnVisit, canCancel, canLogOutcome, canReschedule, canStartVisit, listVisits, LogOutcomeModal, StartVisitModal, toVisitRecord } from "@/features/visits";
+import { CancelVisitModal, canActOnVisit, canCancel, canLogOutcome, canReschedule, canStartVisit, listVisits, LogOutcomeModal, StartVisitModal, toVisitRecord, visitStatusLabel } from "@/features/visits";
 import { Banner } from "@/components/ui/Banner";
 import { cn } from "@/lib/utils";
 import type { VisitRecord } from "@/features/visits";
@@ -36,7 +36,9 @@ const EMPTY: VisitFilters = { agent: new Set(), kebele: new Set(), status: new S
 
 type ActiveModal = { type: "view" | "reschedule" | "start" | "outcome" | "cancel"; visit: VisitRecord } | null;
 
-const STATUS_ORDER = ["Confirmed", "Planned", "Completed", "Missed"];
+// physical_status values in the order the Status filter lists them; any other value follows.
+const STATUS_ORDER = ["Planned", "Confirmed", "In progress", "Physical Visit Complete", "Missed", "Rescheduled", "Cancelled", "Superseded"];
+
 
 /** Filter options with counts from the loaded rows; `order` fixes the list (status), otherwise first-seen order. */
 const optionsOf = (values: string[], order?: string[]): FilterOption[] =>
@@ -223,6 +225,8 @@ export function VisitsTable() {
   // A DA's list is narrowed to their own with da_id from /me.
   const isDA = useAuthStore((s) => s.role === "DA");
   const ownDaId = useAuthStore((s) => s.profile?.daId ?? null);
+  const ownUser = useAuthStore((s) => s.user?.id ?? null);
+  const me = { user: ownUser, daId: ownDaId };
   const daFilter = (isDA ? ownDaId : null) ?? undefined;
   const [date, setDate] = useState(isoToday);
   const [selectedDate, setSelectedDate] = useState(isoToday);
@@ -256,7 +260,8 @@ export function VisitsTable() {
   const error = loading ? null : loaded.error;
   const agentOptions = optionsOf(source.map((v) => v.agent));
   const kebeleOptions = optionsOf(source.map((v) => v.kebele));
-  const statusOptions = optionsOf(source.map((v) => v.status), STATUS_ORDER);
+  const statuses = source.map(visitStatusLabel);
+  const statusOptions = optionsOf(statuses, [...STATUS_ORDER.filter((s) => statuses.includes(s)), ...new Set(statuses.filter((s) => !STATUS_ORDER.includes(s)))]);
   const filterFields: FilterFieldConfig[] = [
     ...(isDA ? [] : [{ key: "agent", label: "Agent", allLabel: "All agents", placeholder: "All Agent", options: agentOptions }]),
     { key: "kebele", label: "Kebele", allLabel: "All kebeles", placeholder: "All Kebele", options: kebeleOptions },
@@ -276,7 +281,7 @@ export function VisitsTable() {
     (v) =>
       (filters.agent.size === 0 || filters.agent.has(v.agent)) &&
       (filters.kebele.size === 0 || filters.kebele.has(v.kebele)) &&
-      (filters.status.size === 0 || filters.status.has(v.status)) &&
+      (filters.status.size === 0 || filters.status.has(visitStatusLabel(v))) &&
       matchesQuery(query, v),
   );
 
@@ -397,9 +402,9 @@ export function VisitsTable() {
             )}
             {pageRows.map((v) => {
               const showLogOutcome = canLogOutcome(v);
-              const showStart = canStartVisit(v) && canActOnVisit(v, isDA, ownDaId);
+              const showStart = canStartVisit(v) && canActOnVisit(v, isDA, me);
               const canResched = v.physicalStatus === undefined || canReschedule(v);
-              const canCanc = canCancel(v) && canActOnVisit(v, isDA, ownDaId);
+              const canCanc = canCancel(v) && canActOnVisit(v, isDA, me);
               const hasMoreActions = canResched || canCanc;
 
               return (
@@ -427,9 +432,7 @@ export function VisitsTable() {
                     </p>
                   </td>
                   <td className="whitespace-nowrap px-4 py-3.5 text-center">
-                    <VisitStatusPill status={v.status} />
-                    {v.physicalStatus === "In progress" && <p className="mt-1 text-[12px] font-medium text-blue-600">In progress</p>}
-                    {(v.physicalStatus === "Cancelled" || v.physicalStatus === "Rescheduled") && <p className="mt-1 text-[12px] font-medium text-muted">{v.physicalStatus}</p>}
+                    <VisitStatusPill status={visitStatusLabel(v)} />
                   </td>
                   <td className="whitespace-nowrap px-4 py-3.5 text-right">
                     <div className="flex items-center justify-end gap-1.5 sm:gap-2">
@@ -483,6 +486,7 @@ export function VisitsTable() {
           visit={modal.visit}
           onClose={() => setModal(null)}
           onReschedule={(visit) => setModal({ type: "reschedule", visit })}
+          canReschedule={modal.visit.physicalStatus === undefined || canReschedule(modal.visit)}
         />
       )}
       {modal?.type === "reschedule" && (
