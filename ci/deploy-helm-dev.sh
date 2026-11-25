@@ -8,16 +8,19 @@
 set -euo pipefail
 
 : "${KUBECONFIG:?KUBECONFIG is required (credential oan-dev-kubeconfig)}"
-: "${IMMUTABLE_TAG:?IMMUTABLE_TAG is required (<package.json version>-develop.<build>)}"
+: "${IMMUTABLE_TAG:?IMMUTABLE_TAG is required (<package.json version>-<branch>.<build>)}"
+
+# DEPLOY_ENV picks the values: dev (develop) or staging (the staging branch, a promoted chart).
+DEPLOY_ENV="${DEPLOY_ENV:-dev}"
 
 NS="${DA_NAMESPACE:-da-app}"
 RELEASE="${DA_UI_RELEASE:-da-app-ui}"
 CHART_TGZ="built-chart/oan-da-app-ui-${IMMUTABLE_TAG}.tgz"
-VALUES=helm/environments/dev/oan-da-app-ui.yaml
+VALUES="helm/environments/${DEPLOY_ENV}/oan-da-app-ui.yaml"
 
 test -f "${CHART_TGZ}" || { echo "${CHART_TGZ} is missing: run package_chart.py package first" >&2; exit 1; }
 
-echo "=== Deploying to oan_dev: release ${RELEASE}, namespace ${NS}, image tag ${IMMUTABLE_TAG} ==="
+echo "=== Deploying to ${DEPLOY_ENV}: release ${RELEASE}, namespace ${NS}, image tag ${IMMUTABLE_TAG} ==="
 
 if ! helm upgrade --install "${RELEASE}" "${CHART_TGZ}" --namespace "${NS}" -f "${VALUES}" \
   --set ui.image.tag="${IMMUTABLE_TAG}" \
@@ -31,4 +34,4 @@ fi
 helm -n "${NS}" status "${RELEASE}"
 kubectl -n "${NS}" get pods,ingress
 
-echo "=== oan_dev deploy complete: ${RELEASE} ${IMMUTABLE_TAG} ==="
+echo "=== ${DEPLOY_ENV} deploy complete: ${RELEASE} ${IMMUTABLE_TAG} ==="
