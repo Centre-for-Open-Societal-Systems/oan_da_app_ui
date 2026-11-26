@@ -67,8 +67,12 @@ describe("canActOnVisit", () => {
     const visit = { daId: "DA-000003" };
     expect(canActOnVisit(visit, true, { user: "da.user@example.com", daId: "DA-000003" })).toBe(true);
     expect(canActOnVisit(visit, true, { daId: "DA-000009" })).toBe(false);
-    expect(canActOnVisit(visit, true, {})).toBe(false);
     expect(canActOnVisit(visit, false, {})).toBe(true);
+  });
+
+  it("lets a DA act when the owner is unknown (no visit user, no DA-ID on one side); the backend checks the call", () => {
+    expect(canActOnVisit({ daId: "DA-000003" }, true, { user: "da.user@example.com" })).toBe(true);
+    expect(canActOnVisit({}, true, { user: "da.user@example.com" })).toBe(true);
   });
 });
 

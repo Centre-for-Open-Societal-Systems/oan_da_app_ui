@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FormField } from "@/components/ui/FormField";
-import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { listKbGeo, type KbGeo } from "@/features/communication";
 import { cn } from "@/lib/utils";
@@ -27,6 +26,9 @@ function useGeo(level: AreaLevel, parent: string | null) {
 
   return state && state.key === key ? state : { areas: null as KbGeo[] | null, error: false };
 }
+
+/** Every area lies in Ethiopia: Regions are listed under its code. */
+const COUNTRY = "ET";
 
 /** The signed-in user's area preset (userAreaPreset of their role and /me location). */
 export function useUserAreaPreset(): AreaPreset {
@@ -60,12 +62,7 @@ interface Props {
   /** Prefix of the fields' ids, e.g. "grv" gives "grv-region". */
   idPrefix: string;
   onChange: (selection: AreaSelection) => void;
-  /** Shows the read-only Country field first (default true). */
-  showCountry?: boolean;
-  /**
-   * Shows only the levels /me leaves empty: the account's own levels (and Country, when /me names it) get no field, and
-   * a line under the fields names them instead.
-   */
+  /** Shows only the levels /me leaves empty: the account's own levels get no field, and a line under the fields names them instead. */
   hideLocked?: boolean;
   /** An error shown under the fields, e.g. a failed "required" check. */
   error?: string;
@@ -75,16 +72,14 @@ interface Props {
 }
 
 /**
- * Country > Region > Zone > Woreda (> Kebele) from the geo Master Data (GET /get_master_data?data_type=geo). The levels
+ * Region > Zone > Woreda (> Kebele) from the geo Master Data (GET /get_master_data?data_type=geo). The levels
  * the account fixes (the preset, from /me) are shown filled and locked; the levels /me leaves empty are picked, each
  * listing the areas under the one above. A locked level is checked against the Master Data (by code, else by name);
  * one not found there is picked instead, with every level below it.
  */
-export function AreaPicker({ depth, preset: presetProp, initial, required, idPrefix, onChange, showCountry = true, hideLocked = false, error, className, fieldClassName, controlClassName }: Props) {
+export function AreaPicker({ depth, preset: presetProp, initial, required, idPrefix, onChange, hideLocked = false, error, className, fieldClassName, controlClassName }: Props) {
   const userPreset = useUserAreaPreset();
   const preset = presetProp ?? userPreset;
-  const meCountry = useAuthStore((s) => s.profile?.location?.country?.name);
-  const countryName = meCountry || "Ethiopia";
   const levels = levelsDownTo(depth);
   const asked = (level: AreaLevel) => levels.includes(level);
   const [chosen, setChosen] = useState<Partial<Record<AreaLevel, string>>>(() => ({ ...initial }));
@@ -106,7 +101,7 @@ export function AreaPicker({ depth, preset: presetProp, initial, required, idPre
   };
 
   const parentOf = (level: Level) => (level.code && !level.resolving ? level.code : null);
-  const regionList = useGeo("region", "ET");
+  const regionList = useGeo("region", COUNTRY);
   const region = resolve("region", regionList, null);
   const zoneList = useGeo("zone", asked("zone") ? parentOf(region) : null);
   const zone = resolve("zone", zoneList, region);
@@ -142,19 +137,13 @@ export function AreaPicker({ depth, preset: presetProp, initial, required, idPre
 
   const locked = rows.filter((r) => r.locked).map((r) => AREA_LABELS[r.level]);
   const shownRows = hideLocked ? rows.filter((r) => !r.locked) : rows;
-  const countryShown = showCountry && !(hideLocked && meCountry);
-  // With hideLocked: "Ethiopia › Oromia › West Shewa" for the levels the account fixes.
-  const accountArea = [...(hideLocked && meCountry ? [meCountry] : []), ...rows.filter((r) => r.locked).map((r) => (r.resolving && !r.name ? "…" : r.name || r.code))];
+  // With hideLocked: "Oromia › West Shewa" for the levels the account fixes.
+  const accountArea = rows.filter((r) => r.locked).map((r) => (r.resolving && !r.name ? "…" : r.name || r.code));
 
   return (
     <div className={cn("flex flex-col gap-2", className)}>
-      {(countryShown || shownRows.length > 0) && (
+      {shownRows.length > 0 && (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {countryShown && (
-          <FormField label="Country" htmlFor={`${idPrefix}-country`} className={fieldClassName}>
-            <Input id={`${idPrefix}-country`} value={countryName} disabled readOnly className={controlClassName} />
-          </FormField>
-        )}
         {shownRows.map((row) => {
           const label = AREA_LABELS[row.level];
           const id = `${idPrefix}-${row.level}`;

@@ -109,12 +109,16 @@ export function toVisitRecord(v: ApiVisit): VisitRecord {
  */
 export const visitStatusLabel = (v: Pick<VisitRecord, "physicalStatus" | "status">) => v.physicalStatus ?? v.status;
 
-/** A DA acts only on their own visits; an unknown DA id (/me not read yet) counts as not theirs. Officers are not limited here. */
+/**
+ * Whether a DA may Start / Cancel a visit. Officers are not limited here. The visit's `user` (the DA's Frappe User) is
+ * matched against the signed-in user, else the DA-ID when both sides have one. When neither is known (GET /visits sends no
+ * `user` yet and /me no DA-ID), the DA may act: the list is already scoped to them and the backend checks the call.
+ */
 export const canActOnVisit = (v: Pick<VisitRecord, "daId" | "ownerUser">, isDA: boolean, me: { user?: string | null; daId?: string | null }) => {
   if (!isDA) return true;
-  // The visit's `user` (the DA's Frappe User) against the signed-in user; the DA-ID when /me sends one.
-  if (v.ownerUser && me.user && v.ownerUser.toLowerCase() === me.user.toLowerCase()) return true;
-  return !!me.daId && v.daId === me.daId;
+  if (v.ownerUser && me.user) return v.ownerUser.toLowerCase() === me.user.toLowerCase();
+  if (v.daId && me.daId) return v.daId === me.daId;
+  return true;
 };
 
 /** Only a Planned or Confirmed visit can be checked in, on any date (today, overdue, upcoming or future). */

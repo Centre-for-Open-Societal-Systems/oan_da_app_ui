@@ -16,7 +16,7 @@ import { FilterDropdown, type FilterOption } from "@/components/ui/FilterDropdow
 import { AdvancedFiltersDrawer, type FilterFieldConfig, type FilterSelection } from "@/components/ui/AdvancedFiltersDrawer";
 import { PAGE_SIZES, TablePagination } from "@/components/ui/TablePagination";
 import { useAuthStore } from "@/store/useAuthStore";
-import { ACTIVE_TONE, APPROVAL_TONE, BulkImportsPanel, apiAgentToAgent, describeAgentError, importStatusLabel, listMyTeam, type Agent, type AgentFacets, type AgentFilterField, type AgentFilters, type AgentImport, type TeamKind } from "@/features/agents";
+import { ACTIVE_TONE, APPROVAL_TONE, AgentsPageHeader, BulkImportsPanel, apiAgentToAgent, describeAgentError, importStatusLabel, listMyTeam, type Agent, type AgentFacets, type AgentFilterField, type AgentFilters, type AgentImport, type TeamKind } from "@/features/agents";
 import { searchPlaceholder } from "@/lib/search";
 import { fileDate, type CsvColumn } from "@/lib/download";
 import { downloadTable, formatLabel } from "@/lib/export";
@@ -182,30 +182,121 @@ export function AgentsRegistry() {
   const rows = source;
 
   const columns: Column<Agent>[] = [
-    { key: "daId", header: "DA-ID", cell: (a) => <span className="font-semibold text-ink">{a.daId.replace(/-(?=d+$)/, "-​")}</span> },
     {
-      key: "name", header: "Full Name",
-      cell: (a) => isDA
-        ? <span className="flex items-center gap-2 whitespace-nowrap text-ink">{a.fullName}{a.daId === myDaId && <Pill tone="green">You</Pill>}</span>
-        : <Link href={`/agents/${a.daId}`} className="whitespace-nowrap text-ink hover:text-brand-green">{a.fullName}</Link>,
+      key: "sNo",
+      header: "S. No.",
+      align: "center",
+      className: "w-12 sm:w-14 px-2 sm:px-3 text-center whitespace-nowrap",
+      cell: (_a, index) => (
+        <span className="text-[13px] font-medium text-slate-500">
+          {(page - 1) * pageSize + index + 1}
+        </span>
+      ),
     },
-    { key: "fayda", header: "Fayda ID", cell: (a) => <span className="whitespace-nowrap text-ink">{a.faydaId}</span> },
-    { key: "active", header: <FilterDropdown label="Active Status" allLabel="All active statuses" options={activeOptions} selected={filters.active} onApply={setFilter("active")} />, align: "center", cell: (a) => <Pill tone={ACTIVE_TONE[a.activeStatus]}>{a.activeStatus}</Pill> },
-    { key: "tier", header: <FilterDropdown label="Education Tier" allLabel="All tiers" options={tierOptions} selected={filters.tier} onApply={setFilter("tier")} />, cell: (a) => a.educationTier },
-    { key: "kebele", header: <FilterDropdown label="Assigned Kebele" allLabel="All kebeles" options={kebeleOptions} selected={filters.kebele} onApply={setFilter("kebele")} />, cell: (a) => (a.kebele === UNASSIGNED ? <span className="text-subtle">Unassigned</span> : <span className="whitespace-nowrap">{a.kebele}<span className="block text-[12px] text-muted">{a.woreda}</span></span>) },
-    { key: "farmers", header: "Farmer Count", cell: (a) => a.farmerCount.toLocaleString() },
-    { key: "approval", header: <FilterDropdown label="Approval Status" allLabel="All approval statuses" options={approvalOptions} selected={filters.approval} onApply={setFilter("approval")} />, align: "center", cell: (a) => <Pill tone={APPROVAL_TONE[a.approvalStatus]}>{a.approvalStatus}</Pill> },
-    { key: "updated", header: "Last Updated", cell: (a) => { const [date, time] = splitStamp(a.updatedAt); return <span className="block whitespace-nowrap leading-snug text-ink">{date}<span className="block">{time}</span></span>; } },
     {
-      key: "actions", header: "Action", align: "center",
+      key: "daId",
+      header: "DA-ID",
+      className: "whitespace-nowrap px-2.5 sm:px-3.5",
+      cell: (a) => <span className="whitespace-nowrap text-[13px] font-semibold text-ink">{a.daId}</span>,
+    },
+    {
+      key: "name",
+      header: "Full Name",
+      className: "whitespace-nowrap px-2.5 sm:px-3.5",
+      cell: (a) =>
+        isDA ? (
+          <span className="flex items-center gap-2 whitespace-nowrap text-[13.5px] font-medium text-ink">
+            {a.fullName}
+            {a.daId === myDaId && <Pill tone="green">You</Pill>}
+          </span>
+        ) : (
+          <Link href={`/agents/${a.daId}`} className="whitespace-nowrap text-[13.5px] font-medium text-ink hover:text-brand-green">
+            {a.fullName}
+          </Link>
+        ),
+    },
+    {
+      key: "fayda",
+      header: "Fayda ID",
+      className: "whitespace-nowrap px-2.5 sm:px-3.5",
+      cell: (a) => <span className="whitespace-nowrap font-mono text-[12.5px] text-slate-600">{a.faydaId}</span>,
+    },
+    {
+      key: "active",
+      header: <FilterDropdown label="Active Status" allLabel="All active statuses" options={activeOptions} selected={filters.active} onApply={setFilter("active")} />,
+      align: "center",
+      className: "px-2 sm:px-3 text-center whitespace-nowrap",
+      cell: (a) => <Pill tone={ACTIVE_TONE[a.activeStatus]}>{a.activeStatus}</Pill>,
+    },
+    {
+      key: "tier",
+      header: <FilterDropdown label="Education Tier" allLabel="All tiers" options={tierOptions} selected={filters.tier} onApply={setFilter("tier")} />,
+      align: "center",
+      className: "px-2 sm:px-3 text-center whitespace-nowrap",
+      cell: (a) => <span className="whitespace-nowrap text-[13px] text-slate-700">{a.educationTier}</span>,
+    },
+    {
+      key: "kebele",
+      header: <FilterDropdown label="Assigned Kebele" allLabel="All kebeles" options={kebeleOptions} selected={filters.kebele} onApply={setFilter("kebele")} />,
+      className: "px-2.5 sm:px-3.5 whitespace-nowrap",
+      cell: (a) => (
+        a.kebele === UNASSIGNED ? (
+          <span className="text-subtle text-[13px]">Unassigned</span>
+        ) : (
+          <span className="whitespace-nowrap text-[13px] font-medium text-ink leading-tight">
+            {a.kebele}
+            <span className="block text-[11.5px] font-normal text-muted">{a.woreda}</span>
+          </span>
+        )
+      ),
+    },
+    {
+      key: "farmers",
+      header: "Farmer Count",
+      align: "center",
+      className: "px-2 sm:px-3 text-center whitespace-nowrap",
+      cell: (a) => <span className="text-[13px] text-slate-700">{a.farmerCount.toLocaleString()}</span>,
+    },
+    {
+      key: "approval",
+      header: <FilterDropdown label="Approval Status" allLabel="All approval statuses" options={approvalOptions} selected={filters.approval} onApply={setFilter("approval")} />,
+      align: "center",
+      className: "px-2 sm:px-3 text-center whitespace-nowrap",
+      cell: (a) => <Pill tone={APPROVAL_TONE[a.approvalStatus]}>{a.approvalStatus}</Pill>,
+    },
+    {
+      key: "updated",
+      header: "Last Updated",
+      align: "center",
+      className: "px-2 sm:px-3 text-center whitespace-nowrap",
+      cell: (a) => {
+        if (!a.updatedAt || a.updatedAt === "—") return <span className="text-muted text-[13px]">—</span>;
+        const [date, time] = splitStamp(a.updatedAt);
+        return (
+          <span className="block whitespace-nowrap text-[12px] leading-tight text-slate-600">
+            {date}
+            <span className="block text-[11px] text-muted">{time}</span>
+          </span>
+        );
+      },
+    },
+    {
+      key: "actions",
+      header: "Action",
+      align: "center",
+      className: "px-2.5 sm:px-4 text-center whitespace-nowrap",
       cell: (a) => {
         const enabled = !disabledIds.has(a.daId);
         return (
-          <div className="flex items-center justify-center gap-2.5" onClick={(e) => e.stopPropagation()}>
-            {!isDA && <RowAction href={`/agents/${a.daId}`} icon="view">View</RowAction>}
+          <div className="flex items-center justify-center gap-1.5 sm:gap-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
             {!isDA && (
-              <RowAction href={`/performance/teams/attendance?agent=${encodeURIComponent(a.daId)}`} icon="calendar">
-                View Attendance
+              <RowAction href={`/agents/${a.daId}`} icon="view" className="px-2.5 py-1 text-[12px]">
+                View
+              </RowAction>
+            )}
+            {!isDA && (
+              <RowAction href={`/performance/teams/attendance?agent=${encodeURIComponent(a.daId)}`} icon="calendar" className="px-2.5 py-1 text-[12px]">
+                Attendance
               </RowAction>
             )}
             <Switch
@@ -230,25 +321,32 @@ export function AgentsRegistry() {
 
   return (
     <>
-      <Card className="overflow-hidden p-0 shadow-card">
-        {/* Toolbar — the title never wraps; the controls stay one group that sits beside it when it fits and drops below as a whole when it doesn't. */}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4">
-          <div className="flex shrink-0 items-center gap-2.5">
-            <h2 className="whitespace-nowrap text-[16px] font-semibold text-ink">{isDA ? "Team members" : "Master registry"}</h2>
-            {loaded && !loaded.error && !loading && <span className="text-[13px] text-muted">{loaded.total.toLocaleString()} in your {isDA ? "Kebele" : "scope"}</span>}
-          </div>
-          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-            <SearchInput value={query} onChange={setQuery} placeholder={SEARCH_PLACEHOLDER} />
-
-            <AdvancedFiltersButton activeCount={activeFilterCount} onClick={() => setIsFiltersOpen(true)} />
-
+      <AgentsPageHeader
+        actions={
+          <div className="flex items-center flex-wrap sm:flex-nowrap gap-2 sm:gap-2.5">
+            {isDA && (
+              <Link
+                href="/advisors"
+                className="inline-flex shrink-0 whitespace-nowrap h-9 sm:h-10 items-center justify-center gap-2 rounded-xl bg-brand-green px-3 sm:px-4 text-[12.5px] sm:text-[13.5px] font-semibold text-white transition-colors hover:bg-brand-green-dark shadow-xs"
+              >
+                Advisors
+              </Link>
+            )}
             {canImport && (
-              <button type="button" onClick={() => setImportOpen(true)} className="inline-flex shrink-0 whitespace-nowrap h-9 items-center gap-2 rounded-md bg-brand-green px-3.5 text-[13.5px] font-semibold text-white hover:bg-brand-green-dark">
+              <button
+                type="button"
+                onClick={() => setImportOpen(true)}
+                className="inline-flex shrink-0 whitespace-nowrap h-9 sm:h-10 items-center justify-center gap-2 rounded-xl bg-brand-green px-3 sm:px-4 text-[12.5px] sm:text-[13.5px] font-semibold text-white transition-colors hover:bg-brand-green-dark shadow-xs"
+              >
                 Import agents
               </button>
             )}
             {canEdit && (
-              <button type="button" onClick={() => setNotice("Sync from MoA queued — inbound batch will appear in Registry Sync with its receipt.")} className="inline-flex shrink-0 whitespace-nowrap h-9 items-center gap-2 rounded-md border border-brand-green bg-white px-3.5 text-[13.5px] font-semibold text-brand-green hover:bg-brand-wash">
+              <button
+                type="button"
+                onClick={() => setNotice("Sync from MoA queued — inbound batch will appear in Registry Sync with its receipt.")}
+                className="inline-flex shrink-0 whitespace-nowrap h-9 sm:h-10 items-center justify-center gap-2 rounded-xl border border-brand-green bg-white px-3 sm:px-4 text-[12.5px] sm:text-[13.5px] font-semibold text-brand-green transition-colors hover:bg-brand-wash shadow-xs"
+              >
                 Sync from MoA
               </button>
             )}
@@ -256,10 +354,36 @@ export function AgentsRegistry() {
               label="Export"
               icon={false}
               disabled={rows.length === 0}
+              className="h-9 sm:h-10 rounded-xl text-[12.5px] sm:text-[13.5px]"
               onExport={(format) => {
                 downloadTable(format, `da-registry-${fileDate()}`, rows, CSV_COLUMNS, "DA master registry");
                 setNotice(`Exported ${rows.length} agent${rows.length === 1 ? "" : "s"} matching the current filters (${formatLabel(format)}).`);
               }}
+            />
+          </div>
+        }
+      />
+
+      <Card className="overflow-hidden p-0 shadow-card">
+        {/* Toolbar */}
+        <div className="flex flex-col gap-3 px-3.5 py-3 sm:px-5 sm:py-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex shrink-0 items-center gap-2.5">
+            <h2 className="whitespace-nowrap text-[15px] sm:text-[17px] font-semibold text-ink">{isDA ? "Team members" : "Master registry"}</h2>
+            {loaded && !loaded.error && !loading && (
+              <span className="text-[12.5px] sm:text-[13px] text-muted">{loaded.total.toLocaleString()} in your {isDA ? "Kebele" : "scope"}</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 sm:gap-3 w-full md:w-auto">
+            <SearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder={SEARCH_PLACEHOLDER}
+              className="flex-1 min-w-0 md:w-[260px] lg:w-[280px]"
+            />
+            <AdvancedFiltersButton
+              activeCount={activeFilterCount}
+              onClick={() => setIsFiltersOpen(true)}
+              className="shrink-0 h-10 px-3 sm:px-4"
             />
           </div>
         </div>
@@ -277,7 +401,7 @@ export function AgentsRegistry() {
             columns={columns}
             rows={rows}
             rowKey={(a) => a.daId}
-            minWidth="1380px"
+            minWidth="min-w-[1060px] xl:min-w-full"
             paginate={false}
             state={loading ? "loading" : loaded?.error ? "error" : "ready"}
             onRetry={() => setAttempt((n) => n + 1)}

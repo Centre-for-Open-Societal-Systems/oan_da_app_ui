@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { AgentsPageHeader } from "@/features/agents";
 import { AgentsRegistry } from "./components/AgentsRegistry";
 
 export const metadata: Metadata = {
@@ -9,8 +8,7 @@ export const metadata: Metadata = {
 
 export default function AgentsPage() {
   return (
-    <div className="flex w-full flex-col gap-4">
-      <AgentsPageHeader />
+    <div className="flex w-full flex-col gap-3.5 sm:gap-4 md:gap-5">
       <AgentsRegistry />
     </div>
   );

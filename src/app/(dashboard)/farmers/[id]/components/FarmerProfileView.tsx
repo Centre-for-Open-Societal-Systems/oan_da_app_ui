@@ -9,15 +9,13 @@ import {
   apiVisitToVisit,
   describeFarmerError,
   describeLivestockError,
+  fetchFarmerDetails,
+  fetchFarmerLandDetails,
   fetchFarmerLivestock,
-  fetchFarmerPhoto,
-  fetchFarmerPlots,
-  fetchFarmerProfile,
-  fetchFarmerUpdateStatus,
-  registryCode,
   profileToFarmer,
   readLivestock,
-  type ApiFarmerProfile,
+  resolveFarmerInternalId,
+  type ApiFarmerDetails,
   type LivestockOverview,
   type Plot,
   type Visit,
@@ -36,12 +34,14 @@ import { DocumentsSection } from "./DocumentsSection";
 import { AdvisorySection } from "./AdvisorySection";
 
 type Loaded =
-  | { source: "api"; profile: ApiFarmerProfile; photo?: string; pendingUpdates: number }
+  | { source: "api"; details: ApiFarmerDetails; ids: FarmerIds }
   | { source: "error"; reason: string };
 
 /** One tab's data: undefined until its tab is first opened and the call returns. */
 type Slot<T> = { ok: true; value: T } | { ok: false; error: string } | undefined;
-type Visits = { items: Visit[]; total: number };
+type Visits = { items: Visit[]; total: number; lastAt: string | null };
+/** internal_record_id for the registry calls (details, land_details); the Farmer-ID for the rest. */
+type FarmerIds = { internalId: string; code: string };
 
 /** The data each tab needs; Crop Sown and Advisory load their own when shown. */
 const TAB_NEEDS: Partial<Record<ProfileTab, ("plots" | "visits" | "livestock")[]>> = {
@@ -60,8 +60,9 @@ export function FarmerProfileView({ id }: { id: string }) {
 }
 
 /**
- * Farmer profile from GET /farmers/{id}/profile (with photo and update-status for the header). Each tab reads its own
- * data the first time it opens: Holdings → /plots, Visit history → /visits?farmer_id=, Livestock → /livestock; Crop Sown Details
+ * Farmer profile from GET /farmers/{internal_id}/details. The URL may carry the
+ * internal_record_id or a Farmer-ID (looked up in the farmer list). Each tab reads its own
+ * data the first time it opens: Holdings → /land_details, Visit history → /visits?farmer_id=, Livestock → /livestock; Crop Sown Details
  * and Advisory load inside their panels. Errors read as the backend error table says: no access (403), not found
  * (404), registry unavailable (502/504).
  */
@@ -72,12 +73,12 @@ function FarmerProfile({ id }: { id: string }) {
   const [livestock, setLivestock] = useState<Slot<LivestockOverview>>();
   const requested = useRef(new Set<string>());
 
-  const loadTab = useCallback((code: string, tab: ProfileTab) => {
+  const loadTab = useCallback(({ internalId, code }: FarmerIds, tab: ProfileTab) => {
     for (const need of TAB_NEEDS[tab] ?? []) {
       if (requested.current.has(need)) continue;
       requested.current.add(need);
       if (need === "plots") {
-        fetchFarmerPlots(code).then(
+        fetchFarmerLandDetails(internalId).then(
           (rows) => setPlots({ ok: true, value: rows.map(apiPlotToPlot) }),
           (err) => setPlots({ ok: false, error: describeFarmerError(err) }),
         );
@@ -87,7 +88,9 @@ function FarmerProfile({ id }: { id: string }) {
         listVisits({ farmer_id: code, limit: 50, start: 0 }).then(
           (res) => {
             const items = res.items.map((v) => apiVisitToVisit({ ...v, outcome: v.purpose, completed_at: null })).reverse();
-            setVisits({ ok: true, value: { items, total: res.total } });
+            // Last visit: the newest completed one.
+            const lastAt = res.items.filter((v) => v.physical_status === "Physical Visit Complete").map((v) => v.scheduled_at).sort().pop() ?? null;
+            setVisits({ ok: true, value: { items, total: res.total, lastAt } });
           },
           (err) => setVisits({ ok: false, error: describeFarmerError(err) }),
         );
@@ -104,14 +107,14 @@ function FarmerProfile({ id }: { id: string }) {
     let current = true;
     (async () => {
       try {
-        const profile = await fetchFarmerProfile(id);
-        // The page may be open on either id; the calls after the profile use the Farmer ID.
-        const code = profile.reg_id ?? id;
-        const [updates, photo] = await Promise.allSettled([fetchFarmerUpdateStatus(code), fetchFarmerPhoto(code)]);
+        const internalId = await resolveFarmerInternalId(decodeURIComponent(id));
+        const details = await fetchFarmerDetails(internalId);
+        // The other farmer calls (crops, livestock, visits, updates) still take the Farmer-ID.
+        const ids = { internalId, code: details.functional_record_id || id };
         if (!current) return;
-        setLoaded({ source: "api", profile, photo: (photo.status === "fulfilled" && photo.value) || undefined, pendingUpdates: updates.status === "fulfilled" ? updates.value.total : 0 });
+        setLoaded({ source: "api", details, ids });
         // The tab the profile opens on loads straight away.
-        loadTab(code, DEFAULT_PROFILE_TAB);
+        loadTab(ids, DEFAULT_PROFILE_TAB);
       } catch (err) {
         if (current) setLoaded({ source: "error", reason: describeFarmerError(err) });
       }
@@ -137,12 +140,14 @@ function FarmerProfile({ id }: { id: string }) {
 
   const plotRows = plots?.ok ? plots.value : [];
   const visitRows = visits?.ok ? visits.value.items : [];
-  const farmer = { ...profileToFarmer(loaded.profile, { plots: plotRows.length, visits: visits?.ok ? visits.value.total : 0 }), avatar: loaded.photo };
-  const code = registryCode(farmer);
+  const base = profileToFarmer(loaded.details, visits?.ok ? visits.value : { total: 0 });
+  // The registry's plot count until the Holdings call answers.
+  const farmer = plots?.ok ? { ...base, totalPlots: plotRows.length, plotsUnknown: false } : base;
+  const { ids } = loaded;
+  const code = ids.code;
   const livestockValue = livestock?.ok ? livestock.value : null;
   const livestockError = livestock && !livestock.ok ? livestock.error : undefined;
   const notes = [plots && !plots.ok && "plots", visits && !visits.ok && "visit history", livestockError && "livestock"].filter((x): x is string => !!x);
-  const incomplete = loaded.profile.incomplete_sections ?? [];
 
   return (
     <>
@@ -150,17 +155,11 @@ function FarmerProfile({ id }: { id: string }) {
         <Banner tone="warning">Could not load {notes.join(" and ")} for this farmer; the other tabs are up to date.</Banner>
       )}
 
-      {incomplete.length > 0 && (
-        <Banner tone="warning" title="Partial data">The registry could not deliver: {incomplete.join(", ")}. Those parts are shown as partial.</Banner>
-      )}
-      {loaded.pendingUpdates > 0 && (
-        <Banner tone="info">{loaded.pendingUpdates === 1 ? "1 edit is" : `${loaded.pendingUpdates} edits are`} queued for the Farmer Registry and will sync in the background.</Banner>
-      )}
 
       <ProfileHeader farmer={farmer} />
-      <ProfileStats farmer={farmer} fromApi known={{ plots: !!plots?.ok, visits: !!visits?.ok }} />
+      <ProfileStats farmer={farmer} fromApi known={{ plots: !farmer.plotsUnknown, visits: !!visits?.ok }} />
       <ProfileTabs
-        onSelect={(tab) => loadTab(code, tab)}
+        onSelect={(tab) => loadTab(ids, tab)}
         panels={{
           Overview: <ProfileOverview farmerCode={code} livestock={livestockValue} livestockError={livestockError} plots={plotRows} visits={visitRows} />,
           Holdings: plots ? <HoldingsSection plots={plotRows} /> : <Loading what="holdings" />,
