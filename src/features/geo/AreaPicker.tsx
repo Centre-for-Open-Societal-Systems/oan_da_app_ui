@@ -69,6 +69,7 @@ interface Props {
   className?: string;
   fieldClassName?: string;
   controlClassName?: string;
+  gridClassName?: string;
 }
 
 /**
@@ -77,7 +78,7 @@ interface Props {
  * listing the areas under the one above. A locked level is checked against the Master Data (by code, else by name);
  * one not found there is picked instead, with every level below it.
  */
-export function AreaPicker({ depth, preset: presetProp, initial, required, idPrefix, onChange, hideLocked = false, error, className, fieldClassName, controlClassName }: Props) {
+export function AreaPicker({ depth, preset: presetProp, initial, required, idPrefix, onChange, hideLocked = false, error, className, fieldClassName, controlClassName, gridClassName }: Props) {
   const userPreset = useUserAreaPreset();
   const preset = presetProp ?? userPreset;
   const levels = levelsDownTo(depth);
@@ -143,7 +144,7 @@ export function AreaPicker({ depth, preset: presetProp, initial, required, idPre
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       {shownRows.length > 0 && (
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className={cn("grid grid-cols-1 gap-4", gridClassName ?? "sm:grid-cols-2")}>
         {shownRows.map((row) => {
           const label = AREA_LABELS[row.level];
           const id = `${idPrefix}-${row.level}`;

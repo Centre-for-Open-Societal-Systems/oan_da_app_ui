@@ -70,7 +70,7 @@ export function DataTable<T>({ columns, rows, rowKey, state = "ready", emptyTitl
       </div>
     )}
     {!searchable && title && <div className="px-4 py-3">{title}</div>}
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto min-w-0 max-w-full">
       <table
         className={cn("w-full border-collapse text-left", isClassMinWidth && minWidth, tableClassName)}
         style={!isClassMinWidth && minWidth ? { minWidth } : undefined}
