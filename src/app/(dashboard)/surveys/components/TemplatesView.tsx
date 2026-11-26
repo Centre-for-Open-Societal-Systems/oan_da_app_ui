@@ -152,7 +152,7 @@ export function TemplatesView({ reloadKey = 0, notice, onDismissNotice }: { relo
             />
           </div>
         </div>
-        <AreaPicker depth="woreda" idPrefix="tpl-filter" showCountry={false} onChange={pickArea} className="border-b border-line-soft p-3.5 sm:p-4" />
+        <AreaPicker depth="woreda" idPrefix="tpl-filter" onChange={pickArea} className="border-b border-line-soft p-3.5 sm:p-4" />
         <DataTable itemLabel="templates" columns={columns} rows={rows} rowKey={(t) => t.id} minWidth="1180px" state={state} onRetry={load}
           emptyTitle={query || status || type || woreda ? "No templates match your filters" : "No survey templates yet"}
           emptyHint={query || status || type || woreda ? "Clear a filter or try a different name." : "Use New Template to publish the first survey."} />

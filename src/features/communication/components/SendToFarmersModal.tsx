@@ -61,7 +61,7 @@ export function SendToFarmersModal({ article, isOpen, onClose }: { article: Arti
             </FormField>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <AreaPicker depth="woreda" required idPrefix="audience" showCountry={false} onChange={pickArea} />
+                <AreaPicker depth="woreda" required idPrefix="audience" onChange={pickArea} />
                 {woreda && <p className="mt-1 text-[12.5px] text-muted">All {reach > 0 ? `${reach.toLocaleString()} ` : ""}farmers in {woreda} Woreda</p>}
               </div>
               <FormField label="Language" htmlFor="lang">

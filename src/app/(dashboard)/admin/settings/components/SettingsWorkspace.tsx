@@ -86,7 +86,7 @@ export function SettingsWorkspace() {
         {tab === "master" && (
           <div className="p-5">
             <p className="text-[13.5px] text-ink-soft">Administrative units used for scope, assignment and geofence validation. Unknown inbound codes (e.g. OR-DN-017) surface as “Invalid Kebele reference” exceptions until mapped here.</p>
-            <AreaPicker depth="zone" idPrefix="master" showCountry={false} onChange={setMasterArea} className="mt-4" />
+            <AreaPicker depth="zone" idPrefix="master" onChange={setMasterArea} className="mt-4" />
             {!masterZone ? (
               <p className="mt-4 text-[13px] text-muted">Choose a Region and Zone to see its Woredas and Kebeles.</p>
             ) : !masterWoredas ? (
