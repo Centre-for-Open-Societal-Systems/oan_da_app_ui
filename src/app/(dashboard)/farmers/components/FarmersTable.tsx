@@ -377,7 +377,7 @@ export function FarmersTable() {
                       <StatusPill status={farmerActivity(farmer.status)} reason={farmer.statusReason} />
                     </td>
                     <td className="px-4 py-3.5 text-center">
-                      <RowAction href={`/farmers/${farmer.regId ?? farmer.id}`} icon="view">View</RowAction>
+                      <RowAction href={`/farmers/${farmer.internalId ?? farmer.regId ?? farmer.id}`} icon="view">View</RowAction>
                     </td>
                   </tr>
                 );

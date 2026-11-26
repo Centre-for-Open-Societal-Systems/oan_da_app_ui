@@ -4,17 +4,20 @@ import { useEffect, useState } from "react";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { apiPlotToPlot, fetchFarmerPlots } from "../farmersApi";
+import { apiPlotToPlot, fetchFarmerLandDetails, resolveFarmerInternalId } from "../farmersApi";
 import type { Farmer, Plot } from "../types";
 import { EMPTY_LOCATION, parseLocation, registryCode, type PlotLocation } from "./planVisit";
 
-/** The farmer's plots from GET /farmers/{id}/plots, as the Holdings tab shows them; null while loading. */
-function useFarmerPlots(code: string) {
+/**
+ * The farmer's plots from GET /farmers/{internal_id}/land_details, as the Holdings tab shows them; null while loading.
+ * `id` is the internal_record_id, or a Farmer-ID that is looked up in the farmer list first.
+ */
+function useFarmerPlots(id: string) {
   const [plots, setPlots] = useState<Plot[] | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let current = true;
-    fetchFarmerPlots(code).then(
+    resolveFarmerInternalId(id).then(fetchFarmerLandDetails).then(
       (rows) => current && setPlots(rows.map(apiPlotToPlot).filter((p) => p.code)),
       () => {
         if (!current) return;
@@ -25,7 +28,7 @@ function useFarmerPlots(code: string) {
     return () => {
       current = false;
     };
-  }, [code]);
+  }, [id]);
   return { plots, failed };
 }
 
@@ -42,7 +45,7 @@ interface RowProps {
 // One farmer's location: the plot (from the registry) and the plot's latitude / longitude (typed; the registry sends no
 // coordinates yet). A farmer with one plot gets it picked.
 function PlotLocationRow({ farmer, value, onChange, showName }: RowProps) {
-  const { plots, failed } = useFarmerPlots(registryCode(farmer));
+  const { plots, failed } = useFarmerPlots(farmer.internalId ?? registryCode(farmer));
   useEffect(() => {
     if (plots?.length === 1 && !value.plotRef) onChange(farmer, { plotRef: plots[0].code });
   }, [plots, value.plotRef, farmer, onChange]);

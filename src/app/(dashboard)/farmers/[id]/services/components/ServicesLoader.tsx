@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { describeFarmerError, fetchFarmerProfile, getFarmer, profileToFarmer, type Farmer } from "@/features/farmers";
+import { describeFarmerError, fetchFarmerDetails, getFarmer, profileToFarmer, resolveFarmerInternalId, type Farmer } from "@/features/farmers";
 import { ServicesWorkspace } from "./ServicesWorkspace";
 
-// The farmer behind the Services page: a sample farmer directly, anyone else from GET /farmers/{id}/profile.
+// The farmer behind the Services page: a sample farmer directly, anyone else from GET /farmers/{internal_id}/details
+// (a Farmer-ID in the URL is looked up in the farmer list first).
 export function ServicesLoader({ id }: { id: string }) {
   const [sample] = useState(() => getFarmer(id));
   const [loaded, setLoaded] = useState<{ farmer: Farmer } | { error: string } | null>(null);
@@ -14,8 +15,9 @@ export function ServicesLoader({ id }: { id: string }) {
   useEffect(() => {
     if (sample) return;
     let current = true;
-    fetchFarmerProfile(id)
-      .then((profile) => current && setLoaded({ farmer: profileToFarmer(profile, { plots: 0, visits: 0 }) }))
+    resolveFarmerInternalId(decodeURIComponent(id))
+      .then(fetchFarmerDetails)
+      .then((details) => current && setLoaded({ farmer: profileToFarmer(details, { total: 0 }) }))
       .catch((err: unknown) => current && setLoaded({ error: describeFarmerError(err) }));
     return () => {
       current = false;

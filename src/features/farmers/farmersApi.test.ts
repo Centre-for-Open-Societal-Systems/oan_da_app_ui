@@ -7,13 +7,15 @@ import {
   apiVisitToVisit,
   describeFarmerError,
   fetchFarmerLivestock,
-  fetchFarmerPlots,
-  fetchFarmerProfile,
+  fetchFarmerDetails,
+  fetchFarmerLandDetails,
   fetchFarmerVisits,
   listFarmers,
   profileToFarmer,
+  resolveFarmerInternalId,
   toFarmerStatus,
   type ApiFarmer,
+  type ApiFarmerDetails,
 } from "./farmersApi";
 import { ApiError } from "@/lib/api";
 import { registryCode } from "./components/planVisit";
@@ -53,6 +55,26 @@ const row: ApiFarmer = {
   last_approved_at: "2026-11-20T05:46:37.876763",
 };
 
+const UUID = "38ef1bcb-a359-45b4-b813-dd0d2b05c864";
+
+// GET /farmers/{internal_id}/details, the collection's saved response (shortened).
+const details: ApiFarmerDetails = {
+  internal_record_id: UUID,
+  functional_record_id: "FR-675618129549",
+  record_name: "Aster Mulugeta Assefa",
+  record_status: "ACTIVE",
+  primary_phone_number: "+251964815374",
+  email: null,
+  region_name: "Tigray",
+  zone_name: "North Western",
+  woreda_name: "Shire Endaslasie town",
+  kebele_name: "Lekatit",
+  total_land_area: "4.25",
+  total_plots: 2,
+  record_image_url: "https://garage.example/photo.jpg",
+  last_approved_at: "2026-11-12T15:48:07.346262",
+};
+
 beforeEach(() => {
   globalThis.sessionStorage = new MemoryStorage();
   globalThis.localStorage = new MemoryStorage();
@@ -76,21 +98,34 @@ describe("farmer calls", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/farmers?search_text=&current_page=1&page_size=50");
   });
 
-  it("reads the profile, visits and plots of one farmer", async () => {
+  it("reads the details, visits and land details of one farmer", async () => {
+    const plot = { internal_record_id: "0065cd98", area_in_hectare: "1.750000" };
     fetchMock
-      .mockResolvedValueOnce(json({ data: { farmer_id: "FRM-000103", name: "Lelise" } }))
+      .mockResolvedValueOnce(json({ data: { internal_record_id: UUID, record_name: "Aster" } }))
       .mockResolvedValueOnce(json({ data: { visits: [], total: 0 } }))
-      .mockResolvedValueOnce(json({ data: { plots: [] } }));
+      .mockResolvedValueOnce(json({ data: [{ is_list: false, records: [{ internal_record_id: UUID }] }, { is_list: true, records: [plot] }] }));
 
-    await fetchFarmerProfile("FRM-000103");
-    await expect(fetchFarmerVisits("FRM-000103")).resolves.toEqual({ items: [], total: 0 });
-    await expect(fetchFarmerPlots("FRM-000103")).resolves.toEqual([]);
+    await fetchFarmerDetails(UUID);
+    await expect(fetchFarmerVisits("FR-675618129549")).resolves.toEqual({ items: [], total: 0 });
+    await expect(fetchFarmerLandDetails(UUID)).resolves.toEqual([plot]);
 
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
-      "/api/v1/da-services/farmers/FRM-000103/profile",
-      "/api/v1/da-services/farmers/FRM-000103/visits?limit=50&start=0",
-      "/api/v1/da-services/farmers/FRM-000103/plots",
+      `/api/v1/da-services/farmers/${UUID}/details`,
+      "/api/v1/da-services/farmers/FR-675618129549/visits?limit=50&start=0",
+      `/api/v1/da-services/farmers/${UUID}/land_details`,
     ]);
+  });
+
+  it("finds the internal id of a Farmer-ID through the list search; a UUID is used as it is", async () => {
+    await expect(resolveFarmerInternalId(UUID)).resolves.toBe(UUID);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fetchMock.mockResolvedValueOnce(json({ data: [row], meta: { number_of_items: 1, number_of_pages: 1 } }));
+    await expect(resolveFarmerInternalId("FR-821910965037")).resolves.toBe(row.internal_record_id);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/da-services/farmers?search_text=FR-821910965037&current_page=1&page_size=5");
+
+    fetchMock.mockResolvedValueOnce(json({ data: [], meta: { number_of_items: 0, number_of_pages: 0 } }));
+    await expect(resolveFarmerInternalId("FR-000")).rejects.toMatchObject({ status: 404 });
   });
 
   it("reads the livestock of one farmer", async () => {
@@ -107,6 +142,7 @@ describe("mapping", () => {
     expect(apiFarmerToFarmer(row)).toMatchObject({
       id: "FR-821910965037",
       regId: "FR-821910965037",
+      internalId: "95162d8b-1f6c-4d0c-beee-2f2e12710b2c",
       avatar: "https://storage.example/photo.jpg",
       phone: "+251911200001",
       totalPlots: 2,
@@ -134,21 +170,18 @@ describe("mapping", () => {
 
   it("maps registry states onto the status pill", () => {
     expect(toFarmerStatus("APPROVED")).toEqual({ status: "Verified" });
+    expect(toFarmerStatus("ACTIVE")).toEqual({ status: "Verified" });
     expect(toFarmerStatus("PENDING_APPROVAL")).toEqual({ status: "Pending", reason: "Pending approval" });
     expect(toFarmerStatus("REJECTED")).toEqual({ status: "Flagged", reason: "Rejected" });
   });
 
-  it("builds the profile farmer with plot and visit counts", () => {
-    const profile = {
-      farmer_id: "FRM-000103", reg_id: "FR-88341", name: "Lelise Gudeta", kebele: null, woreda: "ET04-W01", region: "ET04", phone: null, email: null,
-      verification_state: null, pending_actions: 0, household_size: 5, total_land_area: 2.5, land_ownership: "OWNER", primary_crop: "Teff",
-      registration_date: "2026-05-12", last_visit_date: null, last_visit_outcome: null, can_edit: true, is_linked: true,
-    };
-    expect(profileToFarmer(profile, { plots: 2, visits: 4 })).toMatchObject({ kebele: "—", crop: "Teff", landHa: 2.5, totalPlots: 2, visits: 4, lastVisit: "—", registeredTime: "" });
+  it("builds the profile farmer with the visit count and last visit from the visits call", () => {
+    expect(profileToFarmer({ ...details, kebele_name: null }, { total: 4, lastAt: "2026-11-02T10:00:00" })).toMatchObject({ kebele: "—", crop: "—", visits: 4, lastVisit: "02 Nov 2026" });
+    expect(profileToFarmer(details, { total: 0 })).toMatchObject({ visits: 0, lastVisit: "—" });
   });
 
   it("maps plots and visits for the tabs", () => {
-    const plot = apiPlotToPlot({ plot_id: "LR-1", land_kebele: "Gedo", area_in_hectare: 0.8, land_ownership_type: "OWNER", soil_fertility: "Good", current_land_use: "CROP_PRODUCTION", certificate_provided: true });
+    const plot = apiPlotToPlot({ internal_record_id: "LR-1", land_kebele: "Gedo", area_in_hectare: "0.800000", land_ownership_type: "OWNER", soil_fertility: "Good", current_land_use: "CROP_PRODUCTION", certificate_provided: true });
     expect(plot).toMatchObject({ code: "LR-1", crop: "Crop production", areaHa: 0.8, soil: "Good", zone: "Gedo", tenure: "Owner" });
     expect(Number.isNaN(plot.lat)).toBe(true);
 
@@ -163,7 +196,7 @@ describe("mapping", () => {
   });
 });
 
-// The collection's saved responses (OAN-DA-Farmers: "List farmers", "Farmer profile", "Farmer plots").
+// The collection's saved responses (OAN-DA-Farmers: "List farmers", "Farmer details", "Farmer land details").
 describe("mapping the collection's example responses", () => {
   it("shows a list row with nulls as dashes and initials, not as 0 ha or a broken photo", () => {
     const bare: ApiFarmer = { ...row, primary_phone_number: null, record_image_url: null, total_land_area: null, total_plots: null };
@@ -171,20 +204,19 @@ describe("mapping the collection's example responses", () => {
     expect(apiFarmerToFarmer({ ...row, total_land_area: "0.00", total_plots: "0" })).toMatchObject({ landUnknown: false, plotsUnknown: false, landHa: 0, totalPlots: 0 });
   });
 
-  it("reads the profile example: phone without +251, no verification_state or primary_crop", () => {
-    const profile = {
-      farmer_id: "38ef1bcb-a359-45b4-b813-dd0d2b05c864", reg_id: "FR-675618129549", name: "Aster Mulugeta Assefa", phone: "964815374", email: null, gender: "female",
-      education_level: "PRIMARY", kebele: "Lekatit", woreda: "Shire Endaslasie town", region: "Tigray", total_land_area: 4.25, land_ownership: "HYBRID", household_size: 0,
-      registration_date: "2026-10-30 14:16:40.292811", last_visit_date: null, last_visit_outcome: null, pending_actions: 0, can_edit: true, is_linked: false, incomplete_sections: [],
-    };
-    expect(profileToFarmer(profile, { plots: 2, visits: 0 })).toMatchObject({ regId: "FR-675618129549", phone: "+251964815374", status: "Verified", crop: "—", landHa: 4.25, landUnknown: false, registeredAt: "30 Oct 2026", registeredTime: "14:16" });
-    expect(profileToFarmer({ ...profile, total_land_area: null }, { plots: 0, visits: 0 })).toMatchObject({ landUnknown: true });
+  it("reads the details example: string numbers, ACTIVE as verified, photo and registration from the record", () => {
+    expect(profileToFarmer(details, { total: 0 })).toMatchObject({
+      id: "FR-675618129549", regId: "FR-675618129549", internalId: UUID, name: "Aster Mulugeta Assefa", phone: "+251964815374",
+      avatar: "https://garage.example/photo.jpg", region: "Tigray", woreda: "Shire Endaslasie town", kebele: "Lekatit",
+      status: "Verified", crop: "—", landHa: 4.25, landUnknown: false, totalPlots: 2, plotsUnknown: false, registeredAt: "12 Nov 2026", registeredTime: "15:48",
+    });
+    expect(profileToFarmer({ ...details, total_land_area: null, total_plots: null }, { total: 0 })).toMatchObject({ landUnknown: true, plotsUnknown: true });
   });
 
   it("shows the plots' registry codes as labels", () => {
-    expect(apiPlotToPlot({ plot_id: "0065cd98", area_in_hectare: 1.75, land_ownership_type: "OWNER", soil_fertility: "SF_HIGH", current_land_use: "AGRICULTURAL", land_kebele: null, certificate_provided: false }))
-      .toMatchObject({ areaHa: 1.75, tenure: "Owner", soil: "High", crop: "Agricultural", zone: "—" });
-    expect(apiPlotToPlot({ plot_id: "5069b1b1", area_in_hectare: null, land_ownership_type: "TENANT", soil_fertility: "SF_MEDIUM", current_land_use: "GRAZING", land_kebele: null, certificate_provided: false }))
+    expect(apiPlotToPlot({ internal_record_id: "0065cd98", area_in_hectare: "1.750000", land_ownership_type: "OWNER", soil_fertility: "SF_HIGH", current_land_use: "AGRICULTURAL", land_kebele: null, certificate_provided: false }))
+      .toMatchObject({ code: "0065cd98", areaHa: 1.75, tenure: "Owner", soil: "High", crop: "Agricultural", zone: "—" });
+    expect(apiPlotToPlot({ internal_record_id: "5069b1b1", area_in_hectare: null, land_ownership_type: "TENANT", soil_fertility: "SF_MEDIUM", current_land_use: "GRAZING", land_kebele: null, certificate_provided: false }))
       .toMatchObject({ areaHa: 0, tenure: "Tenant", soil: "Medium", crop: "Grazing" });
   });
 

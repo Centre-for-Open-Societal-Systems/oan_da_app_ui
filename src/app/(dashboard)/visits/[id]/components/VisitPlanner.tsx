@@ -70,7 +70,7 @@ export function VisitPlanner({ visitId }: { visitId: string }) {
       ) : (
         <>
           <WeekCalendar daId={daId} reload={reload} />
-          <TodaysVisits daId={daId} reload={reload} canAct={canAct} onStart={(visit) => setModal({ type: "start", visit })} onLogOutcome={(visit) => setModal({ type: "outcome", visit })} />
+          <TodaysVisits daId={daId} reload={reload} canAct={canAct} canStart={isDA} onStart={(visit) => setModal({ type: "start", visit })} onLogOutcome={(visit) => setModal({ type: "outcome", visit })} />
         </>
       )}
 
