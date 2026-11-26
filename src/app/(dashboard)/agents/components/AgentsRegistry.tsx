@@ -16,7 +16,7 @@ import { FilterDropdown, type FilterOption } from "@/components/ui/FilterDropdow
 import { AdvancedFiltersDrawer, type FilterFieldConfig, type FilterSelection } from "@/components/ui/AdvancedFiltersDrawer";
 import { PAGE_SIZES, TablePagination } from "@/components/ui/TablePagination";
 import { useAuthStore } from "@/store/useAuthStore";
-import { ACTIVE_TONE, APPROVAL_TONE, BulkImportsPanel, apiAgentToAgent, describeAgentError, importStatusLabel, listMyTeam, type Agent, type AgentFacets, type AgentFilterField, type AgentFilters, type AgentImport, type TeamScope } from "@/features/agents";
+import { ACTIVE_TONE, APPROVAL_TONE, BulkImportsPanel, apiAgentToAgent, describeAgentError, importStatusLabel, listMyTeam, type Agent, type AgentFacets, type AgentFilterField, type AgentFilters, type AgentImport, type TeamKind } from "@/features/agents";
 import { searchPlaceholder } from "@/lib/search";
 import { fileDate, type CsvColumn } from "@/lib/download";
 import { downloadTable, formatLabel } from "@/lib/export";
@@ -87,8 +87,8 @@ const splitStamp = (stamp: string): [string, string] => {
 };
 
 // FR-02 §3.2.1–3.2.2: 11 literal columns, combinable/resettable filters, search by DA-ID or name. Rows come from
-// the DA Registry through GET /da-services/agents/my-team, scoped by role on the backend (Admin: every DA, Executive:
-// their Region, Supervisor: their Woreda). Search, filters and paging run on the server; the filter menus list the
+// the DA Registry through GET /da-services/agents/my-team, whose team comes from the DA Hierarchy (Admin: every DA;
+// a manager: everyone who reports to them). Search, filters and paging run on the server; the filter menus list the
 // backend's facets, counted over the whole team.
 export function AgentsRegistry() {
   const router = useRouter();
@@ -104,8 +104,8 @@ export function AgentsRegistry() {
   const [loaded, setLoaded] = useState<{ key: string; rows: Agent[]; total: number; error: string | null } | null>(null);
   // The last facets the backend sent; kept while the next page loads so the filter menus do not empty.
   const [facets, setFacets] = useState<AgentFacets>({});
-  // The team scope the backend chose for the signed-in role; "all" until the first answer.
-  const [scope, setScope] = useState<TeamScope>("all");
+  // How the backend chose the team ("all" for an Admin); "all" until the first answer.
+  const [team, setTeam] = useState<TeamKind>("all");
   const [filters, setFilters] = useState<Filters>(EMPTY);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -129,14 +129,14 @@ export function AgentsRegistry() {
   const requestKey = `${searchText}|${page}|${pageSize}|${attempt}|${filterKey}`;
   useEffect(() => {
     let current = true;
-    // One call for every officer (GET /agents/my-team): the backend scopes it by role (Admin every DA, Executive their
-    // Region, Supervisor their Woreda), applies the filters and sends the facets for the filter menus.
+    // One call for every officer (GET /agents/my-team): the backend takes the team from the DA Hierarchy (Admin every
+    // DA, a manager their reports), applies the filters and sends the facets for the filter menus.
     listMyTeam({ search: searchText || undefined, filters: JSON.parse(filterKey) as AgentFilters, limit: pageSize, start: (page - 1) * pageSize })
-      .then(({ agents, total, facets: next, scope: nextScope }) => {
+      .then(({ agents, total, facets: next, team: nextTeam }) => {
         if (!current) return;
         setLoaded({ key: requestKey, rows: agents.map(apiAgentToAgent), total, error: null });
         setFacets(next);
-        setScope(nextScope);
+        setTeam(nextTeam);
       })
       .catch((err: unknown) => current && setLoaded({ key: requestKey, rows: [], total: 0, error: describeAgentError(err) }));
     return () => {
@@ -165,10 +165,9 @@ export function AgentsRegistry() {
   const approvalOptions = options("approval");
   const woredaOptions = options("woreda");
   const filterFields: FilterFieldConfig[] = [
-    // A narrower team hides the levels above it: a Region filter only for every DA (or several Regions), a Woreda
-    // filter unless the team is a single Woreda.
-    ...(scope === "all" || (scope === "region" && options("region").length > 1) ? [{ key: "region", label: "Region", allLabel: "All regions", placeholder: "All Regions", options: options("region") }] : []),
-    ...(scope === "all" || scope === "region" || woredaOptions.length > 1 ? [{ key: "woreda", label: "Woreda", allLabel: "All woredas", placeholder: "All Woredas", options: woredaOptions }] : []),
+    // Region and Woreda filters show for every DA (Admin) or when the team spans more than one.
+    ...(team === "all" || options("region").length > 1 ? [{ key: "region", label: "Region", allLabel: "All regions", placeholder: "All Regions", options: options("region") }] : []),
+    ...(team === "all" || woredaOptions.length > 1 ? [{ key: "woreda", label: "Woreda", allLabel: "All woredas", placeholder: "All Woredas", options: woredaOptions }] : []),
     { key: "kebele", label: "Kebele", allLabel: "All kebeles", placeholder: "All Kebeles", options: kebeleOptions },
     { key: "active", label: "Active status", allLabel: "All active statuses", placeholder: "All", options: activeOptions },
     { key: "tier", label: "Education tier", allLabel: "All tiers", placeholder: "All", options: tierOptions },

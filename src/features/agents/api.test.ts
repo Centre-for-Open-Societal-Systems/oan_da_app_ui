@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { apiAgentToAgent, describeImportException, importStatusLabel, listAllImportExceptions, listAgents, listMyTeam } from "./api";
+import { apiAgentToAgent, describeImportException, importStatusLabel, listAllImportExceptions, fetchMyTeamTree, listAgents, listMyTeam } from "./api";
 
 const { authRequest } = vi.hoisted(() => ({ authRequest: vi.fn() }));
 vi.mock("@/features/auth", () => ({ authRequest }));
@@ -67,7 +67,8 @@ describe("apiAgentToAgent", () => {
 describe("listMyTeam", () => {
   it("reads the team from /agents/my-team with comma-separated filters", async () => {
     const facets = { kebele: [{ value: "ET04-W01-K03", label: "Bako 03", count: 1 }] };
-    authRequest.mockResolvedValueOnce({ data: { scope: "woreda", areas: ["ET04-W01"], agents: [{ da_id: "DA-000001" }, { da_id: "DA-000002" }], total: 2, facets } });
+    const root = { name: "sup@x", user: "sup@x", full_name: "Sup", designation: null, region: "ET04", zone: null, woreda: "ET04-W01", kebele: null, is_group: true };
+    authRequest.mockResolvedValueOnce({ data: { team: "reports", root, agents: [{ da_id: "DA-000001" }, { da_id: "DA-000002" }], total: 2, facets } });
 
     const team = await listMyTeam({ search: "DA-0000", filters: { kebele: ["ET04-W01-K03", "unassigned"], active_status: [] }, limit: 20, start: 20 });
 
@@ -79,12 +80,12 @@ describe("listMyTeam", () => {
     expect(params.has("active_status")).toBe(false);
     expect(params.get("limit")).toBe("20");
     expect(params.get("start")).toBe("20");
-    expect(team).toMatchObject({ scope: "woreda", areas: ["ET04-W01"], total: 2, facets });
+    expect(team).toMatchObject({ team: "reports", root, total: 2, facets });
     expect(team.agents).toHaveLength(2);
   });
 
   it("asks for 50 from the start by default", async () => {
-    authRequest.mockResolvedValueOnce({ data: { scope: "all", areas: [], agents: [], total: 0 } });
+    authRequest.mockResolvedValueOnce({ data: { team: "all", root: null, agents: [], total: 0 } });
     await listMyTeam();
     const params = new URLSearchParams((authRequest.mock.calls[0][0] as string).split("?")[1]);
     expect([params.get("limit"), params.get("start")]).toEqual(["50", "0"]);
@@ -92,7 +93,21 @@ describe("listMyTeam", () => {
 
   it("reads a response without the optional fields as an empty team", async () => {
     authRequest.mockResolvedValueOnce({ data: {} });
-    expect(await listMyTeam()).toEqual({ scope: "none", areas: [], agents: [], total: 0, facets: {} });
+    expect(await listMyTeam()).toEqual({ team: "none", root: null, agents: [], total: 0, facets: {} });
+  });
+});
+
+describe("fetchMyTeamTree", () => {
+  it("reads the team tree from /agents/my-team/tree", async () => {
+    const tree = { name: "sup@x", user: "sup@x", full_name: "Sup", designation: null, region: null, zone: null, woreda: null, kebele: null, is_group: true, da_id: null, reports: [] };
+    authRequest.mockResolvedValueOnce({ data: { team: "peers", tree } });
+    expect(await fetchMyTeamTree()).toEqual({ team: "peers", tree });
+    expect(authRequest.mock.calls[0][0]).toBe("/da-services/agents/my-team/tree");
+  });
+
+  it("reads no node as an empty tree", async () => {
+    authRequest.mockResolvedValueOnce({ data: { team: "none", tree: null } });
+    expect(await fetchMyTeamTree()).toEqual({ team: "none", tree: null });
   });
 });
 
