@@ -72,14 +72,14 @@ export function MonthlyAttendanceGrid({
   const { pageRows, paginationProps } = usePagination(filteredRecords);
 
   return (
-    <Card className="overflow-hidden p-0 shadow-card border border-line bg-white">
+    <Card className="overflow-hidden p-0 shadow-card border border-line bg-white rounded-2xl">
       {/* Header */}
-      <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between border-b border-line-soft">
+      <div className="flex flex-col gap-3 p-4 sm:p-5 sm:flex-row sm:items-center sm:justify-between border-b border-line-soft">
         <div>
-          <h2 className="text-[16px] font-semibold text-ink">
+          <h2 className="text-[15px] sm:text-[16px] font-bold text-ink">
             Monthly attendance – {selectedMonthLabel}
           </h2>
-          <p className="mt-0.5 text-[12.5px] text-ink-soft">
+          <p className="mt-0.5 text-[12px] sm:text-[12.5px] text-ink-soft">
             One square per day. Select an agent name to open their calendar.
           </p>
         </div>

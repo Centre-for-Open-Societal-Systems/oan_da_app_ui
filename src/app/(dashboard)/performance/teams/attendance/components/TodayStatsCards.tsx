@@ -14,15 +14,15 @@ export function TodayStatsCards({
   totalAgents = 9,
 }: TodayStatsCardsProps) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
       {/* Checked In Card */}
-      <Card className="flex items-center justify-between p-5 shadow-card border border-line bg-white">
+      <Card className="flex items-center justify-between p-4 sm:p-5 shadow-card border border-line bg-white rounded-2xl">
         <div>
-          <p className="text-[13.5px] font-medium text-ink-soft">Checked in</p>
+          <p className="text-[13px] sm:text-[13.5px] font-medium text-ink-soft">Checked in</p>
           <p className="mt-1 text-[32px] sm:text-[36px] font-bold tracking-tight text-ink leading-none">
             {checkedInCount}
           </p>
-          <p className="mt-1.5 text-[12.5px] text-muted">
+          <p className="mt-1.5 text-[12px] sm:text-[12.5px] text-muted">
             of {totalAgents} agents
           </p>
         </div>
@@ -35,13 +35,13 @@ export function TodayStatsCards({
       </Card>
 
       {/* Not Checked In Card */}
-      <Card className="flex items-center justify-between p-5 shadow-card border border-line bg-white">
+      <Card className="flex items-center justify-between p-4 sm:p-5 shadow-card border border-line bg-white rounded-2xl">
         <div>
-          <p className="text-[13.5px] font-medium text-ink-soft">Not checked in</p>
+          <p className="text-[13px] sm:text-[13.5px] font-medium text-ink-soft">Not checked in</p>
           <p className="mt-1 text-[32px] sm:text-[36px] font-bold tracking-tight text-ink leading-none">
             {notCheckedInCount}
           </p>
-          <p className="mt-1.5 text-[12.5px] text-muted">
+          <p className="mt-1.5 text-[12px] sm:text-[12.5px] text-muted">
             Yet to check in
           </p>
         </div>
