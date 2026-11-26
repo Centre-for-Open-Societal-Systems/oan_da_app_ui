@@ -68,7 +68,7 @@ describe("listMyTeam", () => {
   it("reads the team from /agents/my-team with comma-separated filters", async () => {
     const facets = { kebele: [{ value: "ET04-W01-K03", label: "Bako 03", count: 1 }] };
     const root = { name: "sup@x", user: "sup@x", full_name: "Sup", designation: null, region: "ET04", zone: null, woreda: "ET04-W01", kebele: null, is_group: true };
-    authRequest.mockResolvedValueOnce({ data: { team: "reports", root, agents: [{ da_id: "DA-000001" }, { da_id: "DA-000002" }], total: 2, facets } });
+    authRequest.mockResolvedValueOnce({ data: { team: "woreda", root, areas: ["ET04-W01"], agents: [{ da_id: "DA-000001" }, { da_id: "DA-000002" }], total: 2, facets } });
 
     const team = await listMyTeam({ search: "DA-0000", filters: { kebele: ["ET04-W01-K03", "unassigned"], active_status: [] }, limit: 20, start: 20 });
 
@@ -80,7 +80,7 @@ describe("listMyTeam", () => {
     expect(params.has("active_status")).toBe(false);
     expect(params.get("limit")).toBe("20");
     expect(params.get("start")).toBe("20");
-    expect(team).toMatchObject({ team: "reports", root, total: 2, facets });
+    expect(team).toMatchObject({ team: "woreda", root, areas: ["ET04-W01"], total: 2, facets });
     expect(team.agents).toHaveLength(2);
   });
 
@@ -93,7 +93,7 @@ describe("listMyTeam", () => {
 
   it("reads a response without the optional fields as an empty team", async () => {
     authRequest.mockResolvedValueOnce({ data: {} });
-    expect(await listMyTeam()).toEqual({ team: "none", root: null, agents: [], total: 0, facets: {} });
+    expect(await listMyTeam()).toEqual({ team: "none", root: null, areas: [], agents: [], total: 0, facets: {} });
   });
 });
 

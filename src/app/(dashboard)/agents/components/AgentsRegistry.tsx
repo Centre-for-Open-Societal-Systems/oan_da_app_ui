@@ -87,15 +87,18 @@ const splitStamp = (stamp: string): [string, string] => {
 };
 
 // FR-02 §3.2.1–3.2.2: 11 literal columns, combinable/resettable filters, search by DA-ID or name. Rows come from
-// the DA Registry through GET /da-services/agents/my-team, whose team comes from the DA Hierarchy (Admin: every DA;
-// a manager: everyone who reports to them). Search, filters and paging run on the server; the filter menus list the
-// backend's facets, counted over the whole team.
+// the DA Registry through GET /da-services/agents/my-team (Admin: every DA; Supervisor: the DAs posted to their
+// Woreda; another manager: everyone who reports to them in the DA Hierarchy; a DA: the DAs posted to their Kebele). Search, filters and paging run on the server; the
+// filter menus list the backend's facets, counted over the whole team. A DA (My Teams) gets the same grid, read-only:
+// no row links (the /agents pages are closed to DAs), no import, and their own row marked "You".
 export function AgentsRegistry() {
   const router = useRouter();
   const role = useAuthStore((s) => s.role);
   const canEdit = role === "Supervisor" || role === "Admin";
   // Bulk import needs the registry's Intake Officer role, which only the OAN Administrator holds.
   const canImport = role === "Admin";
+  const isDA = role === "DA";
+  const myDaId = useAuthStore((s) => s.profile?.daId ?? null);
   const [query, setQuery] = useState("");
   const [searchText, setSearchText] = useState("");
   const [page, setPage] = useState(1);
@@ -180,7 +183,12 @@ export function AgentsRegistry() {
 
   const columns: Column<Agent>[] = [
     { key: "daId", header: "DA-ID", cell: (a) => <span className="font-semibold text-ink">{a.daId.replace(/-(?=d+$)/, "-​")}</span> },
-    { key: "name", header: "Full Name", cell: (a) => <Link href={`/agents/${a.daId}`} className="whitespace-nowrap text-ink hover:text-brand-green">{a.fullName}</Link> },
+    {
+      key: "name", header: "Full Name",
+      cell: (a) => isDA
+        ? <span className="flex items-center gap-2 whitespace-nowrap text-ink">{a.fullName}{a.daId === myDaId && <Pill tone="green">You</Pill>}</span>
+        : <Link href={`/agents/${a.daId}`} className="whitespace-nowrap text-ink hover:text-brand-green">{a.fullName}</Link>,
+    },
     { key: "fayda", header: "Fayda ID", cell: (a) => <span className="whitespace-nowrap text-ink">{a.faydaId}</span> },
     { key: "active", header: <FilterDropdown label="Active Status" allLabel="All active statuses" options={activeOptions} selected={filters.active} onApply={setFilter("active")} />, align: "center", cell: (a) => <Pill tone={ACTIVE_TONE[a.activeStatus]}>{a.activeStatus}</Pill> },
     { key: "tier", header: <FilterDropdown label="Education Tier" allLabel="All tiers" options={tierOptions} selected={filters.tier} onApply={setFilter("tier")} />, cell: (a) => a.educationTier },
@@ -194,10 +202,12 @@ export function AgentsRegistry() {
         const enabled = !disabledIds.has(a.daId);
         return (
           <div className="flex items-center justify-center gap-2.5" onClick={(e) => e.stopPropagation()}>
-            <RowAction href={`/agents/${a.daId}`} icon="view">View</RowAction>
-            <RowAction href={`/performance/teams/attendance?agent=${encodeURIComponent(a.daId)}`} icon="calendar">
-              View Attendance
-            </RowAction>
+            {!isDA && <RowAction href={`/agents/${a.daId}`} icon="view">View</RowAction>}
+            {!isDA && (
+              <RowAction href={`/performance/teams/attendance?agent=${encodeURIComponent(a.daId)}`} icon="calendar">
+                View Attendance
+              </RowAction>
+            )}
             <Switch
               checked={enabled}
               disabled={!canEdit}
@@ -224,8 +234,8 @@ export function AgentsRegistry() {
         {/* Toolbar — the title never wraps; the controls stay one group that sits beside it when it fits and drops below as a whole when it doesn't. */}
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4">
           <div className="flex shrink-0 items-center gap-2.5">
-            <h2 className="whitespace-nowrap text-[16px] font-semibold text-ink">Master registry</h2>
-            {loaded && !loaded.error && !loading && <span className="text-[13px] text-muted">{loaded.total.toLocaleString()} in your scope</span>}
+            <h2 className="whitespace-nowrap text-[16px] font-semibold text-ink">{isDA ? "Team members" : "Master registry"}</h2>
+            {loaded && !loaded.error && !loading && <span className="text-[13px] text-muted">{loaded.total.toLocaleString()} in your {isDA ? "Kebele" : "scope"}</span>}
           </div>
           <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
             <SearchInput value={query} onChange={setQuery} placeholder={SEARCH_PLACEHOLDER} />
@@ -271,9 +281,9 @@ export function AgentsRegistry() {
             paginate={false}
             state={loading ? "loading" : loaded?.error ? "error" : "ready"}
             onRetry={() => setAttempt((n) => n + 1)}
-            onRowClick={(a) => router.push(`/agents/${a.daId}`)}
-            emptyTitle={searchText || activeFilterCount > 0 ? "No agents match the search or filters" : "No agents in your scope"}
-            emptyHint={searchText || activeFilterCount > 0 ? "Clear a filter or try a different search." : "Agents appear here once the DA Registry publishes records in your Region or Woreda."}
+            onRowClick={isDA ? undefined : (a) => router.push(`/agents/${a.daId}`)}
+            emptyTitle={searchText || activeFilterCount > 0 ? "No agents match the search or filters" : isDA ? "No agents in your Kebele" : "No agents in your scope"}
+            emptyHint={searchText || activeFilterCount > 0 ? "Clear a filter or try a different search." : isDA ? "Your Kebele colleagues appear here once the DA Registry posts you and them to a Kebele." : "Agents appear here once the DA Registry publishes records in your Region or Woreda."}
           />
           {!loading && !loaded?.error && loaded && loaded.total > 0 && (
             <TablePagination
@@ -304,7 +314,7 @@ export function AgentsRegistry() {
       </Card>
 
       {/* What this portal sent to the registry and what the registry refused; reloads after an import. */}
-      <BulkImportsPanel refreshKey={importsVersion} />
+      {!isDA && <BulkImportsPanel refreshKey={importsVersion} />}
 
       {/* §4.1 Intake — bulk import is one of only two entry paths (no manual Add DA). */}
       <ImportAgentsModal

@@ -1,50 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Banner } from "@/components/ui/Banner";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { agentToTeamMember, describeAgentError, listMyTeam, type ApiAgent, type TeamKind, type TeamMember } from "@/features/agents";
-import { useAuthStore } from "@/store/useAuthStore";
-import { TeamTable } from "./TeamTable";
+import { AgentsRegistry } from "../../agents/components/AgentsRegistry";
 
-/** The `agent` of /me is the DA's registry record when the registry answered; anything else is not one. */
-const asApiAgent = (value: Record<string, unknown> | null | undefined): ApiAgent | null =>
-  value && typeof value.da_id === "string" ? (value as unknown as ApiAgent) : null;
-
-// A DA's team is the Development Agents under their boss in the DA Hierarchy (GET /da-services/agents/my-team), with
-// the DA's own registry record (from /me) first.
+// A DA's My Teams: the same grid as the officers' registry (AgentsRegistry, read-only for a DA), listing every
+// Development Agent posted to the DA's Kebele (GET /da-services/agents/my-team), the DA included.
 export function MyTeam() {
-  const profile = useAuthStore((s) => s.profile);
-  const me = useMemo(() => {
-    const record = asApiAgent(profile?.agent);
-    return record ? agentToTeamMember(record) : null;
-  }, [profile?.agent]);
-  const [loaded, setLoaded] = useState<{ items: TeamMember[]; team: TeamKind; boss: string | null; error: string | null } | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    listMyTeam({ limit: 200 })
-      .then(({ team, root, agents }) => !cancelled && setLoaded({ items: agents.map(agentToTeamMember), team, boss: team === "peers" ? root?.full_name || root?.user || null : null, error: null }))
-      .catch((err: unknown) => !cancelled && setLoaded({ items: [], team: "none", boss: null, error: describeAgentError(err) }));
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const colleagues = loaded?.items ?? [];
-  const team = me ? [me, ...colleagues.filter((m) => m.daId !== me.daId)] : colleagues;
-  const description = loaded && loaded.team === "none" && !loaded.error
-    ? "You are not in the DA Hierarchy yet, so there is no team to show."
-    : loaded?.boss
-      ? `Development Agents who report to ${loaded.boss}`
-      : "The Development Agents who report to the same supervisor as you.";
-
   return (
     <div className="flex w-full flex-col gap-4">
       <PageHeader
         title="My Teams"
-        description={description}
+        description="The Development Agents posted to your Kebele, from the DA Registry."
         actions={
           <Link
             href="/advisors"
@@ -60,14 +27,7 @@ export function MyTeam() {
           </Link>
         }
       />
-
-      {loaded?.error && (
-        <Banner tone="error" title="Your team could not be loaded">
-          {loaded.error}
-        </Banner>
-      )}
-
-      <TeamTable team={team} myDaId={me?.daId ?? profile?.daId ?? ""} loading={loaded === null} />
+      <AgentsRegistry />
     </div>
   );
 }

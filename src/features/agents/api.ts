@@ -82,11 +82,12 @@ export async function listAgents({ search, region, woreda, kebele, activeStatus,
 }
 
 /**
- * How the backend chose the team from the DA Hierarchy (who reports to whom): every DA (Admin), the caller's reports
- * at every level (someone with people under them), their boss's reports with them included (a DA), just them (a DA
- * with no boss), or nobody (no DA Hierarchy node).
+ * How the backend chose the team: every DA (Admin), the DAs posted to the caller's Woreda (Supervisor), the caller's
+ * reports at every level from the DA Hierarchy (someone else with people under them, e.g. an Executive), the DAs
+ * posted to the caller's Kebele (a DA), or nobody (no DA Hierarchy node). The tree (GET /agents/my-team/tree) answers
+ * "reports" for a Supervisor and "peers" (a DA: their boss's reports) or "self" (a DA with no boss) for a DA.
  */
-export type TeamKind = "all" | "reports" | "peers" | "self" | "none";
+export type TeamKind = "all" | "woreda" | "reports" | "kebele" | "peers" | "self" | "none";
 
 /** One DA Hierarchy node: a user and where they sit. */
 export interface HierarchyNode {
@@ -119,24 +120,26 @@ export interface ListMyTeamParams {
 
 export interface MyTeam {
   team: TeamKind;
-  /** The DA Hierarchy node the team hangs from (the caller, their boss, or the root); null for "none". */
+  /** The DA Hierarchy node the team hangs from (the caller, or the root); null for "none". */
   root: HierarchyNode | null;
+  /** The Supervisor's Woreda codes ("woreda") or the DA's Kebele code ("kebele"); [] otherwise or with no posting. */
+  areas: string[];
   agents: ApiAgent[];
   total: number;
   facets: AgentFacets;
 }
 
 /**
- * GET /da-services/agents/my-team: the signed-in user's team from the DA Hierarchy: an Admin every DA, someone with
- * people under them their reports (every level), a DA their boss's reports (them included). Filters, search and
- * paging run on the server; facets count the whole team.
+ * GET /da-services/agents/my-team: the signed-in user's team: an Admin every DA, a Supervisor the DAs posted to their
+ * Woreda, someone else with people under them their reports from the DA Hierarchy (every level), a DA the DAs posted
+ * to their Kebele (them included). Filters, search and paging run on the server; facets count the whole team.
  */
 export async function listMyTeam({ search, filters, limit = 50, start = 0 }: ListMyTeamParams = {}): Promise<MyTeam> {
-  const res = await authRequest<{ data: { team?: TeamKind; root?: HierarchyNode | null; agents?: ApiAgent[]; total?: number; facets?: AgentFacets } }>(
+  const res = await authRequest<{ data: { team?: TeamKind; root?: HierarchyNode | null; areas?: string[]; agents?: ApiAgent[]; total?: number; facets?: AgentFacets } }>(
     `/da-services/agents/my-team?${query({ search, ...filterParams(filters), limit, start })}`,
   );
   const d = res.data;
-  return { team: d.team ?? "none", root: d.root ?? null, agents: d.agents ?? [], total: d.total ?? 0, facets: d.facets ?? {} };
+  return { team: d.team ?? "none", root: d.root ?? null, areas: d.areas ?? [], agents: d.agents ?? [], total: d.total ?? 0, facets: d.facets ?? {} };
 }
 
 /** GET /da-services/agents/my-team/tree: the same team as a tree by reporting line; `tree` is null for "none". */
