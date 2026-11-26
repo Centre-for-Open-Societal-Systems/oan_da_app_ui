@@ -26,7 +26,7 @@ export function PageHeader({ title, description, actions, tabs, activeHref, tabB
     <Card className="relative p-0">
       {tabs && activeHref && <PageTabs tabs={tabs} activeHref={activeHref} />}
       {tabBar}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4 py-3.5 sm:px-5 sm:py-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5 sm:py-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
             <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight text-ink sm:text-2xl">{title}</h1>
@@ -35,7 +35,7 @@ export function PageHeader({ title, description, actions, tabs, activeHref, tabB
           {/* Description is still passed and rendered, just hidden on every page for now; drop `hidden` to show it again. */}
           {description && <div className={cn("mt-1 text-[13px] sm:text-[14px] text-ink-soft", !showDescription && "hidden")}>{description}</div>}
         </div>
-        {actions && <div className="flex w-full sm:w-auto shrink-0 flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-2.5">{actions}</div>}
+        {actions && <div className="flex shrink-0 flex-wrap items-center gap-2 sm:gap-2.5">{actions}</div>}
       </div>
     </Card>
   );

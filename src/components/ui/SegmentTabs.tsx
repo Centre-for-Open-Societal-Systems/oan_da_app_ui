@@ -9,6 +9,7 @@ export interface SegmentTab<K extends string> {
   key: K;
   label: string;
   count?: number;
+  icon?: ReactNode;
 }
 
 // In-page state tabs (no routing). Same look as PageTabs so hub link-tabs and local tabs read alike.
@@ -22,7 +23,12 @@ export function SegmentTabs<K extends string>({ tabs, active, onChange, classNam
           const isActive = tab.key === active;
           return (
             <button key={tab.key} type="button" role="tab" aria-selected={isActive} onClick={() => onChange(tab.key)} className={cn(tabClass(isActive), "cursor-pointer select-none transition-all duration-200")}>
-              {tab.label}
+              {tab.icon && (
+                <span className={cn("shrink-0 transition-colors", isActive ? "text-brand-green" : "text-muted")}>
+                  {tab.icon}
+                </span>
+              )}
+              <span>{tab.label}</span>
               {tab.count !== undefined && (
                 <span
                   className={cn(

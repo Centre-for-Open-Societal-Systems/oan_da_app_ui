@@ -320,15 +320,37 @@ const isDaySelected = (year: number, month: number, day: number) => {
 
 return createPortal(
   <div
-    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-fade-in"
+    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-xs p-3 sm:p-4 md:p-6 animate-fade-in"
     onClick={onClose}
   >
     <div
-      className="flex w-full max-w-4xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl animate-pop-in transition-all duration-200"
+      className="flex flex-col md:flex-row w-full max-w-4xl max-h-[92vh] sm:max-h-[90vh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl animate-pop-in transition-all duration-200"
       onClick={(e) => e.stopPropagation()}
     >
-      {/* Left Sidebar: Quick Ranges */}
-      <div className="w-48 shrink-0 border-r border-slate-100 bg-slate-50/50 p-4">
+      {/* Mobile: Horizontal scrollable quick ranges */}
+      <div className="flex md:hidden items-center gap-1.5 overflow-x-auto p-2.5 sm:p-3 border-b border-slate-100 bg-slate-50/70 no-scrollbar shrink-0">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 shrink-0 px-1">
+          Quick:
+        </span>
+        {QUICK_RANGES.map((qr) => (
+          <button
+            key={qr.key}
+            type="button"
+            onClick={() => handleQuickSelect(qr.key)}
+            className={cn(
+              "shrink-0 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer whitespace-nowrap",
+              selectedQuick === qr.key
+                ? "bg-brand-green text-white shadow-xs"
+                : "bg-white text-slate-700 border border-slate-200/80 hover:bg-slate-100"
+            )}
+          >
+            {qr.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Desktop / Tablet (md:): Left Sidebar Quick Ranges */}
+      <div className="hidden md:flex w-44 lg:w-48 shrink-0 flex-col border-r border-slate-100 bg-slate-50/50 p-4 overflow-y-auto">
         <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2 px-2.5">
           Quick Ranges
         </p>
@@ -355,9 +377,9 @@ return createPortal(
       </div>
 
       {/* Right Area: Dual Month Picker */}
-      <div className="flex min-w-0 flex-1 flex-col p-6">
+      <div className="flex min-w-0 flex-1 flex-col p-4 sm:p-5 md:p-6 overflow-y-auto">
         {/* Top Row: Interactive Date Display Pills (matching user images) */}
-        <div className="flex flex-wrap items-center gap-3 pb-5 border-b border-slate-100">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 pb-4 sm:pb-5 border-b border-slate-100">
           {/* Start Date Button */}
           <button
             type="button"
@@ -370,7 +392,7 @@ return createPortal(
               }
             }}
             className={cn(
-              "flex h-10 items-center gap-2 rounded-xl border px-3.5 text-[13.5px] font-semibold transition-all duration-200 cursor-pointer shadow-2xs",
+              "flex h-9 sm:h-10 items-center gap-2 rounded-xl border px-3 sm:px-3.5 text-[12.5px] sm:text-[13.5px] font-semibold transition-all duration-200 cursor-pointer shadow-2xs",
               activeInput === "start"
                 ? "border-brand-green bg-emerald-50/80 text-brand-green ring-2 ring-brand-green/20 shadow-xs scale-[1.02]"
                 : "border-slate-200 bg-white text-slate-800 hover:border-slate-300 hover:bg-slate-50"
@@ -405,7 +427,7 @@ return createPortal(
               }
             }}
             className={cn(
-              "flex h-10 items-center gap-2 rounded-xl border px-3.5 text-[13.5px] font-semibold transition-all duration-200 cursor-pointer shadow-2xs",
+              "flex h-9 sm:h-10 items-center gap-2 rounded-xl border px-3 sm:px-3.5 text-[12.5px] sm:text-[13.5px] font-semibold transition-all duration-200 cursor-pointer shadow-2xs",
               activeInput === "end"
                 ? "border-brand-green bg-emerald-50/80 text-brand-green ring-2 ring-brand-green/20 shadow-xs scale-[1.02]"
                 : "border-slate-200 bg-white text-slate-800 hover:border-slate-300 hover:bg-slate-50"
@@ -424,7 +446,7 @@ return createPortal(
           </button>
 
           {/* Duration Tag */}
-          <div className="flex items-center gap-1.5 text-[13.5px] text-slate-500 font-medium ml-1">
+          <div className="flex items-center gap-1.5 text-[12.5px] sm:text-[13.5px] text-slate-500 font-medium ml-1">
             <svg className="h-4 w-4 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M5 12h14M12 5l7 7-7 7" />
             </svg>
@@ -434,7 +456,7 @@ return createPortal(
         </div>
 
         {/* Month Navigation Headers */}
-        <div className="flex items-center justify-between pt-4 pb-2">
+        <div className="flex items-center justify-between pt-3 sm:pt-4 pb-2">
           <button
             type="button"
             onClick={() => {
@@ -453,9 +475,9 @@ return createPortal(
             </svg>
           </button>
 
-          <div className="grid grid-cols-2 flex-1 text-center font-bold text-slate-900 text-[15.5px]">
+          <div className="grid grid-cols-1 md:grid-cols-2 flex-1 text-center font-bold text-slate-900 text-[14.5px] sm:text-[15.5px]">
             <div>{monthNames[viewMonth]} {viewYear}</div>
-            <div>{monthNames[nextMonthIndex]} {nextMonthYear}</div>
+            <div className="hidden md:block">{monthNames[nextMonthIndex]} {nextMonthYear}</div>
           </div>
 
           <button
@@ -483,8 +505,8 @@ return createPortal(
           </button>
         </div>
 
-        {/* Dual Month Calendar Grids */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-3">
+        {/* Calendar Grids: 1 month on mobile, dual months on md+ */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 py-2 sm:py-3">
           {/* Month 1 (Left Month) */}
           <div>
             <div className="grid grid-cols-7 text-center text-[11.5px] font-semibold text-slate-400 mb-2.5 uppercase tracking-wider">
@@ -542,8 +564,8 @@ return createPortal(
             </div>
           </div>
 
-          {/* Month 2 (Right Month) */}
-          <div>
+          {/* Month 2 (Right Month - Hidden on Mobile, Visible on md+) */}
+          <div className="hidden md:block">
             <div className="grid grid-cols-7 text-center text-[11.5px] font-semibold text-slate-400 mb-2.5 uppercase tracking-wider">
               {WEEKDAY_NAMES.map((w) => (
                 <div key={w}>{w}</div>
@@ -600,34 +622,34 @@ return createPortal(
           </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className="flex items-center justify-between pt-5 border-t border-slate-100 mt-2">
-          <div className="text-[12.5px] font-medium">
+        {/* Footer Actions: Fully responsive across Mobile, Tablet, Desktop */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 sm:pt-5 border-t border-slate-100 mt-2 shrink-0 bg-white">
+          <div className="text-[12px] sm:text-[12.5px] font-medium text-slate-600 min-w-0">
             {activeInput === "start" ? (
-              <span className="inline-flex items-center gap-1.5 text-brand-green">
-                <span className="h-2 w-2 rounded-full bg-brand-green animate-pulse" />
-                Click a date to select <strong className="font-bold">Start date</strong>
+              <span className="inline-flex items-center gap-1.5 text-brand-green bg-emerald-50/80 px-2.5 py-1 rounded-lg border border-emerald-200/60 shadow-2xs">
+                <span className="h-2 w-2 rounded-full bg-brand-green animate-pulse shrink-0" />
+                <span>Click a date to select <strong className="font-bold text-emerald-900">Start date</strong></span>
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1.5 text-brand-green">
-                <span className="h-2 w-2 rounded-full bg-brand-green animate-pulse" />
-                Click a date to select <strong className="font-bold">End date</strong>
+              <span className="inline-flex items-center gap-1.5 text-brand-green bg-emerald-50/80 px-2.5 py-1 rounded-lg border border-emerald-200/60 shadow-2xs">
+                <span className="h-2 w-2 rounded-full bg-brand-green animate-pulse shrink-0" />
+                <span>Click a date to select <strong className="font-bold text-emerald-900">End date</strong></span>
               </span>
             )}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0 w-full sm:w-auto">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-[13.5px] font-semibold text-slate-700 hover:bg-slate-50 transition-all active:scale-95 shadow-2xs cursor-pointer"
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 sm:px-5 text-[13px] sm:text-[13.5px] font-semibold text-slate-700 hover:bg-slate-50 transition-all active:scale-95 shadow-2xs cursor-pointer h-9 sm:h-10"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={handleApply}
-              className="rounded-lg bg-brand-green px-5 py-2 text-[13.5px] font-semibold text-white shadow-sm hover:bg-emerald-700 transition-all active:scale-95 shadow-brand-green/20 cursor-pointer"
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center rounded-xl bg-brand-green px-5 sm:px-6 text-[13px] sm:text-[13.5px] font-semibold text-white shadow-sm hover:bg-emerald-700 transition-all active:scale-95 shadow-brand-green/20 cursor-pointer h-9 sm:h-10 whitespace-nowrap"
             >
               Apply range
             </button>

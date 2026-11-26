@@ -22,7 +22,6 @@ interface ExportButtonProps {
 export function ExportButton({ label = "Export Report", onExport, formats = ["pdf", "xlsx", "csv"], disabled, icon = true, className }: ExportButtonProps) {
   const options = EXPORT_FORMATS.filter((o) => formats.includes(o.value));
   const [isOpen, setIsOpen] = useState(false);
-  const [isUpward, setIsUpward] = useState(false);
   const [format, setFormat] = useState<ExportFormat>(options[0]?.value ?? "csv");
   const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -61,18 +60,20 @@ export function ExportButton({ label = "Export Report", onExport, formats = ["pd
   const open = () => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (rect) {
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const spaceAbove = rect.top;
+      const gap = 6;
+      const width = Math.min(240, window.innerWidth - 16);
+      // Right-align with the trigger button so the dropdown never overflows to the right
+      const idealLeft = rect.right - width;
+      const left = Math.max(8, Math.min(idealLeft, window.innerWidth - width - 8));
+      const spaceBelow = window.innerHeight - rect.bottom - gap - 8;
+      const spaceAbove = rect.top - gap - 8;
       const up = spaceBelow < 220 && spaceAbove > spaceBelow;
-      const width = Math.max(rect.width, 160);
-      const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
-      setIsUpward(up);
       setMenuStyle({
         left,
         width,
         ...(up
-          ? { bottom: window.innerHeight - rect.top }
-          : { top: rect.bottom }),
+          ? { bottom: window.innerHeight - rect.top + gap }
+          : { top: rect.bottom + gap }),
       });
     }
     setIsOpen(true);
@@ -94,10 +95,8 @@ export function ExportButton({ label = "Export Report", onExport, formats = ["pd
         aria-expanded={isOpen}
         aria-controls={isOpen ? menuId : undefined}
         className={cn(
-          "inline-flex h-9 shrink-0 items-center justify-between gap-2 whitespace-nowrap rounded-md border border-brand-green bg-white px-3 sm:px-3.5 text-[13px] sm:text-[13.5px] font-semibold text-brand-green transition-colors hover:bg-brand-wash disabled:cursor-not-allowed disabled:border-zinc-200 disabled:text-subtle disabled:hover:bg-white",
-          isOpen && "bg-brand-wash",
-          isOpen && !isUpward && "rounded-b-none border-b-line-soft",
-          isOpen && isUpward && "rounded-t-none border-t-line-soft",
+          "inline-flex h-9 shrink-0 items-center justify-between gap-2 whitespace-nowrap rounded-xl border border-brand-green bg-white px-3 sm:px-3.5 text-[13px] sm:text-[13.5px] font-semibold text-brand-green transition-colors hover:bg-brand-wash disabled:cursor-not-allowed disabled:border-zinc-200 disabled:text-subtle disabled:hover:bg-white shadow-xs",
+          isOpen && "bg-brand-wash ring-2 ring-brand-green/30",
           className,
         )}
       >
@@ -120,10 +119,7 @@ export function ExportButton({ label = "Export Report", onExport, formats = ["pd
           id={menuId}
           role="dialog"
           aria-label="Export format"
-          className={cn(
-            "fixed z-[110] animate-dropdown-in overflow-hidden border border-brand-green bg-white shadow-[0_12px_40px_-12px_rgba(0,0,0,0.25)]",
-            isUpward ? "rounded-t-xl rounded-b-none border-b-0" : "rounded-b-xl rounded-t-none border-t-0",
-          )}
+          className="fixed z-[110] animate-dropdown-in overflow-hidden rounded-xl border border-brand-green/40 bg-white shadow-[0_12px_40px_-12px_rgba(0,0,0,0.22)]"
           style={{ ...menuStyle, width: menuStyle.width }}
         >
           <div role="radiogroup" aria-label="File format">
@@ -133,20 +129,13 @@ export function ExportButton({ label = "Export Report", onExport, formats = ["pd
                 <label
                   key={o.value}
                   className={cn(
-                    "flex cursor-pointer items-center gap-2.5 sm:gap-3 border-b border-line-soft px-3 sm:px-4 py-2.5 sm:py-3 text-[13px] sm:text-[14px] transition-colors",
+                    "flex cursor-pointer items-center gap-2.5 sm:gap-3 border-b border-line-soft px-3.5 sm:px-4 py-2.5 sm:py-3 text-[13px] sm:text-[13.5px] transition-colors",
                     selected ? "bg-brand-wash font-semibold text-brand-green" : "text-ink hover:bg-surface",
                   )}
                 >
                   <input type="radio" name={menuId} value={o.value} checked={selected} onChange={() => setFormat(o.value)} className="h-4 w-4 shrink-0 accent-brand-green" />
-                  <span className="flex-1 truncate">
-                    {o.value === "xlsx" ? (
-                      <>
-                        <span className="inline sm:hidden">Excel (.xlsx)</span>
-                        <span className="hidden sm:inline">Excel spreadsheet (.xlsx)</span>
-                      </>
-                    ) : (
-                      o.label
-                    )}
+                  <span className="flex-1 whitespace-nowrap text-[13px] sm:text-[13.5px]">
+                    {o.label}
                   </span>
                   {selected && (
                     <svg className="h-4 w-4 shrink-0 text-brand-green" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -157,8 +146,8 @@ export function ExportButton({ label = "Export Report", onExport, formats = ["pd
               );
             })}
           </div>
-          <div className="flex justify-end px-3 sm:px-4 py-2.5 sm:py-3">
-            <button type="button" onClick={confirm} className="inline-flex h-8 sm:h-9 items-center rounded-md bg-brand-green px-4 sm:px-5 text-[12.5px] sm:text-[13.5px] font-semibold text-white transition-colors hover:bg-brand-green-dark">
+          <div className="flex justify-end px-3.5 sm:px-4 py-2.5 sm:py-3 bg-surface/50">
+            <button type="button" onClick={confirm} className="inline-flex h-8 sm:h-9 items-center rounded-lg bg-brand-green px-4 sm:px-5 text-[12.5px] sm:text-[13.5px] font-semibold text-white transition-colors hover:bg-brand-green-dark shadow-xs">
               Export
             </button>
           </div>
