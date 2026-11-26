@@ -405,7 +405,8 @@ export function VisitsTable() {
             )}
             {pageRows.map((v) => {
               const showLogOutcome = canLogOutcome(v);
-              const showStart = canStartVisit(v) && canActOnVisit(v, isDA, me);
+              // Start is for a signed-in Development Agent only, on a Planned / Confirmed visit (no DA-ID check).
+              const showStart = isDA && canStartVisit(v);
               const canResched = v.physicalStatus === undefined || canReschedule(v);
               const canCanc = canCancel(v) && canActOnVisit(v, isDA, me);
               const hasMoreActions = canResched || canCanc;

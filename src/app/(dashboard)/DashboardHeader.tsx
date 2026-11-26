@@ -14,7 +14,7 @@ const RESULTS = 5;
 /** Global search's farmers from GET /farmers, in the caller's scope. */
 async function searchFarmers(searchText: string): Promise<SearchHit[]> {
   const { items } = await listFarmers({ searchText, pageSize: RESULTS });
-  return items.map(apiFarmerToFarmer).map((f) => ({ id: f.id, name: f.name, details: `${f.kebele}, ${f.woreda}`, href: `/farmers/${f.id}` }));
+  return items.map(apiFarmerToFarmer).map((f) => ({ id: f.id, name: f.name, details: `${f.kebele}, ${f.woreda}`, href: `/farmers/${f.internalId ?? f.id}` }));
 }
 
 /** Global search's DAs from GET /agents, scoped by the backend (Supervisor: Woreda, Executive: Region, Admin: all). */

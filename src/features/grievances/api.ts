@@ -233,16 +233,6 @@ export async function submitGrievance(body: SubmitGrievanceRequest): Promise<Sub
   };
 }
 
-// --- administrative area ----------------------------------------------------
-// The create endpoint takes administrative_area as `kebele-<code>` (e.g. "kebele-ET140108101008"). The pickers
-// read Region > Zone > Woreda > Kebele from the geo Master Data (features/geo AreaPicker).
-
-/** administrative_area the create endpoint expects for a Kebele: `kebele-<geo value_id>`. */
-export const toAdministrativeArea = (kebeleCode: string) => {
-  const code = kebeleCode.trim();
-  return code.startsWith("kebele-") ? code : `kebele-${code}`;
-};
-
 /** POST /grievances/sync/retry (OAN Administrator): replays failed grievance sync events, one by name or all when omitted. */
 export async function retryGrievanceSync(eventName?: string): Promise<{ retried: string[]; count: number }> {
   return (await authRequest<{ data: { retried: string[]; count: number } }>("/da-services/grievances/sync/retry", { method: "POST", body: eventName ? { event_name: eventName } : {} })).data;
