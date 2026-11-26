@@ -373,9 +373,9 @@ export function SupervisorSurveys({ initialView = "results", initialSurvey }: { 
   );
 
   return (
-    <div className="flex w-full flex-col gap-4">
+    <div className="flex w-full flex-col gap-4 min-w-0 max-w-full">
       {/* Header Card */}
-      <Card className="flex flex-col gap-4 rounded-2xl border border-line bg-white p-4 sm:p-5 shadow-card md:flex-row md:items-center md:justify-between">
+      <Card className="flex flex-col gap-4 rounded-2xl border border-line bg-white p-4 sm:p-5 shadow-card md:flex-row md:items-center md:justify-between min-w-0 max-w-full">
         <div className="min-w-0">
           <div className="flex items-center gap-2.5">
             <h1 className="text-[20px] sm:text-[24px] font-bold tracking-tight text-ink">
