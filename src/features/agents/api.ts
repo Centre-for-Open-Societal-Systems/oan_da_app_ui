@@ -37,6 +37,19 @@ export interface ApiAgent {
   [field: string]: unknown;
 }
 
+/** The filters of GET /agents and /agents/my-team; the backend names them the same. */
+export const AGENT_FILTER_FIELDS = ["region", "woreda", "kebele", "active_status", "education_tier", "fayda_status", "approval_status", "specialisation"] as const;
+export type AgentFilterField = (typeof AGENT_FILTER_FIELDS)[number];
+/** Values per filter; a DA matches any value of a filter, and every filter given. "unassigned" = no area at that level. */
+export type AgentFilters = Partial<Record<AgentFilterField, string[]>>;
+/** One option of a filter with how many DAs it shows, counted over the whole list (not just the page). */
+export interface AgentFacet {
+  value: string;
+  label: string;
+  count: number;
+}
+export type AgentFacets = Partial<Record<AgentFilterField, AgentFacet[]>>;
+
 export interface ListAgentsParams {
   /** Part of a DA-ID or name. */
   search?: string;
@@ -46,6 +59,8 @@ export interface ListAgentsParams {
   kebele?: string;
   activeStatus?: string;
   educationTier?: string;
+  /** Several values per filter; wins over the single-value fields above. */
+  filters?: AgentFilters;
   limit?: number;
   start?: number;
 }
@@ -53,12 +68,86 @@ export interface ListAgentsParams {
 const query = (params: Record<string, string | number | undefined>) =>
   new URLSearchParams(Object.entries(params).flatMap(([k, v]) => (v === undefined || v === "" ? [] : [[k, String(v)]]))).toString();
 
-/** GET /da-services/agents: the DAs in the caller's scope (Supervisor: Woreda, Executive: Region, Admin: all). */
-export async function listAgents({ search, region, woreda, kebele, activeStatus, educationTier, limit = 50, start = 0 }: ListAgentsParams = {}): Promise<{ agents: ApiAgent[]; total: number }> {
-  const res = await authRequest<{ data: { agents: ApiAgent[]; total: number } }>(
-    `/da-services/agents?${query({ search, region, woreda, kebele, active_status: activeStatus, education_tier: educationTier, limit, start })}`,
+/** The filters as query parameters: each one's values comma-separated, empty ones left out. */
+const filterParams = (filters: AgentFilters = {}): Record<string, string | undefined> =>
+  Object.fromEntries(AGENT_FILTER_FIELDS.map((f) => [f, filters[f]?.length ? filters[f].join(",") : undefined]));
+
+/** GET /da-services/agents: every DA the registry returns (the Admin's view), filtered and paged, with filter facets. */
+export async function listAgents({ search, region, woreda, kebele, activeStatus, educationTier, filters, limit = 50, start = 0 }: ListAgentsParams = {}): Promise<{ agents: ApiAgent[]; total: number; facets: AgentFacets }> {
+  const single = { region, woreda, kebele, active_status: activeStatus, education_tier: educationTier };
+  const many = filterParams(filters);
+  const params = Object.fromEntries(AGENT_FILTER_FIELDS.map((f) => [f, many[f] ?? (single as Record<string, string | undefined>)[f]]));
+  const res = await authRequest<{ data: { agents: ApiAgent[]; total: number; facets?: AgentFacets } }>(`/da-services/agents?${query({ search, ...params, limit, start })}`);
+  return { agents: res.data.agents ?? [], total: res.data.total ?? 0, facets: res.data.facets ?? {} };
+}
+
+/**
+ * How the backend chose the team: every DA (Admin), the DAs posted to the caller's Woreda (Supervisor), the caller's
+ * reports at every level from the DA Hierarchy (someone else with people under them, e.g. an Executive), the DAs
+ * posted to the caller's Kebele (a DA), or nobody (no DA Hierarchy node). The tree (GET /agents/my-team/tree) answers
+ * "reports" for a Supervisor and "peers" (a DA: their boss's reports) or "self" (a DA with no boss) for a DA.
+ */
+export type TeamKind = "all" | "woreda" | "reports" | "kebele" | "peers" | "self" | "none";
+
+/** One DA Hierarchy node: a user and where they sit. */
+export interface HierarchyNode {
+  name: string;
+  user: string | null;
+  full_name: string | null;
+  designation: string | null;
+  region: string | null;
+  zone: string | null;
+  woreda: string | null;
+  kebele: string | null;
+  is_group: boolean;
+}
+
+/** A node of GET /agents/my-team/tree, with the people who report to it. */
+export interface TeamTreeNode extends HierarchyNode {
+  /** The user's DA-ID when they have a DA record. */
+  da_id: string | null;
+  reports: TeamTreeNode[];
+}
+
+export interface ListMyTeamParams {
+  /** Part of a DA-ID or name. */
+  search?: string;
+  /** Narrow within the team, e.g. { kebele: ["ET04-W01-K03"] }; never widens it. */
+  filters?: AgentFilters;
+  limit?: number;
+  start?: number;
+}
+
+export interface MyTeam {
+  team: TeamKind;
+  /** The DA Hierarchy node the team hangs from (the caller, or the root); null for "none". */
+  root: HierarchyNode | null;
+  /** The Supervisor's Woreda codes ("woreda") or the DA's Kebele code ("kebele"); [] otherwise or with no posting. */
+  areas: string[];
+  /** The caller's boss in the DA Hierarchy (their parent node); null at the top or with no node. */
+  reportsTo: HierarchyNode | null;
+  agents: ApiAgent[];
+  total: number;
+  facets: AgentFacets;
+}
+
+/**
+ * GET /da-services/agents/my-team: the signed-in user's team: an Admin every DA, a Supervisor the DAs posted to their
+ * Woreda, someone else with people under them their reports from the DA Hierarchy (every level), a DA the DAs posted
+ * to their Kebele (them included). Filters, search and paging run on the server; facets count the whole team.
+ */
+export async function listMyTeam({ search, filters, limit = 50, start = 0 }: ListMyTeamParams = {}): Promise<MyTeam> {
+  const res = await authRequest<{ data: { team?: TeamKind; root?: HierarchyNode | null; areas?: string[]; reports_to?: HierarchyNode | null; agents?: ApiAgent[]; total?: number; facets?: AgentFacets } }>(
+    `/da-services/agents/my-team?${query({ search, ...filterParams(filters), limit, start })}`,
   );
-  return { agents: res.data.agents ?? [], total: res.data.total ?? 0 };
+  const d = res.data;
+  return { team: d.team ?? "none", root: d.root ?? null, areas: d.areas ?? [], reportsTo: d.reports_to ?? null, agents: d.agents ?? [], total: d.total ?? 0, facets: d.facets ?? {} };
+}
+
+/** GET /da-services/agents/my-team/tree: the same team as a tree by reporting line; `tree` is null for "none". */
+export async function fetchMyTeamTree(): Promise<{ team: TeamKind; tree: TeamTreeNode | null }> {
+  const res = await authRequest<{ data: { team?: TeamKind; tree?: TeamTreeNode | null } }>("/da-services/agents/my-team/tree");
+  return { team: res.data.team ?? "none", tree: res.data.tree ?? null };
 }
 
 /** GET /da-services/agents/{da_id}: one DA, read live from the registry; 403 outside the caller's scope. */
