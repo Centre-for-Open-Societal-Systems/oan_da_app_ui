@@ -124,7 +124,7 @@ export function TemplatesView({ reloadKey = 0, notice, onDismissNotice }: { relo
     },
     { key: "type", header: "Type", className: "whitespace-nowrap", cell: (t) => <span className="whitespace-nowrap rounded-md bg-surface px-2 py-0.5 text-[12px] font-medium text-ink-soft border border-line-soft">{t.type}</span> },
     { key: "window", header: "Window", className: "whitespace-nowrap", cell: (t) => <span className="whitespace-nowrap text-[12.5px] font-medium text-ink">{t.window.open} → {t.window.close}</span> },
-    { key: "assign", header: "Assigned to", className: "whitespace-nowrap", cell: (t) => <span className="whitespace-nowrap text-[13px]">{t.assignmentMode === "Selected" ? `${t.assignedDaIds?.length ?? 0} selected DA${t.assignedDaIds?.length === 1 ? "" : "s"}` : "Whole Woreda"}</span> },
+    { key: "assign", header: "Assigned to", className: "whitespace-nowrap", cell: (t) => <span className="whitespace-nowrap text-[13px]">{t.assignmentMode === "Selected" ? `${t.assignedUsers?.length ?? 0} selected DA${t.assignedUsers?.length === 1 ? "" : "s"}` : "Whole Woreda"}</span> },
     { key: "langs", header: "Languages", className: "whitespace-nowrap", cell: (t) => <span className="text-[12.5px] text-ink-soft">{t.languages.join(" · ")}</span> },
     { key: "resp", header: "Responses", align: "center", className: "whitespace-nowrap", cell: (t) => <span className="font-medium text-ink">{t.collected}{t.queued > 0 ? <span className="ml-1 text-[12px] font-normal text-amber-700">+{t.queued} queued</span> : null}</span> },
     { key: "status", header: "Status", className: "whitespace-nowrap", cell: (t) => <Pill tone={SURVEY_STATUS_TONE[t.status]} dot>{t.status}</Pill> },

@@ -11,7 +11,7 @@ import { describeSurveyError, downloadSurveyResponses, getSurveyTemplate, listSu
 
 const answerText = (value: string | string[] | undefined) => (Array.isArray(value) ? value.join(", ") : value) || "—";
 
-/** The questions the Supervisor wrote. Consent, Farmer ID and Kebele are on every survey and are not listed. */
+/** The questions the Supervisor wrote (older templates also stored consent / Farmer ID / Kebele rows: not listed). */
 export const writtenQuestions = (parameters: Parameter[] | undefined) => (parameters ?? []).filter((p) => p.type !== "consent" && p.type !== "auto");
 
 const distinct = (values: (string | null | undefined)[]) => [...new Set(values.filter((v): v is string => Boolean(v)))].sort();

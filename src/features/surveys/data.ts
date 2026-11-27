@@ -4,6 +4,19 @@ import type { PillTone } from "@/components/ui/Pill";
 
 export type ResponseType = "consent" | "auto" | "lookup" | "rating" | "single" | "multi" | "text";
 
+/**
+ * The consent step the capture form takes before the questions. It is not a template question: the answer goes to
+ * the response's own `consent` field. Older templates also stored consent / Farmer ID / Kebele rows; the form drops them.
+ */
+export const CONSENT_STEP: Parameter = {
+  id: "consent",
+  order: 0,
+  prompt: "The farmer consents to take part in this survey and understands responses are used to improve extension services.",
+  type: "consent",
+  required: true,
+  helper: "A declined consent ends the response.",
+};
+
 export interface Parameter {
   id: string;
   order: number;
@@ -49,7 +62,9 @@ export interface SurveyTask {
   woreda?: string | null;
   created_by_user?: string | null;
   assignmentMode?: AssignmentMode;
-  /** Template list / detail and create / patch responses only. */
+  /** Template list / detail and create / patch responses only: the assigned DAs' portal User ids. */
+  assignedUsers?: string[];
+  /** DA-IDs of those Users, where the server could fill them (may be empty). */
   assignedDaIds?: string[];
   /** Absent on list rows. */
   parameters?: Parameter[];

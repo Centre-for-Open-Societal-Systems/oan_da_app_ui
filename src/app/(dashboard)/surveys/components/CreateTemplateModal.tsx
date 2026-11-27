@@ -75,7 +75,7 @@ export function CreateTemplateModal({ onClose, onSaved, template }: CreateTempla
             // Set by the area picker: a Supervisor's own Woreda (from /me), else the one picked.
             woreda: "",
             assignmentMode: "Woreda",
-            assignedDaIds: [],
+            assignedUsers: [],
           },
     [template],
   );
@@ -111,14 +111,15 @@ export function CreateTemplateModal({ onClose, onSaved, template }: CreateTempla
   // The area picker reports its Woreda (a Supervisor's own from /me, else the one picked); DAs picked for another go.
   const pickArea = useCallback((area: AreaSelection) => {
     const woreda = area.woreda?.code ?? "";
-    setDraft((d) => (d.woreda === woreda ? d : { ...d, woreda, assignedDaIds: [] }));
+    setDraft((d) => (d.woreda === woreda ? d : { ...d, woreda, assignedUsers: [] }));
   }, []);
   const patchQuestion = (id: number, next: Partial<TemplateQuestion>) =>
     setDraft((d) => ({ ...d, questions: d.questions.map((q) => (q.id === id ? { ...q, ...next } : q)) }));
 
   const translationLanguages = TRANSLATION_LANGUAGES.filter((l) => draft.languages.includes(l));
-  const agentOptions = (agents ?? []).map(agentLabel);
-  const selectedAgentLabels = (agents ?? []).filter((a) => draft.assignedDaIds.includes(a.da_id)).map(agentLabel);
+  // Only a DA with a portal User can be assigned: the server takes the Users.
+  const agentOptions = (agents ?? []).filter((a) => a.user).map(agentLabel);
+  const selectedAgentLabels = (agents ?? []).filter((a) => a.user && draft.assignedUsers.includes(a.user)).map(agentLabel);
 
   const submit = async () => {
     if (errors.length > 0) {
@@ -259,7 +260,7 @@ export function CreateTemplateModal({ onClose, onSaved, template }: CreateTempla
               selected={selectedAgentLabels}
               disabled={!agents || agents.length === 0}
               placeholder={agents ? "Select DAs…" : "Loading DAs…"}
-              onChange={(labels) => patch({ assignedDaIds: (agents ?? []).filter((a) => labels.includes(agentLabel(a))).map((a) => a.da_id) })}
+              onChange={(labels) => patch({ assignedUsers: (agents ?? []).filter((a) => a.user && labels.includes(agentLabel(a))).map((a) => a.user as string) })}
             />
           </FormField>
         )}
@@ -286,7 +287,7 @@ export function CreateTemplateModal({ onClose, onSaved, template }: CreateTempla
               Questions <span className="text-danger">*</span>
             </p>
             <span className="text-[12px] sm:text-[12.5px] text-muted">
-              Consent, Farmer ID and Kebele are added automatically
+              The DA takes consent first; Farmer ID and Kebele come from the farmer
             </span>
           </div>
 
