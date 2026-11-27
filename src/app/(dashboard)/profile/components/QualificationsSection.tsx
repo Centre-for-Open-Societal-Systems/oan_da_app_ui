@@ -1,29 +1,60 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { Banner } from "@/components/ui/Banner";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Select } from "@/components/ui/Select";
-import { FormField } from "@/components/ui/FormField";
-import { CertificateDocuments } from "@/features/farmers";
-import { EDUCATION_TIERS, SAMPLE_CERTIFICATES, SPECIALIZATIONS, type Certificate } from "@/features/farmers";
+import { CertificateDocuments, type Certificate } from "@/features/farmers";
+import { describeProfileError, fetchProfileDocument, type ProfileQualification } from "@/features/profile";
 import { UploadCertificateModal } from "./UploadCertificateModal";
 
 interface Props {
-  /** From the DA Registry profile (GET /profile/me); the sample defaults when absent. */
-  educationTier?: string;
-  specialisation?: string;
+  /** The education records with their certificates (GET /profile/my_profile). */
+  qualifications?: ProfileQualification[];
 }
 
-// Education tier and specialisation show the registry's values; a change to them goes through "Edit profile"
-// (a Qualifications change request). Certificates stay samples until their API exists.
-export function QualificationsSection({ educationTier, specialisation }: Props = {}) {
-  const tierOptions = educationTier && !EDUCATION_TIERS.includes(educationTier) ? [educationTier, ...EDUCATION_TIERS] : EDUCATION_TIERS;
-  const specialisationOptions = specialisation && !SPECIALIZATIONS.includes(specialisation) ? [specialisation, ...SPECIALIZATIONS] : SPECIALIZATIONS;
-  const [certificates, setCertificates] = useState<Certificate[]>(SAMPLE_CERTIFICATES);
-  const [isUploading, setIsUploading] = useState(false);
+/** The certificates of the education records as list rows; the id is the registry document_id. */
+function certificatesOf(qualifications: ProfileQualification[]): Certificate[] {
+  return qualifications.flatMap((q) =>
+    (q.certificates ?? []).map((c) => ({
+      id: c.document_id,
+      title: c.name || "Certificate",
+      status: "verified" as const,
+      issuer: [q.education_level_label || q.education_level, q.passout_year ? `passed ${q.passout_year}` : null, q.is_main ? "main record" : null].filter(Boolean).join(" · ") || "DA Registry",
+    })),
+  );
+}
 
-  const addCertificates = (added: Certificate[]) => setCertificates((prev) => [...prev, ...added]);
+// The education records and their certificates as the registry holds them; education level and specialisation are
+// changed from "Edit profile" (a Qualifications change request). A certificate's file link is asked for on every
+// View (GET /profile/documents/{document_id}) because it lives only about an hour.
+export function QualificationsSection({ qualifications = [] }: Props) {
+  const registryCertificates = useMemo(() => certificatesOf(qualifications), [qualifications]);
+  // Files picked here stay on this page only: there is no upload API for the user's own record yet.
+  const [uploaded, setUploaded] = useState<Certificate[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [viewError, setViewError] = useState<string | null>(null);
+  const certificates = [...registryCertificates, ...uploaded];
+
+  const addCertificates = (added: Certificate[]) => setUploaded((prev) => [...prev, ...added]);
+
+  const viewCertificate = async (cert: Certificate) => {
+    setViewError(null);
+    // Open the tab inside the click so the browser does not block it, then point it at the signed link.
+    const tab = window.open("", "_blank");
+    try {
+      const { url } = await fetchProfileDocument(cert.id);
+      if (tab) {
+        tab.opener = null;
+        tab.location.href = url;
+      } else {
+        window.open(url, "_blank", "noopener,noreferrer");
+      }
+    } catch (err) {
+      tab?.close();
+      setViewError(describeProfileError(err));
+    }
+  };
 
   return (
     <Card className="overflow-hidden p-0 shadow-card">
@@ -45,26 +76,36 @@ export function QualificationsSection({ educationTier, specialisation }: Props =
         </Button>
       </div>
 
-      <form className="flex flex-col gap-6 p-5 sm:p-6" onSubmit={(e) => e.preventDefault()}>
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          <FormField label="Education tier" htmlFor="educationTier" required>
-            <Select id="educationTier" name="educationTier" key={educationTier ?? "sample"} defaultValue={educationTier ?? "Diploma"} className="h-11">
-              {tierOptions.map((tier) => (
-                <option key={tier} value={tier}>{tier}</option>
+      <div className="flex flex-col gap-6 p-5 sm:p-6">
+        {/* The education records as the DA Registry holds them (its "DA education records" section). */}
+        <div className="flex flex-col gap-3">
+          <h3 className="text-[15px] font-semibold text-ink">Education records</h3>
+          {qualifications.length === 0 ? (
+            <p className="rounded-xl border border-line bg-white px-4 py-3.5 text-[13px] text-muted shadow-2xs">No education records on your record yet.</p>
+          ) : (
+            <ul className="overflow-hidden rounded-xl border border-line bg-white shadow-2xs divide-y divide-line">
+              {qualifications.map((q) => (
+                <li key={q.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3">
+                  <span className="flex items-center gap-2 text-[14px] font-semibold text-ink">
+                    {q.education_level_label || q.education_level || "—"}
+                    {q.is_main && <span className="rounded-[12px] border border-emerald-300 bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">Main</span>}
+                  </span>
+                  <span className="text-[13px] text-ink-soft">
+                    {q.passout_year ? `Passed ${q.passout_year}` : "Passout year not set"} · {(q.certificates ?? []).length} certificate{(q.certificates ?? []).length === 1 ? "" : "s"}
+                  </span>
+                </li>
               ))}
-            </Select>
-          </FormField>
-          <FormField label="Specialization" htmlFor="specialization" required>
-            <Select id="specialization" name="specialization" key={specialisation ?? "sample"} defaultValue={specialisation ?? SPECIALIZATIONS[0]} className="h-11">
-              {specialisationOptions.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </Select>
-          </FormField>
+            </ul>
+          )}
         </div>
 
-        <CertificateDocuments certificates={certificates} onAdd={addCertificates} className="border-t border-line pt-6" />
-      </form>
+        {viewError && (
+          <Banner tone="error" onDismiss={() => setViewError(null)}>
+            {viewError}
+          </Banner>
+        )}
+        <CertificateDocuments certificates={certificates} onAdd={addCertificates} onView={viewCertificate} className="border-t border-line pt-6" />
+      </div>
 
       <UploadCertificateModal isOpen={isUploading} onClose={() => setIsUploading(false)} onSubmit={(cert) => addCertificates([cert])} />
     </Card>

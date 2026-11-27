@@ -12,11 +12,13 @@ interface CertificateDocumentsProps {
   onAdd: (added: Certificate[]) => void;
   /** Pass a ref to open the file picker from outside (e.g. a header "Upload certificate" button). */
   inputRef?: RefObject<HTMLInputElement | null>;
+  /** Opens a certificate that has no `url` of its own (e.g. a registry document whose link is fetched on click). */
+  onView?: (cert: Certificate) => void;
   className?: string;
 }
 
 // Certificates list + compact drop bar; uploads are added as pending until a supervisor verifies them.
-export function CertificateDocuments({ certificates, onAdd, inputRef, className }: CertificateDocumentsProps) {
+export function CertificateDocuments({ certificates, onAdd, inputRef, onView, className }: CertificateDocumentsProps) {
   const localRef = useRef<HTMLInputElement>(null);
   const fileInput = inputRef ?? localRef;
   const [isDragging, setIsDragging] = useState(false);
@@ -46,7 +48,8 @@ export function CertificateDocuments({ certificates, onAdd, inputRef, className 
         </p>
       </div>
 
-      <ul className="overflow-hidden rounded-xl border border-line bg-white shadow-2xs divide-y divide-line">
+      {certificates.length === 0 && <p className="rounded-xl border border-line bg-white px-4 py-3.5 text-[13px] text-muted shadow-2xs">No certificates on your record yet.</p>}
+      <ul className={cn("overflow-hidden rounded-xl border border-line bg-white shadow-2xs divide-y divide-line", certificates.length === 0 && "hidden")}>
         {certificates.map((cert) => {
           const badge = CERTIFICATE_BADGE[cert.status];
           return (
@@ -75,7 +78,11 @@ export function CertificateDocuments({ certificates, onAdd, inputRef, className 
                     href={cert.url ?? "#"}
                     target={cert.url ? "_blank" : undefined}
                     rel="noreferrer"
-                    onClick={(e) => { if (!cert.url) e.preventDefault(); }}
+                    onClick={(e) => {
+                      if (cert.url) return;
+                      e.preventDefault();
+                      onView?.(cert);
+                    }}
                     className={cn(ACTION, "rounded-lg border-brand-border bg-brand-mint text-brand-green hover:bg-brand-tint shadow-2xs")}
                   >
                     <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

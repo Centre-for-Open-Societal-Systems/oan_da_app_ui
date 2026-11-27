@@ -52,7 +52,32 @@ export interface ChangeRequest {
   [field: string]: unknown;
 }
 
-/** The DA's own record as GET /profile/me returns it (`profile`), codes and names side by side. */
+/** A certificate on an education record. The file is fetched on demand with fetchProfileDocument(document_id). */
+export interface ProfileCertificate {
+  name: string;
+  document_id: string;
+}
+
+/** One education record of the signed-in user. */
+export interface ProfileQualification {
+  id: string;
+  education_level?: string | null;
+  education_level_label?: string | null;
+  passout_year?: number | string | null;
+  is_main?: boolean | null;
+  certificates?: ProfileCertificate[] | null;
+}
+
+export interface ProfileFamilyMember {
+  id: string;
+  name?: string | null;
+  relationship?: string | null;
+  relationship_label?: string | null;
+  /** ISO date. */
+  date_of_birth?: string | null;
+}
+
+/** The signed-in user's own record as GET /profile/my_profile returns it (`profile`), codes and names side by side. */
 export interface DaProfile {
   da_id: string;
   full_name: string;
@@ -89,21 +114,48 @@ export interface DaProfile {
   zone_name?: string | null;
   woreda_name?: string | null;
   kebele_name?: string | null;
+  position_code?: string | null;
+  /** Gregorian date of birth (ISO), as the registry form shows it. Not sent by my_profile yet; asked for. */
+  birth_date?: string | null;
+  passout_year?: number | string | null;
+  home_address?: string | null;
+  /** The DA-ID of the person this user reports to; the name is not in the response. */
+  reports_to?: string | null;
+  internal_record_id?: string | null;
+  record_status?: string | null;
+  last_approved_at?: string | null;
+  last_approved_by?: string | null;
+  source?: string | null;
+  qualifications?: ProfileQualification[] | null;
+  family_members?: ProfileFamilyMember[] | null;
   [field: string]: unknown;
 }
 
-/** GET /profile/me: the registry profile, which fields the edit form may touch, and requests still in flight. */
+/** GET /profile/my_profile: the registry profile, requests still in flight, and whether the record is active. */
 export interface MyProfile {
   profile: DaProfile;
-  editable_fields: string[];
-  locked_fields: string[];
   /** Open here, or applied and still waiting for the registry's own approval. */
   pending_requests: ChangeRequest[];
+  validation?: { record_found?: boolean; record_status?: string | null; is_active?: boolean } | null;
 }
 
+/** The signed-in user's own registry profile, for every role; the backend finds the record from the token. */
 export async function fetchMyProfile(): Promise<MyProfile> {
-  const { data } = await authRequest<{ data: MyProfile }>("/da-services/profile/me");
-  return { ...data, editable_fields: data.editable_fields ?? [], locked_fields: data.locked_fields ?? [], pending_requests: data.pending_requests ?? [] };
+  const { data } = await authRequest<{ data: MyProfile }>("/da-services/profile/my_profile");
+  const profile = data.profile ?? ({} as DaProfile);
+  return {
+    ...data,
+    profile: { ...profile, qualifications: profile.qualifications ?? [], family_members: profile.family_members ?? [] },
+    pending_requests: data.pending_requests ?? [],
+  };
+}
+
+/**
+ * GET /profile/documents/{document_id}: a short-lived (about one hour) link to a certificate on the user's own
+ * record. Ask for it on every View and never cache it. 404 when the document is not on this record.
+ */
+export async function fetchProfileDocument(documentId: string): Promise<{ da_id?: string; document_id: string; name?: string; url: string }> {
+  return (await authRequest<{ data: { da_id?: string; document_id: string; name?: string; url: string } }>(`/da-services/profile/documents/${encodeURIComponent(documentId)}`)).data;
 }
 
 /** GET /agents/{da_id}: a DA registry card, scope-checked. */
@@ -115,10 +167,12 @@ const requestPath = (id: string, part = "") => `/da-services/profile/change-requ
 
 /**
  * POST /profile/change-requests: one section per request (Contact or Qualifications); a locked or unknown field
- * is refused with 400. Resend the same clientOpId on a retry so the request is not created twice.
+ * is refused with 400. Resend the same clientOpId on a retry so the request is not created twice. Leave `daId` out
+ * for the user's own record; it is only for a Supervisor asking for a DA below them in the DA Hierarchy.
  */
-export async function submitChangeRequest(changes: ProfileChanges, reason: string, clientOpId: string): Promise<ChangeRequest> {
-  return (await authRequest<{ data: ChangeRequest }>("/da-services/profile/change-requests", { method: "POST", body: { changes, reason, client_op_id: clientOpId } })).data;
+export async function submitChangeRequest(changes: ProfileChanges, reason: string, clientOpId: string, daId?: string): Promise<ChangeRequest> {
+  const body = { ...(daId ? { da_id: daId } : {}), changes, reason, client_op_id: clientOpId };
+  return (await authRequest<{ data: ChangeRequest }>("/da-services/profile/change-requests", { method: "POST", body })).data;
 }
 
 export async function listChangeRequests({ status, daId, limit = 50, start = 0 }: { status?: ChangeRequestStatus; daId?: string; limit?: number; start?: number } = {}): Promise<{ items: ChangeRequest[]; total: number }> {
@@ -184,12 +238,14 @@ export function describeProfileError(err: unknown): string {
     case 403:
       return "Your account is not bound to a DA-ID, so there is no registry profile to show.";
     case 404:
-      return "Your DA record was not found in the DA Registry.";
+      // The backend says which case it is: no registry id on the account, or no such record.
+      return err.message || "Your record was not found in the DA Registry.";
     case 502:
     case 503:
     case 504:
       return "The DA Registry is unavailable. Try again shortly.";
     default:
+      if (err.code === "DA_REGISTRY_NOT_CONFIGURED") return "Your profile could not be loaded right now. Try again later.";
       return err.message;
   }
 }

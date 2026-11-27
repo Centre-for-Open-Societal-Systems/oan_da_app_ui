@@ -17,52 +17,83 @@ import { LOCKED, READ, ReadOnlyField } from "./DemographicsSection";
 const EMPTY = "—";
 
 /** Section fields in display order. Editable ones map to a change-request field; the rest are locked. */
-type FieldKey = "salutation" | "name" | "fatherName" | "fan" | "gender" | "maritalStatus" | "birthMonth" | "birthYear" | "mobile" | "email" | "education" | "position" | "specialisation" | "country" | "region" | "zone" | "woreda" | "kebele";
+type FieldKey =
+  | "salutation" | "name" | "fatherName" | "grandfatherName" | "fan" | "gender" | "maritalStatus" | "dateOfBirth"
+  | "mobile" | "telegram" | "alternate" | "email" | "homeAddress"
+  | "position" | "specialisation" | "education" | "joinedAt" | "reportsTo"
+  | "region" | "zone" | "woreda" | "kebele";
 
 const VERIFIED = "Verified via Fayda; changes need re-verification";
 const ASSIGNED = "Set by your Woreda office";
 
-const FIELDS: { key: FieldKey; label: string; hint: string; change?: keyof ProfileChanges }[] = [
-  { key: "salutation", label: "Salutation", hint: VERIFIED },
-  { key: "name", label: "Name", hint: VERIFIED },
-  { key: "fatherName", label: "Father's name", hint: VERIFIED },
-  { key: "fan", label: "Fayda ID (FAN)", hint: VERIFIED },
-  { key: "gender", label: "Gender", hint: VERIFIED },
-  { key: "maritalStatus", label: "Marital status", hint: VERIFIED },
-  { key: "birthMonth", label: "Month of birth (Ethiopian calendar)", hint: VERIFIED },
-  { key: "birthYear", label: "Year of birth (Ethiopian calendar)", hint: VERIFIED },
-  { key: "mobile", label: "Phone number", hint: "", change: "mobile" },
-  { key: "email", label: "Email", hint: "", change: "email" },
-  { key: "education", label: "Education level", hint: "", change: "education_tier" },
-  { key: "position", label: "Position", hint: ASSIGNED },
-  { key: "specialisation", label: "Specialisation", hint: "", change: "specialisation" },
-  { key: "country", label: "Country", hint: ASSIGNED },
-  { key: "region", label: "Region", hint: ASSIGNED },
-  { key: "zone", label: "Zone", hint: ASSIGNED },
-  { key: "woreda", label: "Woreda", hint: ASSIGNED },
-  { key: "kebele", label: "Kebele", hint: ASSIGNED },
+/** The groups of the DA Registry's own form (da_details_tab), in its order and with its titles. */
+const GROUPS = ["Personal details", "Contact details and home address", "Position and reporting", "Work location"] as const;
+type Group = (typeof GROUPS)[number];
+
+const FIELDS: { key: FieldKey; label: string; hint: string; group: Group; change?: keyof ProfileChanges }[] = [
+  { key: "salutation", label: "Salutation", hint: VERIFIED, group: "Personal details" },
+  { key: "name", label: "Name", hint: VERIFIED, group: "Personal details" },
+  { key: "fatherName", label: "Father's name", hint: VERIFIED, group: "Personal details" },
+  { key: "grandfatherName", label: "Grandfather's name", hint: VERIFIED, group: "Personal details" },
+  { key: "fan", label: "Fayda ID (FAN)", hint: VERIFIED, group: "Personal details" },
+  { key: "gender", label: "Gender", hint: VERIFIED, group: "Personal details" },
+  { key: "maritalStatus", label: "Marital status", hint: VERIFIED, group: "Personal details" },
+  { key: "dateOfBirth", label: "Date of birth", hint: VERIFIED, group: "Personal details" },
+  { key: "mobile", label: "Phone number", hint: "", group: "Contact details and home address", change: "mobile" },
+  { key: "telegram", label: "Telegram number", hint: "", group: "Contact details and home address", change: "telegram" },
+  { key: "alternate", label: "Other phone number", hint: "", group: "Contact details and home address", change: "alternate_mobile" },
+  { key: "email", label: "Email", hint: "", group: "Contact details and home address", change: "email" },
+  { key: "homeAddress", label: "Home address", hint: ASSIGNED, group: "Contact details and home address" },
+  { key: "position", label: "Position", hint: ASSIGNED, group: "Position and reporting" },
+  { key: "specialisation", label: "Specialisation", hint: "", group: "Position and reporting", change: "specialisation" },
+  { key: "education", label: "Education level", hint: "", group: "Position and reporting", change: "education_tier" },
+  { key: "joinedAt", label: "Joining date", hint: ASSIGNED, group: "Position and reporting" },
+  { key: "reportsTo", label: "Reports to (ID)", hint: ASSIGNED, group: "Position and reporting" },
+  { key: "region", label: "Region", hint: ASSIGNED, group: "Work location" },
+  { key: "zone", label: "Zone", hint: ASSIGNED, group: "Work location" },
+  { key: "woreda", label: "Woreda", hint: ASSIGNED, group: "Work location" },
+  { key: "kebele", label: "Kebele", hint: ASSIGNED, group: "Work location" },
 ];
 
-const text = (v: unknown) => (v == null || v === "" ? "" : String(v));
+/** Contact fields go in one change request, Qualifications fields in another (the backend takes one section each). */
+const CONTACT_CHANGES: (keyof ProfileChanges)[] = ["mobile", "telegram", "alternate_mobile", "email"];
+const PHONE_CHANGES: (keyof ProfileChanges)[] = ["mobile", "telegram", "alternate_mobile"];
+const PHONE = /^(\+?251|0)\s?9\d(\s?\d){7}$/;
 
-/** The registry profile as the section shows it: names over codes, EC month by name. */
+const text = (v: unknown) => (v == null || v === "" ? "" : String(v));
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "2023-11-11" -> "11 Nov 2023"; anything else as sent. */
+function formatDate(v: unknown): string {
+  const s = text(v);
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  return m ? `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]} ${m[1]}` : s;
+}
+
+/** The registry profile as the section shows it: names over codes, dates in words. */
 function valuesOf(p: DaProfile): Record<FieldKey, string> {
   const month = p.birth_month_name || (p.birth_month_ec ? ETHIOPIAN_MONTHS[p.birth_month_ec - 1] : "");
+  // The registry form keeps the Gregorian date of birth; my_profile sends only the Ethiopian month and year so far.
+  const ecBirth = [month, text(p.birth_year_ec)].filter(Boolean).join(" ");
   return {
     salutation: text(p.salutation),
     name: text(p.first_name) || text(p.full_name),
     fatherName: text(p.father_name),
+    grandfatherName: text(p.grandfather_name),
     fan: text(p.fayda_id),
     gender: text(p.gender),
     maritalStatus: text(p.marital_status),
-    birthMonth: text(month),
-    birthYear: text(p.birth_year_ec),
+    dateOfBirth: formatDate(p.birth_date) || (ecBirth ? `${ecBirth} (Ethiopian calendar)` : ""),
     mobile: text(p.mobile),
+    telegram: text(p.telegram_number),
+    alternate: text(p.alternate_number),
     email: text(p.email),
-    education: text(p.education_tier),
-    position: text(p.position) || "Development Agent",
+    homeAddress: text(p.home_address),
+    position: text(p.position),
     specialisation: text(p.specialisation),
-    country: text(p.country) || "Ethiopia",
+    education: text(p.education_tier),
+    joinedAt: formatDate(p.joined_at),
+    reportsTo: text(p.reports_to),
     region: text(p.region_name) || text(p.region),
     zone: text(p.zone_name) || text(p.zone),
     woreda: text(p.woreda_name) || text(p.woreda),
@@ -73,8 +104,6 @@ function valuesOf(p: DaProfile): Record<FieldKey, string> {
 interface Props {
   editing: boolean;
   profile: DaProfile;
-  /** Change-request fields the backend lets this DA edit (GET /profile/me `editable_fields`). */
-  editableFields: string[];
   onEdit?: () => void;
   onCancel: () => void;
   /** The changed fields as a change request, plus their labels for the confirmation. Rejects with the backend's message. */
@@ -83,11 +112,16 @@ interface Props {
 
 // Demographics & personal details as the DA Registry holds them: identity (Fayda, locked), contact, education,
 // posting and location. Edits open in a popup and go to the Woreda supervisor as a change request.
-export function DaDemographicsSection({ editing, profile, editableFields, onEdit, onCancel, onSubmit }: Props) {
+// The editable fields are the fixed list in FIELDS (those with a `change`): GET /profile/my_profile no longer says
+// which fields may change, and POST /profile/change-requests still refuses a locked field with 400.
+export function DaDemographicsSection({ editing, profile, onEdit, onCancel, onSubmit }: Props) {
   const p = valuesOf(profile);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const canChange = (change: keyof ProfileChanges | undefined): change is keyof ProfileChanges => !!change && editableFields.includes(change);
+  const canChange = (change: keyof ProfileChanges | undefined): change is keyof ProfileChanges => !!change;
+  // The backend sends what the user's own registry record holds, so a field that is empty for this person (e.g. no
+  // location for an administrator) is left out. Editable fields always show, so an empty one can be filled in.
+  const shown = FIELDS.filter((f) => canChange(f.change) || p[f.key] !== "");
   const educationOptions = p.education && !(EDUCATION_TIER_OPTIONS as readonly string[]).includes(p.education) ? [p.education, ...EDUCATION_TIER_OPTIONS] : [...EDUCATION_TIER_OPTIONS];
 
   const fullName = profile.full_name || profile.da_id || "DA";
@@ -108,7 +142,11 @@ export function DaDemographicsSection({ editing, profile, editableFields, onEdit
       }
     }
     if (labels.length === 0) return setError("Change at least one field before submitting.");
-    if (changes.mobile !== undefined && !/^\+?251\s?9\d(\s?\d){7}$/.test(changes.mobile)) return setError("Use an Ethiopian mobile number, e.g. +251 91 234 5678.");
+    const keys = Object.keys(changes) as (keyof ProfileChanges)[];
+    if (keys.some((k) => CONTACT_CHANGES.includes(k)) && keys.some((k) => !CONTACT_CHANGES.includes(k))) {
+      return setError("Send contact details and education / specialisation as separate requests: change one group, save, then the other.");
+    }
+    if (PHONE_CHANGES.some((k) => changes[k] && !PHONE.test(changes[k]!))) return setError("Use an Ethiopian mobile number, e.g. +251 91 234 5678 or 0912345678.");
     if (changes.email && !/^\S+@\S+\.\S+$/.test(changes.email)) return setError("Enter a valid email address.");
 
     setError(null);
@@ -153,17 +191,27 @@ export function DaDemographicsSection({ editing, profile, editableFields, onEdit
           {/* Profile Photo Tile */}
           <div className="flex flex-col gap-2.5">
             <span className="text-[11.5px] font-semibold uppercase tracking-wider text-muted">Profile Photo</span>
-            <div className="flex flex-col items-center gap-3 rounded-2xl border border-line bg-surface/40 p-5 text-center transition-colors hover:bg-surface">
-              <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-brand-green to-emerald-700 text-[24px] font-bold text-white shadow-xs">
-                {initials}
-              </div>
-              <p className="text-[12px] text-muted leading-relaxed">Change your photo from Edit profile. JPG or PNG up to 5MB.</p>
+            {/* The photo fills the whole tile; a short-lived signed link, used straight from the response, never stored. */}
+            <div className="flex aspect-square w-full max-w-[220px] items-center justify-center overflow-hidden rounded-2xl border border-line bg-gradient-to-br from-brand-green to-emerald-700 text-[48px] font-bold text-white shadow-xs">
+              {profile.photo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={profile.photo} alt={fullName} className="h-full w-full object-cover" />
+              ) : (
+                initials
+              )}
             </div>
           </div>
 
-          {/* Details Grid */}
+          {/* Details, grouped as in the DA Registry form; a group with nothing to show is left out */}
+          <div className="flex flex-col gap-6">
+          {GROUPS.map((group) => {
+            const fields = shown.filter((f) => f.group === group);
+            if (fields.length === 0) return null;
+            return (
+          <section key={group} className="flex flex-col gap-3">
+          <h3 className="text-[12px] font-semibold uppercase tracking-wider text-muted">{group}</h3>
           <dl className="grid grid-cols-1 content-start gap-x-5 gap-y-4 sm:grid-cols-2 xl:grid-cols-3">
-            {FIELDS.map((f) => {
+            {fields.map((f) => {
               const isLocked = !canChange(f.change);
               const val = p[f.key];
               return (
@@ -189,6 +237,10 @@ export function DaDemographicsSection({ editing, profile, editableFields, onEdit
               );
             })}
           </dl>
+          </section>
+            );
+          })}
+          </div>
         </div>
       </Card>
 
@@ -266,7 +318,7 @@ export function DaDemographicsSection({ editing, profile, editableFields, onEdit
               <line x1="12" y1="8" x2="12.01" y2="8" />
             </svg>
             <span>
-              You can edit your contact details (phone, email), education level, and specialisation. Identity and location details are verified and managed by the DA Registry.
+              You can edit your contact details (phone, Telegram, other phone, email), education level and specialisation. Send contact changes and education / specialisation changes as separate requests. Identity and location details are verified and managed by the DA Registry.
             </span>
           </div>
 
@@ -286,7 +338,7 @@ export function DaDemographicsSection({ editing, profile, editableFields, onEdit
             </div>
 
             <div className="grid grid-cols-1 content-start gap-x-5 gap-y-4 sm:grid-cols-2 xl:grid-cols-3">
-              {FIELDS.map((f) => {
+              {shown.map((f) => {
                 const id = `da-edit-${f.key}`;
                 if (!canChange(f.change)) {
                   return (
@@ -360,9 +412,9 @@ export function DaDemographicsSection({ editing, profile, editableFields, onEdit
                       <Input
                         id={id}
                         name={f.key}
-                        type={f.key === "mobile" ? "tel" : f.key === "email" ? "email" : "text"}
+                        type={f.change && PHONE_CHANGES.includes(f.change) ? "tel" : f.key === "email" ? "email" : "text"}
                         defaultValue={p[f.key]}
-                        placeholder={f.key === "mobile" ? "+251 91 234 5678" : f.key === "email" ? "name@example.org" : undefined}
+                        placeholder={f.change && PHONE_CHANGES.includes(f.change) ? "+251 91 234 5678" : f.key === "email" ? "name@example.org" : undefined}
                         className="h-11 border-slate-300 focus:border-brand-green focus:ring-brand-green/20"
                       />
                     )}

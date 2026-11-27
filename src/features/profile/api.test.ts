@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuthStore } from "@/store/useAuthStore";
 import { fetchFarmerUpdateStatus, linkFarmer, listFarmerLinks, retryFarmerUpdate, updateFarmer } from "@/features/farmers";
 import { retryGrievanceSync } from "@/features/grievances";
-import { cancelChangeRequest, decideChangeRequest, listChangeRequests, submitChangeRequest } from "./api";
+import { cancelChangeRequest, decideChangeRequest, describeProfileError, fetchMyProfile, fetchProfileDocument, listChangeRequests, submitChangeRequest } from "./api";
 
 // Minimal in-memory Storage so the persisted auth store runs under Node.
 class MemoryStorage implements Storage {
@@ -28,14 +28,46 @@ beforeEach(() => {
   useAuthStore.getState().signIn({ id: "u", name: "User", email: "u@x" }, "DA", { accessToken: "token", refreshToken: "r", expiresAt: Date.now() + 600_000 });
 });
 
+describe("my profile", () => {
+  it("reads GET /profile/my_profile and fills the lists that may be missing", async () => {
+    fetchMock.mockResolvedValueOnce(json(200, { status: "success", data: { profile: { da_id: "DA-1", full_name: "Abebe", internal_record_id: "r-1" }, validation: { record_found: true, record_status: "ACTIVE", is_active: true } } }));
+
+    const my = await fetchMyProfile();
+
+    expect(call(0)).toEqual({ url: "/api/v1/da-services/profile/my_profile", method: "GET" });
+    expect(my.profile).toMatchObject({ da_id: "DA-1", internal_record_id: "r-1", qualifications: [], family_members: [] });
+    expect(my.pending_requests).toEqual([]);
+    expect(my.validation?.is_active).toBe(true);
+  });
+
+  it("asks for a certificate link by document_id", async () => {
+    fetchMock.mockResolvedValueOnce(json(200, { data: { document_id: "doc 1", name: "Diploma", url: "https://files/x" } }));
+
+    await expect(fetchProfileDocument("doc 1")).resolves.toMatchObject({ url: "https://files/x" });
+
+    expect(call(0).url).toBe("/api/v1/da-services/profile/documents/doc%201");
+  });
+
+  it("shows the backend's 404 message and a generic text when the registry is not configured", async () => {
+    fetchMock.mockResolvedValueOnce(json(404, { status: "error", code: "NOT_FOUND", message: "Your account is not linked to a DA Registry record." }));
+    fetchMock.mockResolvedValueOnce(json(500, { status: "error", code: "DA_REGISTRY_NOT_CONFIGURED", message: "DA_REGISTRY_URL is not set" }));
+
+    const notLinked = await fetchMyProfile().catch((e: unknown) => e);
+    const notConfigured = await fetchMyProfile().catch((e: unknown) => e);
+
+    expect(describeProfileError(notLinked)).toBe("Your account is not linked to a DA Registry record.");
+    expect(describeProfileError(notConfigured)).toBe("Your profile could not be loaded right now. Try again later.");
+  });
+});
+
 describe("profile change requests", () => {
   it("submits changes with the reason and client_op_id", async () => {
     fetchMock.mockResolvedValueOnce(json(201, { data: { request_id: "CR-1", status: "Pending" } }));
 
-    await submitChangeRequest({ mobile: "+251911000111" }, "New SIM card", "op-1");
+    await submitChangeRequest({ mobile: "+251911000111" }, "New SIM card", "op-1", "DA-1");
 
     expect(call(0)).toEqual({ url: "/api/v1/da-services/profile/change-requests", method: "POST" });
-    expect(sentBody(0)).toEqual({ changes: { mobile: "+251911000111" }, reason: "New SIM card", client_op_id: "op-1" });
+    expect(sentBody(0)).toEqual({ da_id: "DA-1", changes: { mobile: "+251911000111" }, reason: "New SIM card", client_op_id: "op-1" });
   });
 
   it("lists by status and reads meta.total", async () => {

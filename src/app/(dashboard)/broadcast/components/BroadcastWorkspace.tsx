@@ -14,19 +14,20 @@ import { SmsPreview } from "@/features/communication";
 import { RECIPIENT_GROUPS, SIGNALS, type RecipientGroup, type SignalSource } from "@/features/communication";
 import { useGeoCascade, type GeoField, type GeoLevel } from "@/features/assignments";
 import { useAreaNames } from "@/features/geo";
-import { broadcastToKebele, broadcastToWoreda } from "@/features/notifications";
+import { broadcastToArea, broadcastToKebele, broadcastToWoreda } from "@/features/notifications";
 import { useAuthStore } from "@/store/useAuthStore";
 import { FileDropInput } from "@/components/ui/FileDropInput";
 import { ReceivedBroadcasts } from "./ReceivedBroadcasts";
 
 const SOURCES: SignalSource[] = ["Knowledge", "Emergency", "Weather", "Informational"];
 
-function GeoSelect({ field, label, level, hint, onSelect, onRetry }: { field: GeoField; label: string; level: GeoLevel; hint?: string; onSelect: (code: string) => void; onRetry: () => void }) {
+// Region, Zone and Woreda are optional: the broadcast goes to the narrowest one picked, or to every DA when none is.
+function GeoSelect({ field, label, level, hint, allLabel, onSelect, onRetry }: { field: GeoField; label: string; level: GeoLevel; hint?: string; allLabel: string; onSelect: (code: string) => void; onRetry: () => void }) {
   const id = `bc-${field}`;
   const failed = level.status === "error";
-  const placeholder = level.status === "loading" ? "Loading…" : failed ? "Could not load" : `Select ${label}`;
+  const placeholder = level.status === "loading" ? "Loading…" : failed ? "Could not load" : allLabel;
   return (
-    <FormField label={label} htmlFor={id} required hint={level.error ?? hint} hintTone={failed ? "error" : "muted"}>
+    <FormField label={label} htmlFor={id} hint={level.error ?? hint} hintTone={failed ? "error" : "muted"}>
       <Select id={id} value={level.selected?.code ?? ""} disabled={level.status !== "ready"} onChange={(e) => onSelect(e.target.value)}>
         <option value="">{placeholder}</option>
         {level.options.map((o) => <option key={o.code} value={o.code}>{o.name}</option>)}
@@ -71,9 +72,18 @@ export function BroadcastWorkspace() {
   const [evidence, setEvidence] = useState<File[]>([]);
 
   const toDAs = group === "Development Agents";
-  // A Supervisor's Woreda is fixed: their own code is what goes out. Everyone else (but a DA) picks Region, Zone, Woreda.
+  // A Supervisor's Woreda is fixed: their own code is what goes out. The Admin and the Communications Officer may pick a
+  // Region, Zone or Woreda, none of them required: the narrowest picked is the audience, and nothing picked is every DA.
+  const pickedArea = !ownKebeleOnly && !ownWoredaOnly;
   const woreda = ownWoredaOnly ? (ownWoreda ? { code: ownWoreda, name: ownWoredaName ?? ownWoreda } : null) : geo.woreda.selected;
-  const area = ownKebeleOnly ? (kebele ? `${kebele.name} Kebele` : null) : woreda ? `${woreda.name} Woreda` : null;
+  const area = ownKebeleOnly
+    ? kebele ? `${kebele.name} Kebele` : null
+    : ownWoredaOnly
+      ? woreda ? `${woreda.name} Woreda` : null
+      : woreda ? `${woreda.name} Woreda`
+      : geo.zone.selected ? `${geo.zone.selected.name} Zone`
+      : geo.region.selected ? `${geo.region.selected.name} Region`
+      : "every Region";
   const areaLabel = area ?? (ownKebeleOnly ? "your Kebele" : "the selected Woreda");
 
   const dispatch = async () => {
@@ -84,12 +94,17 @@ export function BroadcastWorkspace() {
       setError("In-app delivery reaches Development Agents only. Choose “All Development Agents”, or wait for SMS / Telegram.");
       return;
     }
+    if (!area) return;
     const target = ownKebeleOnly ? kebele : woreda;
-    if (!target || !area) return;
+    if (!pickedArea && !target) return;
     setSending(true);
     try {
       const input = { title: title.trim(), body: message.trim(), href: "/notifications", source };
-      const res = ownKebeleOnly ? await broadcastToKebele({ ...input, kebeleCode: target.code }) : await broadcastToWoreda({ ...input, woredaCode: target.code });
+      const res = pickedArea
+        ? await broadcastToArea({ ...input, region: geo.region.selected?.code, zone: geo.zone.selected?.code, woreda: geo.woreda.selected?.code })
+        : ownKebeleOnly
+          ? await broadcastToKebele({ ...input, kebeleCode: target!.code })
+          : await broadcastToWoreda({ ...input, woredaCode: target!.code });
       setNotice(
         res.duplicate
           ? `Already sent to ${area} — no duplicate created.`
@@ -159,9 +174,9 @@ export function BroadcastWorkspace() {
                 </FormField>
               ) : (
                 <>
-                  <GeoSelect field="region" label="Region" level={geo.region} onSelect={(code) => select("region", code)} onRetry={() => retry("region")} />
-                  <GeoSelect field="zone" label="Zone" level={geo.zone} onSelect={(code) => select("zone", code)} onRetry={() => retry("zone")} />
-                  <GeoSelect field="woreda" label="Woreda" level={geo.woreda} hint="Broadcasts reach a whole Woreda." onSelect={(code) => select("woreda", code)} onRetry={() => retry("woreda")} />
+                  <GeoSelect field="region" label="Region" level={geo.region} allLabel="All regions" hint="Leave empty to reach every Region." onSelect={(code) => select("region", code)} onRetry={() => retry("region")} />
+                  <GeoSelect field="zone" label="Zone" level={geo.zone} allLabel="All zones" onSelect={(code) => select("zone", code)} onRetry={() => retry("zone")} />
+                  <GeoSelect field="woreda" label="Woreda" level={geo.woreda} allLabel="All woredas" onSelect={(code) => select("woreda", code)} onRetry={() => retry("woreda")} />
                 </>
               )}
               <FormField label="Recipients" htmlFor="bc-group" required hint={`${toDAs ? "Development Agents" : "Farmers"} in ${areaLabel}${toDAs ? "" : ". In-app delivery reaches Development Agents only."}`}>

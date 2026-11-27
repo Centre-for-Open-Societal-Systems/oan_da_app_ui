@@ -70,9 +70,10 @@ export const NAV_GROUPS: NavGroup[] = [
       { title: "My Teams", href: "/my-teams", roles: ["DA"], part: 1 },
       // The Supervisor's team is the agents registry of their Woreda, so it is named "My Teams" for them.
       { title: "Agents", href: "/agents", roles: OFFICERS, titleFor: { Supervisor: "My Teams" }, part: 1 },
-      // Org hierarchy (region → kebele tree, supervisors and teams) sits right under My Teams; every role sees it,
-      // scoped to their own area (see features/hierarchy/scope.ts).
-      { title: "Hierarchy", href: "/hierarchy", roles: ALL, part: 1 },
+      // Org hierarchy (region → kebele tree, supervisors and teams) sits right under My Teams, scoped to the user's own
+      // area (see features/hierarchy/scope.ts). Only Executive and Admin see it; DA, Supervisor and the Communications
+      // Officer do not.
+      { title: "Hierarchy", href: "/hierarchy", roles: ["Executive", "Admin"], part: 1 },
       // Supervisor sees field operations here (visits + kebele assignment) instead of the registry-admin items
       { title: "Field Visits", href: "/visits", roles: ["Supervisor"], part: 1 },
       { title: "Assignments", href: "/assignments", roles: ["Supervisor"], part: 1 },
@@ -89,8 +90,9 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { title: "Knowledge Base", href: "/knowledge", roles: ALL, part: 1 },
       { title: "Broadcast", href: "/broadcast", roles: ["DA", "Supervisor", "CommsOfficer", "Admin"], part: 1 },
-      // The Supervisor broadcasts to their Woreda from Broadcast instead of triaging Alerts.
-      { title: "Alerts", href: "/alerts", roles: ["CommsOfficer", "Admin"], part: 1 },
+      // The Supervisor broadcasts to their Woreda from Broadcast instead of triaging Alerts. The Communications Officer's
+      // rail is Dashboard, Knowledge Base and Broadcast only; /alerts still opens for them by URL.
+      { title: "Alerts", href: "/alerts", roles: ["Admin"], part: 1 },
       // Admin maintains the directory; DAs open it from My Teams.
       { title: "Advisors", href: "/advisors", roles: ["Admin"], part: 1 },
     ],
