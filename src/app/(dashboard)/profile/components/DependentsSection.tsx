@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { ProfileFamilyMember } from "@/features/profile";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { DataTable, type Column } from "@/components/ui/DataTable";
@@ -14,15 +15,9 @@ interface Dependent {
   id: string;
   name: string;
   relationship: string;
-  dateOfBirth: string; // ISO yyyy-mm-dd
+  dateOfBirth: string; // ISO yyyy-mm-dd, or "" when the registry has none
   status: DependentStatus;
 }
-
-const SAMPLE_DEPENDENTS: Dependent[] = [
-  { id: "1", name: "Meselech Alemu", relationship: "Spouse", dateOfBirth: "1993-09-22", status: "Verified" },
-  { id: "2", name: "Yohannes Alemu", relationship: "Son", dateOfBirth: "2016-01-03", status: "Verified" },
-  { id: "3", name: "Hana Alemu", relationship: "Daughter", dateOfBirth: "2019-11-18", status: "Pending approval" },
-];
 
 const STATUS_TONES: Record<DependentStatus, PillTone> = {
   Verified: "green",
@@ -31,19 +26,36 @@ const STATUS_TONES: Record<DependentStatus, PillTone> = {
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-// "1993-09-22" -> "22 Sep 1993"
+// "1993-09-22" -> "22 Sep 1993"; anything else is shown as sent, an empty value as "—".
 function formatDate(iso: string) {
-  const [year, month, day] = iso.split("-");
-  return `${day} ${MONTHS[Number(month) - 1]} ${year}`;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return iso || "—";
+  return `${m[3]} ${MONTHS[Number(m[2]) - 1]} ${m[1]}`;
 }
 
-export function DependentsSection() {
-  const [dependents, setDependents] = useState<Dependent[]>(SAMPLE_DEPENDENTS);
+/** A registry family member as a table row; it is on the approved record, so it shows as Verified. */
+const fromRegistry = (m: ProfileFamilyMember): Dependent => ({
+  id: m.id,
+  name: m.name || "—",
+  relationship: m.relationship_label || m.relationship || "—",
+  dateOfBirth: m.date_of_birth ?? "",
+  status: "Verified",
+});
+
+interface Props {
+  /** `profile.family_members` from GET /profile/my_profile; empty when the profile could not be read. */
+  members?: ProfileFamilyMember[];
+}
+
+export function DependentsSection({ members = [] }: Props) {
+  // Entries added here stay on this page only: there is no API to add a family member yet.
+  const [added, setAdded] = useState<Dependent[]>([]);
   const [isAdding, setIsAdding] = useState(false);
+  const dependents = [...members.map(fromRegistry), ...added];
 
   // New entries always start as pending — the Woreda officer verifies them
   const handleAdd = (dep: NewDependent) => {
-    setDependents((prev) => [...prev, { id: `${Date.now()}`, ...dep, status: "Pending approval" }]);
+    setAdded((prev) => [...prev, { id: `${Date.now()}`, ...dep, status: "Pending approval" }]);
   };
 
   const columns: Column<Dependent>[] = [
