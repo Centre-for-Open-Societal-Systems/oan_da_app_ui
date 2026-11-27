@@ -9,14 +9,13 @@ import { RowAction } from "@/components/ui/RowAction";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Pill } from "@/components/ui/Pill";
 import { SearchInput } from "@/components/ui/SearchInput";
-import { Switch } from "@/components/ui/Switch";
 import { Banner } from "@/components/ui/Banner";
 import { ExportButton } from "@/components/ui/ExportButton";
 import { FilterDropdown, type FilterOption } from "@/components/ui/FilterDropdown";
 import { AdvancedFiltersDrawer, type FilterFieldConfig, type FilterSelection } from "@/components/ui/AdvancedFiltersDrawer";
 import { PAGE_SIZES, TablePagination } from "@/components/ui/TablePagination";
 import { useAuthStore } from "@/store/useAuthStore";
-import { ACTIVE_TONE, APPROVAL_TONE, AgentsPageHeader, BulkImportsPanel, apiAgentToAgent, describeAgentError, importStatusLabel, listMyTeam, type Agent, type AgentFacets, type AgentFilterField, type AgentFilters, type AgentImport, type TeamKind } from "@/features/agents";
+import { AgentsPageHeader, BulkImportsPanel, apiAgentToAgent, describeAgentError, importStatusLabel, listMyTeam, type Agent, type AgentFacets, type AgentFilterField, type AgentFilters, type AgentImport, type HierarchyNode, type TeamKind } from "@/features/agents";
 import { searchPlaceholder } from "@/lib/search";
 import { fileDate, type CsvColumn } from "@/lib/download";
 import { downloadTable, formatLabel } from "@/lib/export";
@@ -30,13 +29,10 @@ const CSV_COLUMNS: CsvColumn<Agent>[] = [
   { header: "DA-ID", value: (a) => a.daId },
   { header: "Full Name", value: (a) => a.fullName },
   { header: "Fayda ID", value: (a) => a.faydaId },
-  { header: "Active Status", value: (a) => a.activeStatus },
-  { header: "Education Tier", value: (a) => a.educationTier },
+  { header: "Specialisation", value: (a) => a.specialisation },
   { header: "Assigned Kebele", value: (a) => (a.kebele === UNASSIGNED ? "Unassigned" : a.kebele) },
   { header: "Woreda", value: (a) => a.woreda },
   { header: "Farmer Count", value: (a) => a.farmerCount },
-  { header: "Approval Status", value: (a) => a.approvalStatus },
-  { header: "Last Updated", value: (a) => a.updatedAt },
 ];
 
 const importNotice = (imported: AgentImport) =>
@@ -49,21 +45,17 @@ interface Filters extends FilterSelection {
   region: Set<string>;
   woreda: Set<string>;
   kebele: Set<string>;
-  active: Set<string>;
-  tier: Set<string>;
+  specialisation: Set<string>;
   fayda: Set<string>;
-  approval: Set<string>;
 }
-const EMPTY: Filters = { region: new Set(), woreda: new Set(), kebele: new Set(), active: new Set(), tier: new Set(), fayda: new Set(), approval: new Set() };
+const EMPTY: Filters = { region: new Set(), woreda: new Set(), kebele: new Set(), specialisation: new Set(), fayda: new Set() };
 // The API field each filter sends.
 const FIELD: Record<keyof Filters, AgentFilterField> = {
   region: "region",
   woreda: "woreda",
   kebele: "kebele",
-  active: "active_status",
-  tier: "education_tier",
+  specialisation: "specialisation",
   fayda: "fayda_status",
-  approval: "approval_status",
 };
 // Picking a Region resets the Woredas and Kebeles under it; picking a Woreda resets the Kebeles.
 const DEPENDENTS: Partial<Record<keyof Filters, (keyof Filters)[]>> = { region: ["woreda", "kebele"], woreda: ["kebele"] };
@@ -78,15 +70,8 @@ const optionsFor = (facets: AgentFacets, key: keyof Filters, selected: Set<strin
   return options;
 };
 
-// "14 Sep 2026, 09:12" → ["14 Sep 2026,", "09:12 AM"] for the two-line Last Updated cell.
-const splitStamp = (stamp: string): [string, string] => {
-  const [date, time = ""] = stamp.split(", ");
-  const [h, m] = time.split(":").map(Number);
-  if (!time || Number.isNaN(h) || Number.isNaN(m)) return [date, time];
-  return [`${date},`, `${String(h % 12 || 12).padStart(2, "0")}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`];
-};
-
-// FR-02 §3.2.1–3.2.2: 11 literal columns, combinable/resettable filters, search by DA-ID or name. Rows come from
+// FR-02 §3.2.1–3.2.2: the registry columns (without Active Status, Approval Status, Last Updated and the access
+// toggle, left out on request), combinable/resettable filters, search by DA-ID or name. Rows come from
 // the DA Registry through GET /da-services/agents/my-team (Admin: every DA; Supervisor: the DAs posted to their
 // Woreda; another manager: everyone who reports to them in the DA Hierarchy; a DA: the DAs posted to their Kebele). Search, filters and paging run on the server; the
 // filter menus list the backend's facets, counted over the whole team. A DA (My Teams) gets the same grid, read-only:
@@ -109,14 +94,14 @@ export function AgentsRegistry() {
   const [facets, setFacets] = useState<AgentFacets>({});
   // How the backend chose the team ("all" for an Admin); "all" until the first answer.
   const [team, setTeam] = useState<TeamKind>("all");
+  // Whom the signed-in user reports to in the DA Hierarchy, shown beside Export.
+  const [boss, setBoss] = useState<HierarchyNode | null>(null);
   const [filters, setFilters] = useState<Filters>(EMPTY);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   /** Bumped after each import so the imports and exceptions panels below reload. */
   const [importsVersion, setImportsVersion] = useState(0);
-  // Registry access switched off from the Action column (kept in memory until the API exists).
-  const [disabledIds, setDisabledIds] = useState<Set<string>>(new Set());
 
   // One request per pause in typing, not per key press.
   useEffect(() => {
@@ -135,11 +120,12 @@ export function AgentsRegistry() {
     // One call for every officer (GET /agents/my-team): the backend takes the team from the DA Hierarchy (Admin every
     // DA, a manager their reports), applies the filters and sends the facets for the filter menus.
     listMyTeam({ search: searchText || undefined, filters: JSON.parse(filterKey) as AgentFilters, limit: pageSize, start: (page - 1) * pageSize })
-      .then(({ agents, total, facets: next, team: nextTeam }) => {
+      .then(({ agents, total, facets: next, team: nextTeam, reportsTo }) => {
         if (!current) return;
         setLoaded({ key: requestKey, rows: agents.map(apiAgentToAgent), total, error: null });
         setFacets(next);
         setTeam(nextTeam);
+        setBoss(reportsTo);
       })
       .catch((err: unknown) => current && setLoaded({ key: requestKey, rows: [], total: 0, error: describeAgentError(err) }));
     return () => {
@@ -162,20 +148,16 @@ export function AgentsRegistry() {
   const setFilter = (key: keyof Filters) => (next: Set<string>) => applyFilters({ ...filters, [key]: next }, [key]);
 
   const options = (key: keyof Filters) => optionsFor(facets, key, filters[key]);
-  const activeOptions = options("active");
-  const tierOptions = options("tier");
+  const specialisationOptions = options("specialisation");
   const kebeleOptions = options("kebele");
-  const approvalOptions = options("approval");
   const woredaOptions = options("woreda");
   const filterFields: FilterFieldConfig[] = [
     // Region and Woreda filters show for every DA (Admin) or when the team spans more than one.
     ...(team === "all" || options("region").length > 1 ? [{ key: "region", label: "Region", allLabel: "All regions", placeholder: "All Regions", options: options("region") }] : []),
     ...(team === "all" || woredaOptions.length > 1 ? [{ key: "woreda", label: "Woreda", allLabel: "All woredas", placeholder: "All Woredas", options: woredaOptions }] : []),
     { key: "kebele", label: "Kebele", allLabel: "All kebeles", placeholder: "All Kebeles", options: kebeleOptions },
-    { key: "active", label: "Active status", allLabel: "All active statuses", placeholder: "All", options: activeOptions },
-    { key: "tier", label: "Education tier", allLabel: "All tiers", placeholder: "All", options: tierOptions },
+    { key: "specialisation", label: "Specialisation", allLabel: "All specialisations", placeholder: "All", options: specialisationOptions },
     { key: "fayda", label: "Fayda status", allLabel: "All Fayda statuses", placeholder: "All", options: options("fayda") },
-    { key: "approval", label: "Approval status", allLabel: "All approval statuses", placeholder: "All", options: approvalOptions },
   ];
 
   // The backend has already applied the filters.
@@ -222,18 +204,12 @@ export function AgentsRegistry() {
       cell: (a) => <span className="whitespace-nowrap font-mono text-[12.5px] text-slate-600">{a.faydaId}</span>,
     },
     {
-      key: "active",
-      header: <FilterDropdown label="Active Status" allLabel="All active statuses" options={activeOptions} selected={filters.active} onApply={setFilter("active")} />,
+      // Specialisation in place of Education Tier.
+      key: "specialisation",
+      header: <FilterDropdown label="Specialisation" allLabel="All specialisations" options={specialisationOptions} selected={filters.specialisation} onApply={setFilter("specialisation")} />,
       align: "center",
       className: "px-2 sm:px-3 text-center whitespace-nowrap",
-      cell: (a) => <Pill tone={ACTIVE_TONE[a.activeStatus]}>{a.activeStatus}</Pill>,
-    },
-    {
-      key: "tier",
-      header: <FilterDropdown label="Education Tier" allLabel="All tiers" options={tierOptions} selected={filters.tier} onApply={setFilter("tier")} />,
-      align: "center",
-      className: "px-2 sm:px-3 text-center whitespace-nowrap",
-      cell: (a) => <span className="whitespace-nowrap text-[13px] text-slate-700">{a.educationTier}</span>,
+      cell: (a) => <span className="whitespace-nowrap text-[13px] text-slate-700">{a.specialisation}</span>,
     },
     {
       key: "kebele",
@@ -257,66 +233,27 @@ export function AgentsRegistry() {
       className: "px-2 sm:px-3 text-center whitespace-nowrap",
       cell: (a) => <span className="text-[13px] text-slate-700">{a.farmerCount.toLocaleString()}</span>,
     },
-    {
-      key: "approval",
-      header: <FilterDropdown label="Approval Status" allLabel="All approval statuses" options={approvalOptions} selected={filters.approval} onApply={setFilter("approval")} />,
-      align: "center",
-      className: "px-2 sm:px-3 text-center whitespace-nowrap",
-      cell: (a) => <Pill tone={APPROVAL_TONE[a.approvalStatus]}>{a.approvalStatus}</Pill>,
-    },
-    {
-      key: "updated",
-      header: "Last Updated",
-      align: "center",
-      className: "px-2 sm:px-3 text-center whitespace-nowrap",
-      cell: (a) => {
-        if (!a.updatedAt || a.updatedAt === "—") return <span className="text-muted text-[13px]">—</span>;
-        const [date, time] = splitStamp(a.updatedAt);
-        return (
-          <span className="block whitespace-nowrap text-[12px] leading-tight text-slate-600">
-            {date}
-            <span className="block text-[11px] text-muted">{time}</span>
-          </span>
-        );
-      },
-    },
-    {
-      key: "actions",
-      header: "Action",
-      align: "center",
-      className: "px-2.5 sm:px-4 text-center whitespace-nowrap",
-      cell: (a) => {
-        const enabled = !disabledIds.has(a.daId);
-        return (
-          <div className="flex items-center justify-center gap-1.5 sm:gap-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-            {!isDA && (
-              <RowAction href={`/agents/${a.daId}`} icon="view" className="px-2.5 py-1 text-[12px]">
-                View
-              </RowAction>
-            )}
-            {!isDA && (
-              <RowAction href={`/performance/teams/attendance?agent=${encodeURIComponent(a.daId)}`} icon="calendar" className="px-2.5 py-1 text-[12px]">
-                Attendance
-              </RowAction>
-            )}
-            <Switch
-              checked={enabled}
-              disabled={!canEdit}
-              label={`${enabled ? "Deactivate" : "Activate"} ${a.fullName}`}
-              onChange={(on) => {
-                setDisabledIds((prev) => {
-                  const next = new Set(prev);
-                  if (on) next.delete(a.daId);
-                  else next.add(a.daId);
-                  return next;
-                });
-                setNotice(`${a.fullName} (${a.daId}) ${on ? "activated" : "deactivated"} in the registry.`);
-              }}
-            />
-          </div>
-        );
-      },
-    },
+    // A DA cannot open the /agents pages, so their grid has no Action column.
+    ...(isDA
+      ? []
+      : [
+          {
+            key: "actions",
+            header: "Action",
+            align: "center" as const,
+            className: "px-2.5 sm:px-4 text-center whitespace-nowrap",
+            cell: (a: Agent) => (
+              <div className="flex items-center justify-center gap-1.5 sm:gap-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                <RowAction href={`/agents/${a.daId}`} icon="view" className="px-2.5 py-1 text-[12px]">
+                  View
+                </RowAction>
+                <RowAction href={`/performance/teams/attendance?agent=${encodeURIComponent(a.daId)}`} icon="calendar" className="px-2.5 py-1 text-[12px]">
+                  Attendance
+                </RowAction>
+              </div>
+            ),
+          },
+        ]),
   ];
 
   return (
@@ -360,6 +297,13 @@ export function AgentsRegistry() {
                 setNotice(`Exported ${rows.length} agent${rows.length === 1 ? "" : "s"} matching the current filters (${formatLabel(format)}).`);
               }}
             />
+            {boss && (
+              <span className="inline-flex h-9 sm:h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 text-[12.5px] sm:text-[13.5px] text-muted shadow-xs">
+                Reports to <span className="font-semibold text-ink">{boss.full_name || boss.user || boss.name}</span>
+                {boss.designation && <span>({boss.designation})</span>}
+                {boss.user && boss.user !== boss.full_name && <span className="text-subtle">· {boss.user}</span>}
+              </span>
+            )}
           </div>
         }
       />

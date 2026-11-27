@@ -38,7 +38,7 @@ export interface ApiAgent {
 }
 
 /** The filters of GET /agents and /agents/my-team; the backend names them the same. */
-export const AGENT_FILTER_FIELDS = ["region", "woreda", "kebele", "active_status", "education_tier", "fayda_status", "approval_status"] as const;
+export const AGENT_FILTER_FIELDS = ["region", "woreda", "kebele", "active_status", "education_tier", "fayda_status", "approval_status", "specialisation"] as const;
 export type AgentFilterField = (typeof AGENT_FILTER_FIELDS)[number];
 /** Values per filter; a DA matches any value of a filter, and every filter given. "unassigned" = no area at that level. */
 export type AgentFilters = Partial<Record<AgentFilterField, string[]>>;
@@ -124,6 +124,8 @@ export interface MyTeam {
   root: HierarchyNode | null;
   /** The Supervisor's Woreda codes ("woreda") or the DA's Kebele code ("kebele"); [] otherwise or with no posting. */
   areas: string[];
+  /** The caller's boss in the DA Hierarchy (their parent node); null at the top or with no node. */
+  reportsTo: HierarchyNode | null;
   agents: ApiAgent[];
   total: number;
   facets: AgentFacets;
@@ -135,11 +137,11 @@ export interface MyTeam {
  * to their Kebele (them included). Filters, search and paging run on the server; facets count the whole team.
  */
 export async function listMyTeam({ search, filters, limit = 50, start = 0 }: ListMyTeamParams = {}): Promise<MyTeam> {
-  const res = await authRequest<{ data: { team?: TeamKind; root?: HierarchyNode | null; areas?: string[]; agents?: ApiAgent[]; total?: number; facets?: AgentFacets } }>(
+  const res = await authRequest<{ data: { team?: TeamKind; root?: HierarchyNode | null; areas?: string[]; reports_to?: HierarchyNode | null; agents?: ApiAgent[]; total?: number; facets?: AgentFacets } }>(
     `/da-services/agents/my-team?${query({ search, ...filterParams(filters), limit, start })}`,
   );
   const d = res.data;
-  return { team: d.team ?? "none", root: d.root ?? null, areas: d.areas ?? [], agents: d.agents ?? [], total: d.total ?? 0, facets: d.facets ?? {} };
+  return { team: d.team ?? "none", root: d.root ?? null, areas: d.areas ?? [], reportsTo: d.reports_to ?? null, agents: d.agents ?? [], total: d.total ?? 0, facets: d.facets ?? {} };
 }
 
 /** GET /da-services/agents/my-team/tree: the same team as a tree by reporting line; `tree` is null for "none". */

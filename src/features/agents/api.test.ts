@@ -93,7 +93,7 @@ describe("listMyTeam", () => {
 
   it("reads a response without the optional fields as an empty team", async () => {
     authRequest.mockResolvedValueOnce({ data: {} });
-    expect(await listMyTeam()).toEqual({ team: "none", root: null, areas: [], agents: [], total: 0, facets: {} });
+    expect(await listMyTeam()).toEqual({ team: "none", root: null, areas: [], reportsTo: null, agents: [], total: 0, facets: {} });
   });
 });
 
