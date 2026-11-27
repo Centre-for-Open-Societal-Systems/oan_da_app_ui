@@ -693,10 +693,10 @@ export function CropReportForm() {
               <button
                 type="button"
                 onClick={() => setShowConfirmModal(false)}
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-ink transition-colors"
+                className="group flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200/80 bg-slate-100 text-slate-500 transition-all duration-200 hover:scale-105 hover:border-red-400 hover:bg-red-50 hover:text-red-600 active:scale-95 cursor-pointer shadow-2xs hover:shadow-xs"
                 aria-label="Close modal"
               >
-                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <svg className="h-3.5 w-3.5 transition-transform duration-300 ease-in-out group-hover:rotate-90" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round">
                   <path d="M18 6L6 18M6 6l12 12" />
                 </svg>
               </button>
@@ -777,10 +777,10 @@ export function CropReportForm() {
             <button
               type="button"
               onClick={handleBackToStart}
-              className="absolute top-4 right-4 rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-ink transition-colors"
+              className="group absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full border border-slate-200/80 bg-slate-100 text-slate-500 transition-all duration-200 hover:scale-105 hover:border-red-400 hover:bg-red-50 hover:text-red-600 active:scale-95 cursor-pointer shadow-2xs hover:shadow-xs"
               aria-label="Close"
             >
-              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <svg className="h-3.5 w-3.5 transition-transform duration-300 ease-in-out group-hover:rotate-90" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round">
                 <path d="M18 6L6 18M6 6l12 12" />
               </svg>
             </button>

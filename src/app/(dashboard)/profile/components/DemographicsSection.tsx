@@ -52,11 +52,11 @@ export function LockedField({ label, value, required }: { label: string; value: 
     <FormField
       label={
         <span className="min-h-[38px] flex items-end pb-1 text-[13px] font-medium text-ink leading-tight">
-          {label}
+          <span>{label}</span>
+          {required && <span className="ml-1 text-danger font-bold">*</span>}
         </span>
       }
       htmlFor={id}
-      required={required}
     >
       <div className="relative">
         <Input id={id} value={value} readOnly disabled title="Verified via Fayda — changes need re-verification" className={cn(LOCKED, "pr-8 text-slate-600 bg-slate-50 border-slate-200/90 cursor-not-allowed")} />
@@ -268,7 +268,9 @@ export function DemographicsSection({ editing, onEdit, onCancel, onSubmit }: Dem
               <FormField
                 label={
                   <span className="min-h-[38px] flex flex-wrap items-end pb-1 gap-1.5 text-[13px] font-semibold text-slate-800 leading-tight">
-                    <span>Mobile Phone</span>
+                    <span>
+                      Mobile Phone<span className="ml-1 text-danger font-bold">*</span>
+                    </span>
                     <span className="inline-flex items-center rounded-[12px] border border-emerald-300 bg-emerald-50 px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 shadow-2xs">
                       Editable
                     </span>
@@ -280,7 +282,6 @@ export function DemographicsSection({ editing, onEdit, onCancel, onSubmit }: Dem
                   </span>
                 }
                 htmlFor="mobile"
-                required
               >
                 <Input
                   id="mobile"
@@ -321,11 +322,11 @@ export function DemographicsSection({ editing, onEdit, onCancel, onSubmit }: Dem
               <FormField
                 label={
                   <span className="min-h-[38px] flex items-end pb-1 text-[13px] font-medium text-ink leading-tight">
-                    Gender
+                    <span>Gender</span>
+                    <span className="ml-1 text-danger font-bold">*</span>
                   </span>
                 }
                 htmlFor="locked-gender"
-                required
               >
                 <Select id="locked-gender" value={p.gender} disabled title="Verified via Fayda — changes need re-verification" className={LOCKED}>
                   {Object.entries(GENDERS).map(([value, label]) => (
