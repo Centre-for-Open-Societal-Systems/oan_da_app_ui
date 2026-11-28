@@ -9,7 +9,7 @@ export const DEFAULT_TARGET_FARMERS = 20;
 /** Languages a custom question can carry a translation for; English is the prompt itself. */
 export const TRANSLATION_LANGUAGES = ["Amharic", "Afaan Oromoo"];
 
-/** Question types a Supervisor can add; consent, Farmer ID and Kebele are added to every template by the server. */
+/** Question types a Supervisor can add. Consent, Farmer ID and Kebele are not template questions. */
 export const QUESTION_TYPES: { value: TemplateQuestionBody["type"]; label: string; hasOptions: boolean }[] = [
   { value: "rating", label: "Rating (1–5)", hasOptions: false },
   { value: "single", label: "Single choice", hasOptions: true },
@@ -42,7 +42,8 @@ export interface TemplateInput {
   /** Woreda code; "" lets the server use the Supervisor's only Woreda. */
   woreda: string;
   assignmentMode: AssignmentMode;
-  assignedDaIds: string[];
+  /** Portal User ids (emails) of the selected DAs. */
+  assignedUsers: string[];
 }
 
 export const formatSurveyDate = (iso: string) =>
@@ -69,7 +70,7 @@ export function templateErrors(t: TemplateInput, { woredaRequired = false }: { w
   if (t.languages.length === 0) errors.push("Pick at least one language.");
   if (!(t.targetFarmers > 0)) errors.push("Set how many farmers each DA should survey.");
   if (woredaRequired && !t.woreda) errors.push("Pick the Woreda to publish to.");
-  if (t.assignmentMode === "Selected" && t.assignedDaIds.length === 0) errors.push("Pick at least one DA, or publish to the whole Woreda.");
+  if (t.assignmentMode === "Selected" && t.assignedUsers.length === 0) errors.push("Pick at least one DA, or publish to the whole Woreda.");
   if (t.questions.length === 0) errors.push("Add at least one question.");
   t.questions.forEach((q, i) => {
     if (!q.prompt.trim()) errors.push(`Question ${i + 1} needs text.`);
@@ -106,7 +107,7 @@ export function toTemplateBody(t: TemplateInput, clientOpId: string): TemplateBo
     questions: questionBodies(t),
     ...(t.woreda ? { woreda: t.woreda } : {}),
     assignmentMode: t.assignmentMode,
-    ...(t.assignmentMode === "Selected" ? { assignedDaIds: t.assignedDaIds } : {}),
+    ...(t.assignmentMode === "Selected" ? { assignedUsers: t.assignedUsers } : {}),
     client_op_id: clientOpId,
   };
 }
@@ -123,7 +124,7 @@ export function templateInputFrom(task: SurveyTask): TemplateInput {
     targetFarmers: task.targetFarmers,
     woreda: task.woreda ?? "",
     assignmentMode: task.assignmentMode ?? "Woreda",
-    assignedDaIds: task.assignedDaIds ?? [],
+    assignedUsers: task.assignedUsers ?? [],
     questions: custom.map((p, i) => ({
       id: i + 1,
       prompt: p.prompt,
@@ -147,9 +148,9 @@ export function templatePatch(before: TemplateInput, after: TemplateInput): Temp
   if (!same(after.languages, before.languages)) patch.languages = after.languages;
   if (after.targetFarmers !== before.targetFarmers) patch.targetFarmers = after.targetFarmers;
   if (!same(questionBodies(after), questionBodies(before))) patch.questions = questionBodies(after);
-  if (after.assignmentMode !== before.assignmentMode || (after.assignmentMode === "Selected" && !same([...after.assignedDaIds].sort(), [...before.assignedDaIds].sort()))) {
+  if (after.assignmentMode !== before.assignmentMode || (after.assignmentMode === "Selected" && !same([...after.assignedUsers].sort(), [...before.assignedUsers].sort()))) {
     patch.assignmentMode = after.assignmentMode;
-    patch.assignedDaIds = after.assignmentMode === "Selected" ? after.assignedDaIds : [];
+    patch.assignedUsers = after.assignmentMode === "Selected" ? after.assignedUsers : [];
   }
   return patch;
 }

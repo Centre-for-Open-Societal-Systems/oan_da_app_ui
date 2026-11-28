@@ -182,17 +182,17 @@ export function TemplateDetail({ id }: { id: string }) {
             <dl className="text-[13.5px]">
               <Row label="Survey type">{template.type}</Row>
               <Row label="Woreda">{template.woreda ?? "—"}</Row>
-              <Row label="Assigned to">{template.assignmentMode === "Selected" ? `${template.assignedDaIds?.length ?? 0} selected DAs` : "Every DA in the Woreda"}</Row>
+              <Row label="Assigned to">{template.assignmentMode === "Selected" ? `${template.assignedUsers?.length ?? 0} selected DAs` : "Every DA in the Woreda"}</Row>
               <Row label="Languages">{template.languages.join(", ")}</Row>
               <Row label="Collected">{template.collected}{template.queued ? ` · ${template.queued} queued` : ""}</Row>
               <Row label="Version">{template.templateVersion}</Row>
             </dl>
           </Card>
-          {template.assignmentMode === "Selected" && (template.assignedDaIds?.length ?? 0) > 0 && (
+          {template.assignmentMode === "Selected" && (template.assignedUsers?.length ?? 0) > 0 && (
             <Card className="overflow-hidden p-0 shadow-card">
               <h2 className="border-b border-line px-4 py-3.5 text-[17px] font-semibold text-ink">Assigned DAs</h2>
               <ul className="text-[13.5px]">
-                {template.assignedDaIds!.map((d) => <li key={d} className="border-b border-line-soft px-4 py-2.5 font-mono text-ink last:border-b-0">{d}</li>)}
+                {template.assignedUsers!.map((d) => <li key={d} className="border-b border-line-soft px-4 py-2.5 font-mono text-ink last:border-b-0">{d}</li>)}
               </ul>
             </Card>
           )}

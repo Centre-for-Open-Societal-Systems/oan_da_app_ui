@@ -9,6 +9,8 @@ import type { ActiveStatus, Agent, ApprovalStatus, FaydaStatus, TeamMember } fro
 /** One DA as the registry projects it (DAReference.to_dict): GET /agents, GET /agents/{da_id}, and /me `agent`. */
 export interface ApiAgent {
   da_id: string;
+  /** The portal User bound to this DA record (User.da_registry_id); null when none. */
+  user?: string | null;
   full_name: string;
   active_status: string;
   approval_status: string;

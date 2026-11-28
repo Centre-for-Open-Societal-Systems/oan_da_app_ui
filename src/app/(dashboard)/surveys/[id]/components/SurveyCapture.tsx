@@ -22,6 +22,7 @@ import {
   newOpId,
   promptIn,
   submitSurveyResponse,
+  CONSENT_STEP,
   type Parameter,
   type ResponseStatus,
   type SurveyAnswers,
@@ -95,7 +96,8 @@ export function SurveyCapture({ id }: { id: string }) {
   const isAnsweredFarmer = (f: ApiFarmer) => answered.has(apiFarmerId(f)) || answered.has(f.internal_record_id);
   const duplicate = Boolean(farmer && isAnsweredFarmer(farmer));
 
-  const parameters = useMemo(() => task?.parameters ?? [], [task]);
+  // The consent step, then the Supervisor's questions (stored consent / auto rows of older templates are dropped).
+  const parameters = useMemo(() => [CONSENT_STEP, ...(task?.parameters ?? []).filter((p) => p.type !== "consent" && p.type !== "auto")], [task]);
   const visibleParams = useMemo(() => parameters.filter((p) => !p.condition || answers[p.condition.parameterId] === p.condition.equals), [parameters, answers]);
 
   if (loadError) {
@@ -123,9 +125,8 @@ export function SurveyCapture({ id }: { id: string }) {
   const done = status === "Synced" || status === "Queued";
   const needsCollector = !isDA && !daId;
 
-  // p2 / p3 are pre-filled from the picked farmer; the server overwrites them with the resolved farmer's values.
-  const prefillFor = (p: Parameter) => (p.prefill === "Farmer Registry" ? (farmer ? apiFarmerId(farmer) : "") : p.prefill === "DA assignment" ? farmer?.kebele_name ?? "" : "");
-  const valueOf = (p: Parameter) => (p.type === "auto" ? prefillFor(p) : answers[p.id]);
+  // Farmer ID and Kebele are not questions: the response takes them from the picked farmer.
+  const valueOf = (p: Parameter) => answers[p.id];
   const isAnswered = (p: Parameter) => {
     const v = valueOf(p);
     return Array.isArray(v) ? v.length > 0 : Boolean(v);
@@ -144,8 +145,7 @@ export function SurveyCapture({ id }: { id: string }) {
   const consent = consentParam ? answers[consentParam.id] : undefined;
   const declined = consent === "declined";
   // A declined consent ends the response: only the consent question stays on the form.
-  // Farmer ID and Kebele are filled in from the picked farmer (shown beside the farmer picker), so they are not steps.
-  const shown = declined && consentParam ? [consentParam] : visibleParams.filter((p) => p.type !== "auto");
+  const shown = declined && consentParam ? [consentParam] : visibleParams;
   // The questions the Supervisor wrote: what the DA counts as "the questions" of the survey.
   const questions = shown.filter((p) => p.type !== "consent");
   const questionNo = (p: Parameter) => questions.indexOf(p) + 1;

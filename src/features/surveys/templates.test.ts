@@ -13,7 +13,7 @@ const input = (over: Partial<TemplateInput> = {}): TemplateInput => ({
   targetFarmers: 20,
   woreda: "ET04-W01",
   assignmentMode: "Woreda",
-  assignedDaIds: [],
+  assignedUsers: [],
   questions: [
     { id: 1, prompt: "How useful was the advice?", type: "rating", options: "", required: true, translations: { Amharic: "ምክሩ ምን ያህል ጠቃሚ ነበር?", "Afaan Oromoo": "Gorsa" } },
     { id: 2, prompt: "Did you apply it?", type: "single", options: "Yes fully, Partly, No", required: true, translations: {} },
@@ -41,10 +41,10 @@ describe("toTemplateBody", () => {
     });
   });
 
-  it("sends assignedDaIds only for Selected mode and leaves out an empty Woreda", () => {
-    const body = toTemplateBody(input({ woreda: "", assignmentMode: "Selected", assignedDaIds: ["DA-1"] }), "srv-2");
+  it("sends assignedUsers only for Selected mode and leaves out an empty Woreda", () => {
+    const body = toTemplateBody(input({ woreda: "", assignmentMode: "Selected", assignedUsers: ["da1@da.local"] }), "srv-2");
     expect(body.woreda).toBeUndefined();
-    expect(body.assignedDaIds).toEqual(["DA-1"]);
+    expect(body.assignedUsers).toEqual(["da1@da.local"]);
   });
 });
 
@@ -63,7 +63,7 @@ const task: SurveyTask = {
   id: "DA-SRV-2026-0000001", name: "Meher", templateVersion: "FSS-T1-v1.0", type: "Satisfaction",
   window: { open: "03 Nov 2026", close: "30 Nov 2026" }, window_open: "2026-11-03", window_close: "2026-11-30",
   languages: ["English", "Amharic"], targetFarmers: 20, collected: 0, queued: 0, status: "Open", estMinutes: 3, answered: [],
-  woreda: "ET04-W01", assignmentMode: "Woreda", assignedDaIds: [],
+  woreda: "ET04-W01", assignmentMode: "Woreda", assignedUsers: [],
   parameters: [
     { id: "p1", order: 1, prompt: "Consent", type: "consent", required: true },
     { id: "p2", order: 2, prompt: "Farmer ID", type: "auto", required: true, prefill: "Farmer Registry" },
