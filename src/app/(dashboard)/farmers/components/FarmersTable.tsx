@@ -37,6 +37,7 @@ import { Banner } from "@/components/ui/Banner";
 import { fileDate, type CsvColumn } from "@/lib/download";
 import { downloadTable, formatLabel } from "@/lib/export";
 import type { Farmer } from "@/features/farmers";
+import { useScopeAreaNames } from "@/features/geo";
 
 const SEARCH_DEBOUNCE_MS = 400;
 
@@ -113,7 +114,9 @@ export function FarmersTable() {
   const loading = loaded === null || loaded.key !== `${searchText}|${page}|${pageSize}`;
   const source = loading ? [] : loaded.rows;
 
-  const kebeleOptions = optionsOf(source.map((f) => f.kebele));
+  // Every Kebele of the user's own area from the geo Master Data, then those the rows hold.
+  const kebeleNames = useScopeAreaNames("kebele", source.map((f) => f.kebele));
+  const kebeleOptions = optionsOf(source.map((f) => f.kebele), kebeleNames);
   const statusOptions = optionsOf(source.map((f) => farmerActivity(f.status)), STATUS_ORDER);
   const filterFields: FilterFieldConfig[] = [
     { key: "kebele", label: "Kebele", allLabel: "All kebeles", placeholder: "All", options: kebeleOptions },
@@ -374,7 +377,7 @@ export function FarmersTable() {
                       <StatusPill status={farmerActivity(farmer.status)} reason={farmer.statusReason} />
                     </td>
                     <td className="px-4 py-3.5 text-center">
-                      <RowAction href={`/farmers/${farmer.regId ?? farmer.id}`} icon="view">View</RowAction>
+                      <RowAction href={`/farmers/${farmer.internalId ?? farmer.regId ?? farmer.id}`} icon="view">View</RowAction>
                     </td>
                   </tr>
                 );

@@ -172,10 +172,10 @@ export function PlanVisitModal({ farmer, farmers, isOpen, onClose, mode = "plan"
         </Banner>
       )}
       {v.result && (
-        <PlanVisitSuccess result={v.result} visitType={v.visitType} isSchedule={isSchedule} questionCount={v.visitType === ADVISORY_VISIT ? v.advisoryQa.filter((qa) => qa.question.trim()).length : 0} />
+        <PlanVisitSuccess result={v.result} visitType={v.visitType} isSchedule={isSchedule} notifySms={v.notifySms} questionCount={v.visitType === ADVISORY_VISIT ? v.advisoryQa.filter((qa) => qa.question.trim()).length : 0} />
       )}
       {showBatch && !v.result && (
-        <PlanVisitBatchResult rows={v.batch!} onDiscard={v.discard} onResubmit={v.resubmit} submitting={v.submitting} />
+        <PlanVisitBatchResult rows={v.batch!} notifySms={v.notifySms} onDiscard={v.discard} onResubmit={v.resubmit} submitting={v.submitting} />
       )}
       {/* Kept mounted (hidden) under a result so "Change details" / "Retry failed" reuse the values entered. */}
       <form
@@ -203,7 +203,15 @@ export function PlanVisitModal({ farmer, farmers, isOpen, onClose, mode = "plan"
           readCommon={v.commonDetails}
         />
         <VisitTypePicker value={v.visitType} onChange={v.setVisitType} />
-        <VisitDetailsFields selected={v.selected} preset={preset} isSchedule={isSchedule} />
+        <VisitDetailsFields selected={v.selected} preset={preset} isSchedule={isSchedule}           locations={v.locations}
+          onLocationChange={v.setLocation}
+          priority={v.priority}
+          onPriorityChange={v.setPriority}
+          priorityReason={v.priorityReason}
+          onPriorityReasonChange={v.setPriorityReason}
+          notifySms={v.notifySms}
+          onNotifySmsChange={v.setNotifySms}
+        />
       </form>
       </div>
     </Modal>

@@ -15,8 +15,11 @@ export const KB_LANGUAGES = { en: "EN", am: "አማ" } as const;
 /** Fallback categories, used until (or if) GET /knowledge-base/categories answers. See listKbCategories. */
 export const KB_CATEGORIES = ["Crop Production", "Pest & Disease", "Livestock", "Soil & Water", "Markets & Credit"] as const;
 
-/** Who may create articles and videos. */
-export const canWriteKnowledge = (role: string | null | undefined) => role === "Supervisor" || role === "Executive" || role === "Admin";
+/**
+ * Who may create, edit and archive articles and videos. The Communications Officer manages them like the Admin, but the
+ * backend still treats that role as read only (knowledge_base/common.py on develop), so their saves get a 403 until it does.
+ */
+export const canWriteKnowledge = (role: string | null | undefined) => role === "Supervisor" || role === "Executive" || role === "Admin" || role === "CommsOfficer";
 
 export interface KbAudienceScope {
   region?: string | null;

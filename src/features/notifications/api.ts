@@ -74,7 +74,9 @@ interface BroadcastInput {
   clientOpId?: string;
 }
 
-async function sendBroadcast(input: BroadcastInput, scope: "woreda" | "kebele", scopeValue: string): Promise<BroadcastResult> {
+export type BroadcastScope = "all" | "region" | "zone" | "woreda" | "kebele";
+
+async function sendBroadcast(input: BroadcastInput, scope: BroadcastScope, scopeValue: string | null): Promise<BroadcastResult> {
   interface Resp {
     data: { broadcast_id: string; duplicate: boolean; recipients: number; scope: string; scope_value: string };
   }
@@ -86,11 +88,23 @@ async function sendBroadcast(input: BroadcastInput, scope: "woreda" | "kebele", 
       href: input.href ?? "/notifications",
       source: input.source,
       scope,
-      scope_value: scopeValue,
+      ...(scopeValue ? { scope_value: scopeValue } : {}),
       client_op_id: input.clientOpId ?? crypto.randomUUID(),
     },
   });
   return { broadcastId: res.data.broadcast_id, duplicate: res.data.duplicate, recipients: res.data.recipients, scopeValue: res.data.scope_value };
+}
+
+/**
+ * POST /da-services/notifications/broadcast to the narrowest area picked: a Woreda, else a Zone, else a Region, else every
+ * DA ("all"). For the Admin and the Communications Officer, whose Region / Zone / Woreda are optional on the form; the
+ * backend checks the area is inside the sender's grant.
+ */
+export function broadcastToArea(input: BroadcastInput & { region?: string | null; zone?: string | null; woreda?: string | null }): Promise<BroadcastResult> {
+  if (input.woreda) return sendBroadcast(input, "woreda", input.woreda);
+  if (input.zone) return sendBroadcast(input, "zone", input.zone);
+  if (input.region) return sendBroadcast(input, "region", input.region);
+  return sendBroadcast(input, "all", null);
 }
 
 /**

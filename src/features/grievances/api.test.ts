@@ -7,8 +7,8 @@ import {
   fetchGrievanceSummary,
   fetchGrievanceTimeline,
   listGrievances,
-  fetchGrievanceAreas,
   selfSubmitter,
+  toEthiopianMobile,
   submitGrievance,
   toGrievance,
   type ApiGrievance,
@@ -155,35 +155,30 @@ describe("mapping", () => {
   });
 });
 
-describe("fetchGrievanceAreas", () => {
-  it("asks this app's route for the areas under a parent", async () => {
-    const areas = [{ area_id: "kebele-ET140108101008", area_name: "8", code: "ET140108101008" }];
-    fetchMock.mockResolvedValueOnce(json({ areas }));
-    await expect(fetchGrievanceAreas("woreda-ET140108")).resolves.toEqual(areas);
-    expect(fetchMock.mock.calls.at(-1)?.[0]).toBe("/api/grievance-areas?parent=woreda-ET140108");
-  });
-
-  it("says so when the list cannot be read", async () => {
-    fetchMock.mockResolvedValueOnce(json({ message: "no" }, 502));
-    await expect(fetchGrievanceAreas()).rejects.toThrow("Could not load the areas");
-  });
-});
-
 describe("selfSubmitter", () => {
   it("reads the submitter from the DA record", () => {
     expect(selfSubmitter({ full_name: " Abebe Kebede ", phone: "0911000000", woreda: "ET030403", kebele_name: "Kebele 01" }, "abebe@moa.gov.et")).toEqual({
       name: "Abebe Kebede",
       mobile: "0911000000",
-      woredaCode: "ET030403",
-      kebeleName: "Kebele 01",
     });
   });
 
   it("falls back to the account name and leaves what the record lacks empty", () => {
-    expect(selfSubmitter(null, "Abebe")).toEqual({ name: "Abebe", mobile: "", woredaCode: "", kebeleName: "" });
+    expect(selfSubmitter(null, "Abebe")).toEqual({ name: "Abebe", mobile: "" });
   });
 
   it("accepts mobile when the record has no phone", () => {
     expect(selfSubmitter({ mobile: "0922000000" }).mobile).toBe("0922000000");
+  });
+});
+
+describe("toEthiopianMobile", () => {
+  it("writes an Ethiopian mobile with +251", () => {
+    for (const input of ["0911234567", "911234567", "251911234567", "+251 911 234 567", "+251-911-234-567"]) expect(toEthiopianMobile(input)).toBe("+251911234567");
+    expect(toEthiopianMobile("0712345678")).toBe("+251712345678");
+  });
+
+  it("refuses what is not one", () => {
+    for (const input of ["9876543211", "98765432", "0811234567", "+919876543211", ""]) expect(toEthiopianMobile(input)).toBeNull();
   });
 });

@@ -4,7 +4,8 @@ import { useMemo, type ReactNode } from "react";
 import { Header } from "@/components/layout/Header";
 import type { SearchHit } from "@/components/layout/SearchModal";
 import { listAgents } from "@/features/agents";
-import { listAreas, listKebeles, loadScopeAreas, type AdminArea } from "@/features/assignments";
+import { listKbGeo } from "@/features/communication";
+import { areaName, loadAreaNames } from "@/features/geo";
 import { apiFarmerToFarmer, listFarmers } from "@/features/farmers";
 import { useAuthStore } from "@/store/useAuthStore";
 
@@ -13,7 +14,7 @@ const RESULTS = 5;
 /** Global search's farmers from GET /farmers, in the caller's scope. */
 async function searchFarmers(searchText: string): Promise<SearchHit[]> {
   const { items } = await listFarmers({ searchText, pageSize: RESULTS });
-  return items.map(apiFarmerToFarmer).map((f) => ({ id: f.id, name: f.name, details: `${f.kebele}, ${f.woreda}`, href: `/farmers/${f.id}` }));
+  return items.map(apiFarmerToFarmer).map((f) => ({ id: f.id, name: f.name, details: `${f.kebele}, ${f.woreda}`, href: `/farmers/${f.internalId ?? f.id}` }));
 }
 
 /** Global search's DAs from GET /agents, scoped by the backend (Supervisor: Woreda, Executive: Region, Admin: all). */
@@ -27,29 +28,21 @@ async function searchAgents(searchText: string): Promise<SearchHit[]> {
   }));
 }
 
-/** Woreda code → English name, from the area master; empty when it cannot be read. */
-const woredaNames = () =>
-  loadScopeAreas()
-    .then(({ woredas }) => Object.fromEntries(woredas.map((w) => [w.code, w.name_en])) as Record<string, string>)
-    .catch(() => ({}) as Record<string, string>);
-
 /**
- * Kebeles by name from the area master: those of the user's own Woredas when they have any (DA, Supervisor),
- * otherwise every Kebele (Admin, Executive). `href` is where a picked Kebele opens.
+ * Kebeles by name from the geo Master Data (get_master_data ignores `search`, so the lists are read and filtered here):
+ * those of the user's own Woredas (DA, Supervisor), else of the Woredas in their Zone (Executive). Admin has no area of
+ * their own, and every Kebele of the country is too many to read, so the section stays empty. `href` is where a picked
+ * Kebele opens.
  */
-function kebeleSearch(woredas: string[], href: string) {
+function kebeleSearch(woredas: string[], zone: string | null, href: string) {
   return async (searchText: string): Promise<SearchHit[]> => {
-    const q = searchText.toLowerCase();
-    const [kebeles, names] = await Promise.all([
-      woredas.length > 0
-        ? Promise.all(woredas.map((w) => listKebeles(w))).then((lists) => lists.flat().filter((k) => k.name_en.toLowerCase().includes(q)))
-        : listAreas({ level: "Kebele", q: searchText }),
-      woredaNames(),
-    ]);
-    return kebeles.slice(0, RESULTS).map((k: AdminArea) => {
-      const woreda = k.parent_area ? (names[k.parent_area] ?? k.parent_area) : null;
-      return { id: k.code, name: k.name_en, details: woreda ? `${woreda} Woreda` : k.code, href };
-    });
+    const q = searchText.trim().toLowerCase();
+    const inScope = woredas.length > 0 ? woredas : zone ? (await listKbGeo("woreda", zone)).map((w) => w.code) : [];
+    if (!q || inScope.length === 0) return [];
+    const lists = await Promise.allSettled(inScope.map((w) => listKbGeo("kebele", w)));
+    const kebeles = lists.flatMap((l) => (l.status === "fulfilled" ? l.value : [])).filter((k) => k.name.toLowerCase().includes(q)).slice(0, RESULTS);
+    await loadAreaNames(kebeles.map((k) => k.parent));
+    return kebeles.map((k) => ({ id: k.code, name: k.name, details: `${areaName(k.parent)} Woreda`, href }));
   };
 }
 
@@ -58,10 +51,11 @@ export function DashboardHeader({ notifications }: { notifications: ReactNode })
   const role = useAuthStore((s) => s.role);
   const scopeWoredas = useAuthStore((s) => s.profile?.scope?.woredas);
   const agentWoreda = useAuthStore((s) => s.profile?.agent?.woreda);
+  const ownZone = useAuthStore((s) => s.profile?.location?.zone?.id ?? null);
   const woredaKey = [...(scopeWoredas ?? []), ...(typeof agentWoreda === "string" && agentWoreda ? [agentWoreda] : [])].join(",");
   // There is no Kebele page: a Supervisor lands on Agent Assignment (Kebele coverage), everyone else on their farmers.
   const kebeleHref = role === "Supervisor" ? "/assignments" : "/farmers";
-  const searchKebeles = useMemo(() => kebeleSearch([...new Set(woredaKey.split(",").filter(Boolean))], kebeleHref), [woredaKey, kebeleHref]);
+  const searchKebeles = useMemo(() => kebeleSearch([...new Set(woredaKey.split(",").filter(Boolean))], ownZone, kebeleHref), [woredaKey, ownZone, kebeleHref]);
   // A DA has no access to the agents registry (My Teams instead), so their search skips that section.
   const agentSearch = role === "DA" ? undefined : searchAgents;
   return <Header notifications={notifications} searchFarmers={searchFarmers} searchAgents={agentSearch} searchKebeles={searchKebeles} />;

@@ -16,27 +16,31 @@ class MemoryStorage implements Storage {
 const fetchMock = vi.fn<typeof fetch>();
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 
-const AREAS = {
-  Kebele: [
-    { code: "ET04-W01-K01", level: "Kebele", parent_area: "ET04-W01", name_en: "Lekatit", name_am: null },
-    // Same kebele name in another woreda: must not be picked.
-    { code: "ET03-W02-K09", level: "Kebele", parent_area: "ET03-W02", name_en: "Lekatit", name_am: null },
-  ],
-  Woreda: [{ code: "ET04-W01", level: "Woreda", parent_area: "ET04-Z01", name_en: "Shire Endaslasie town", name_am: null }],
-  Zone: [{ code: "ET04-Z01", level: "Zone", parent_area: "ET04", name_en: "North Western", name_am: null }],
+// The geo Master Data, by "<level>:<parent>".
+const GEO: Record<string, { code: string; name: string }[]> = {
+  "region:ET": [{ code: "ET01", name: "Tigray" }, { code: "ET04", name: "Oromia" }],
+  "zone:ET04": [{ code: "ET0401", name: "North Western" }, { code: "ET0402", name: "West Shewa" }],
+  "woreda:ET0401": [{ code: "ET040101", name: "Shire Endaslasie town" }],
+  // Same woreda name in another zone, without the kebele: must not be picked.
+  "woreda:ET0402": [{ code: "ET040201", name: "Shire Endaslasie town" }],
+  "kebele:ET040101": [{ code: "ET04010101", name: "Lekatit" }],
+  "kebele:ET040201": [{ code: "ET04020109", name: "Other" }],
 };
 
-/** Answers /master/areas from AREAS and the beneficiary POST with `post`. */
+/** Answers get_master_data from GEO and the beneficiary POST with `post`. */
 function route(post: (body: Record<string, unknown>) => Response) {
   fetchMock.mockImplementation(async (input, init) => {
     const url = new URL(String(input), "http://x");
-    if (url.pathname.endsWith("/master/areas")) return json({ data: AREAS[url.searchParams.get("level") as keyof typeof AREAS] ?? [] });
+    if (url.pathname.endsWith("/get_master_data")) {
+      const parent = url.searchParams.get("parent")!;
+      return json({ data: (GEO[`${url.searchParams.get("field_name")}:${parent}`] ?? []).map((r) => ({ ...r, parent })) });
+    }
     if (url.pathname.endsWith("/farmer-beneficiaries") && init?.method === "POST") return post(JSON.parse(String(init.body)));
     return json({ message: "unexpected" }, 500);
   });
 }
 
-const farmer = () => ({ id: "uuid-1", regId: "FR-101", name: "Aster", kebele: "Lekatit", woreda: "Shire Endaslasie town" }) as Farmer;
+const farmer = () => ({ id: "uuid-1", regId: "FR-101", name: "Aster", kebele: "Lekatit", woreda: "Shire Endaslasie town", region: "Oromia" }) as Farmer;
 
 beforeEach(() => {
   globalThis.sessionStorage = new MemoryStorage();
@@ -61,14 +65,14 @@ describe("reads", () => {
 });
 
 describe("resolveFarmerArea", () => {
-  it("finds the kebele under the farmer's woreda and walks up to zone and region", async () => {
+  it("finds the region, the woreda among its zones and the kebele under that woreda by name", async () => {
     route(() => json({}));
-    await expect(resolveFarmerArea(farmer())).resolves.toEqual({ region: "ET04", zone: "ET04-Z01", woreda: "ET04-W01", kebele: "ET04-W01-K01" });
+    await expect(resolveFarmerArea(farmer())).resolves.toEqual({ region: "ET04", zone: "ET0401", woreda: "ET040101", kebele: "ET04010101" });
   });
 
-  it("explains a kebele that is not in the area master", async () => {
+  it("explains a kebele that is not in the Master Data", async () => {
     route(() => json({}));
-    await expect(resolveFarmerArea({ kebele: "Nowhere", woreda: "Shire Endaslasie town" })).resolves.toEqual({ error: expect.stringContaining("Nowhere") });
+    await expect(resolveFarmerArea({ kebele: "Nowhere", woreda: "Shire Endaslasie town", region: "Oromia" })).resolves.toEqual({ error: expect.stringContaining("Nowhere") });
   });
 });
 
@@ -86,11 +90,23 @@ describe("addFarmersToSegment", () => {
     );
 
     expect(r.failed.map((f) => f.farmer.name)).toEqual(["Chala", "Dawit"]);
-    expect(posted).toEqual([{ farmer_ids: ["FR-101", "FR-102"], beneficiary_segment: "BS-00001", region: "ET04", zone: "ET04-Z01", woreda: "ET04-W01", kebele: "ET04-W01-K01" }]);
+    expect(posted).toEqual([{ farmer_ids: ["FR-101", "FR-102"], beneficiary_segment: "BS-00001", region: "ET04", zone: "ET0401", woreda: "ET040101", kebele: "ET04010101" }]);
     expect(r.added.map((a) => a.name)).toEqual(["FB-9"]);
     expect(r.skipped.map((f) => f.name)).toEqual(["Bekele"]);
 
     expect(describeAddResult(r, "Package 1")).toMatchObject({ tone: "warning", text: expect.stringContaining("1 farmer added to “Package 1”") });
+  });
+
+  it("sends every farmer with the area picked in the form, without looking it up", async () => {
+    const posted: Record<string, unknown>[] = [];
+    route((body) => {
+      posted.push(body);
+      return json({ data: { created: [{ name: "FB-9", farmer_id: "FR-101" }], skipped: [] } }, 201);
+    });
+    const area = { region: "ET01", zone: "ET0101", woreda: "ET010108", kebele: "ET01010805" };
+    await addFarmersToSegment([farmer(), { ...farmer(), id: "uuid-3", regId: "FR-103", kebele: "Nowhere" }], "BS-00001", area);
+    expect(posted).toEqual([{ farmer_ids: ["FR-101", "FR-103"], beneficiary_segment: "BS-00001", ...area }]);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("get_master_data"))).toBe(false);
   });
 
   it("keeps the backend's reason when a POST is refused", async () => {

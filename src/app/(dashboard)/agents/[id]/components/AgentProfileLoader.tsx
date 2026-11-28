@@ -30,7 +30,7 @@ export function AgentProfileLoader({ daId }: { daId: string }) {
   if ("error" in state) {
     return (
       <div className="flex w-full flex-col gap-4">
-        <BackLink href="/agents" label="Back to Agents" />
+        <BackLink href="/agents" label="Back" />
         <Card className="shadow-card">
           <EmptyState tone="error" title={`${daId} could not be loaded`} hint={state.error} actionLabel="Try again" onAction={() => setAttempt((n) => n + 1)} />
         </Card>

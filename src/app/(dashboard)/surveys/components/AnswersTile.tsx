@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Modal } from "@/components/ui/Modal";
+import { Pill } from "@/components/ui/Pill";
 import { Select } from "@/components/ui/Select";
 import { describeSurveyError, downloadSurveyResponses, getSurveyTemplate, listSurveyResponses, type Parameter, type SurveyResponseRecord } from "@/features/surveys";
 
 const answerText = (value: string | string[] | undefined) => (Array.isArray(value) ? value.join(", ") : value) || "—";
 
-/** The questions the Supervisor wrote. Consent, Farmer ID and Kebele are on every survey and are not listed. */
+/** The questions the Supervisor wrote (older templates also stored consent / Farmer ID / Kebele rows: not listed). */
 export const writtenQuestions = (parameters: Parameter[] | undefined) => (parameters ?? []).filter((p) => p.type !== "consent" && p.type !== "auto");
 
 const distinct = (values: (string | null | undefined)[]) => [...new Set(values.filter((v): v is string => Boolean(v)))].sort();
@@ -81,92 +83,223 @@ export function AnswersTile({ surveyId, questions: given, name, onClose, default
     }
   };
 
+  const columns: Column<SurveyResponseRecord>[] = useMemo(
+    () => [
+      {
+        key: "sno",
+        header: "S.No.",
+        align: "center",
+        className: "w-16 min-w-[64px] whitespace-nowrap",
+        cell: (r) => <span className="text-[13px] font-medium text-muted">{visible.indexOf(r) + 1}</span>,
+      },
+      {
+        key: "farmer_id",
+        header: "Farmer ID",
+        className: "min-w-[150px] whitespace-nowrap",
+        cell: (r) => <span className="font-semibold text-ink">{farmerOf(r)}</span>,
+      },
+      {
+        key: "collector",
+        header: "Collector DA",
+        className: "min-w-[140px] whitespace-nowrap",
+        cell: (r) => <span className="font-mono text-[13px] text-ink">{r.collector_da_id}</span>,
+      },
+      {
+        key: "woreda",
+        header: "Woreda",
+        className: "min-w-[120px] whitespace-nowrap",
+        cell: (r) => <span className="text-ink">{r.woreda ?? "—"}</span>,
+      },
+      {
+        key: "kebele",
+        header: "Kebele",
+        className: "min-w-[120px] whitespace-nowrap",
+        cell: (r) => <span className="text-ink">{r.kebele ?? "—"}</span>,
+      },
+      {
+        key: "consent",
+        header: "Consent",
+        className: "min-w-[110px] whitespace-nowrap",
+        cell: (r) =>
+          r.consent?.toLowerCase() === "granted" || r.consent?.toLowerCase() === "yes" ? (
+            <Pill tone="green" dot>Granted</Pill>
+          ) : r.consent?.toLowerCase() === "denied" || r.consent?.toLowerCase() === "no" ? (
+            <Pill tone="red" dot>Denied</Pill>
+          ) : (
+            <span className="text-[13px] capitalize text-ink">{r.consent ?? "—"}</span>
+          ),
+      },
+      {
+        key: "actions",
+        header: <span className="sr-only">Action</span>,
+        align: "right",
+        className: "min-w-[130px] whitespace-nowrap",
+        cell: (r) => (
+          <span className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setViewing(r)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-[12.5px] font-semibold text-brand-green hover:border-brand-green hover:bg-brand-wash/30 transition-all shadow-2xs whitespace-nowrap"
+            >
+              <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              <span>View answers</span>
+            </button>
+          </span>
+        ),
+      },
+    ],
+    [visible],
+  );
+
   return (
-    <Card className="overflow-hidden p-0 shadow-card">
-      <div className="flex flex-col gap-3 border-b border-line px-4 py-3.5 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h2 className="text-[17px] font-semibold text-ink">Answers{name ? ` · ${name}` : ""} <span className="font-normal text-ink-soft">({filtered ? `${visible.length} of ${total}` : total})</span></h2>
-          <p className="text-[12.5px] text-ink-soft">One row per response · open View answers to see what the farmer answered{total > rows.length ? ` · showing the first ${rows.length}` : ""}</p>
+    <Card className="overflow-hidden rounded-2xl border border-line bg-white p-0 shadow-card">
+      <div className="flex flex-col gap-3.5 border-b border-line px-4 py-3.5 sm:px-5 sm:py-4 lg:flex-row lg:items-center lg:justify-between bg-white">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h2 className="text-[16px] sm:text-[18px] font-bold text-ink">
+              Answers{name ? ` · ${name}` : ""}{" "}
+              <span className="font-normal text-ink-soft">
+                ({filtered ? `${visible.length} of ${total}` : total})
+              </span>
+            </h2>
+            {filtered && (
+              <span className="inline-flex items-center rounded-full bg-surface px-2 py-0.5 text-[11px] font-medium text-ink-soft border border-line-soft">
+                Filtered
+              </span>
+            )}
+          </div>
+          <p className="mt-0.5 text-[12px] sm:text-[12.5px] text-ink-soft">
+            One row per response · open View answers to see what the farmer answered
+            {total > rows.length ? ` · showing first ${rows.length}` : ""}
+          </p>
         </div>
+
         <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center w-full lg:w-auto">
           <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center">
-            <Select aria-label="Woreda" className="h-9 sm:h-10 w-full sm:w-44" value={woreda} onChange={(e) => { setWoreda(e.target.value); setKebele(""); }}>
+            <Select
+              aria-label="Woreda"
+              className="h-10 w-full sm:w-44 rounded-xl font-medium"
+              value={woreda}
+              onChange={(e) => {
+                setWoreda(e.target.value);
+                setKebele("");
+              }}
+            >
               <option value="">All Woredas</option>
-              {woredas.map((w) => <option key={w}>{w}</option>)}
+              {woredas.map((w) => (
+                <option key={w}>{w}</option>
+              ))}
             </Select>
-            <Select aria-label="Kebele" className="h-9 sm:h-10 w-full sm:w-44" value={kebele} onChange={(e) => setKebele(e.target.value)}>
+            <Select
+              aria-label="Kebele"
+              className="h-10 w-full sm:w-44 rounded-xl font-medium"
+              value={kebele}
+              onChange={(e) => setKebele(e.target.value)}
+            >
               <option value="">All Kebeles</option>
-              {kebeles.map((k) => <option key={k}>{k}</option>)}
+              {kebeles.map((k) => (
+                <option key={k}>{k}</option>
+              ))}
             </Select>
           </div>
-          <Button variant="outline" className="h-9 sm:h-10 w-full sm:w-auto whitespace-nowrap px-4 font-semibold" disabled={exporting} onClick={exportXlsx}>{exporting ? "Exporting…" : "Export Excel"}</Button>
-          {onClose && <button type="button" onClick={onClose} className="shrink-0 self-center px-1 text-[13px] font-semibold text-ink-soft hover:text-ink">Hide</button>}
+          <Button
+            variant="outline"
+            className="h-10 w-full sm:w-auto gap-2 whitespace-nowrap px-4 rounded-xl font-semibold border-line hover:border-brand-green hover:text-brand-green"
+            disabled={exporting}
+            onClick={exportXlsx}
+          >
+            <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
+            </svg>
+            <span>{exporting ? "Exporting…" : "Export Excel"}</span>
+          </Button>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="shrink-0 self-center px-2 py-1 text-[13px] font-semibold text-ink-soft hover:text-ink transition-colors"
+            >
+              Hide
+            </button>
+          )}
         </div>
       </div>
+
+      {error && <p className="border-b border-line-soft px-4 py-2.5 text-[13px] font-medium text-danger">{error}</p>}
       {exportError && <p className="border-b border-line-soft px-4 py-2.5 text-[13px] font-medium text-danger">{exportError}</p>}
-      {state === "loading" ? (
-        <p className="px-4 py-8 text-center text-[13.5px] text-ink-soft">Loading answers…</p>
-      ) : state === "error" ? (
-        <p className="px-4 py-8 text-center text-[13.5px] font-medium text-danger">{error}</p>
-      ) : rows.length === 0 ? (
-        <p className="px-4 py-8 text-center text-[13.5px] text-ink-soft">No answers yet. They appear here as DAs submit responses.</p>
-      ) : visible.length === 0 ? (
-        <p className="px-4 py-8 text-center text-[13.5px] text-ink-soft">No answers match this Woreda and Kebele.</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[700px] border-collapse text-left text-[13.5px]">
-            <thead>
-              <tr className="border-b border-line bg-surface text-[12px] font-semibold uppercase tracking-wide text-ink-soft">
-                <th scope="col" className="w-12 px-4 py-2.5">No.</th>
-                <th scope="col" className="px-3 py-2.5">Farmer ID</th>
-                <th scope="col" className="px-3 py-2.5">Collector DA</th>
-                <th scope="col" className="px-3 py-2.5">Woreda</th>
-                <th scope="col" className="px-3 py-2.5">Kebele</th>
-                <th scope="col" className="px-3 py-2.5">Consent</th>
-                <th scope="col" className="px-4 py-2.5 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((r, i) => (
-                <tr key={r.id} className="border-b border-line-soft align-top last:border-b-0">
-                  <td className="px-4 py-3 text-ink-soft">{i + 1}</td>
-                  <td className="px-3 py-3 font-medium text-ink">{farmerOf(r)}</td>
-                  <td className="px-3 py-3 text-ink">{r.collector_da_id}</td>
-                  <td className="px-3 py-3 text-ink">{r.woreda ?? "—"}</td>
-                  <td className="px-3 py-3 text-ink">{r.kebele ?? "—"}</td>
-                  <td className="px-3 py-3 capitalize text-ink">{r.consent ?? "—"}</td>
-                  <td className="px-4 py-3 text-right">
-                    <button type="button" onClick={() => setViewing(r)} className="whitespace-nowrap rounded-md border border-brand-green px-3 py-1.5 text-[12.5px] font-semibold text-brand-green transition-colors hover:bg-brand-wash">View answers</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+
+      <DataTable
+        itemLabel="responses"
+        columns={columns}
+        rows={visible}
+        rowKey={(r) => r.id}
+        minWidth="760px"
+        state={state}
+        onRetry={() => {
+          setState("loading");
+          setError(null);
+          listSurveyResponses(surveyId)
+            .then(({ items, total: t }) => {
+              setRows(items);
+              setTotal(t);
+              setState("ready");
+            })
+            .catch((err: unknown) => {
+              setError(describeSurveyError(err));
+              setState("error");
+            });
+        }}
+        emptyTitle={filtered ? "No answers match your filters" : "No answers yet"}
+        emptyHint={filtered ? "Clear Woreda/Kebele filters or try different ones." : "They appear here as DAs submit responses."}
+      />
 
       <Modal
         isOpen={Boolean(viewing)}
         onClose={() => setViewing(null)}
-        title="Answers"
+        title="Survey Response Answers"
         subtitle={viewing ? `Farmer ${farmerOf(viewing)} · collected by ${viewing.collector_da_id}${viewing.kebele ? ` · ${viewing.kebele}` : ""}` : undefined}
         size="lg"
-        bodyClassName="p-0"
-        footer={<Button variant="outline" className="px-5 font-semibold" onClick={() => setViewing(null)}>Close</Button>}
+        bodyClassName="p-0 max-h-[70vh] overflow-y-auto"
+        footer={<Button variant="outline" className="px-5 font-semibold rounded-xl" onClick={() => setViewing(null)}>Close</Button>}
       >
         {viewing && (
           <>
-            <p className="border-b border-line-soft px-5 py-3 text-[13px] text-ink-soft">
-              Consent: <span className="font-semibold capitalize text-ink">{viewing.consent ?? "—"}</span> · Status: <span className="font-semibold text-ink">{viewing.sync_state}</span>
-            </p>
+            <div className="flex flex-wrap items-center gap-3 border-b border-line-soft bg-surface/50 px-5 py-3 text-[13px] text-ink-soft">
+              <div>
+                Consent: <span className="font-semibold capitalize text-ink">{viewing.consent ?? "—"}</span>
+              </div>
+              <span className="text-muted">·</span>
+              <div>
+                Sync Status: <span className="font-semibold text-ink">{viewing.sync_state}</span>
+              </div>
+              {viewing.woreda && (
+                <>
+                  <span className="text-muted">·</span>
+                  <div>Woreda: <span className="font-semibold text-ink">{viewing.woreda}</span></div>
+                </>
+              )}
+            </div>
             {questions.length === 0 ? (
-              <p className="px-5 py-6 text-[13.5px] text-ink-soft">This template has no questions.</p>
+              <p className="px-5 py-8 text-center text-[13.5px] text-ink-soft">This template has no questions.</p>
             ) : (
-              <ol>
+              <ol className="divide-y divide-line-soft">
                 {questions.map((q, i) => (
-                  <li key={q.id} className="border-b border-line-soft px-5 py-3.5 last:border-b-0">
-                    <p className="text-[14px] font-semibold text-ink"><span className="mr-1.5 text-brand-green">Question {i + 1}:</span>{q.prompt}</p>
-                    <p className="mt-1 whitespace-pre-wrap text-[14px] text-ink"><span className="mr-1.5 text-ink-soft">Answer:</span>{answerText(viewing.answers[q.id])}</p>
+                  <li key={q.id} className="px-5 py-4">
+                    <div className="flex items-start gap-2">
+                      <span className="inline-flex items-center justify-center rounded-md bg-brand-wash px-2 py-0.5 text-[11.5px] font-bold text-brand-green border border-brand-green/20 shrink-0 mt-0.5">
+                        Q{i + 1}
+                      </span>
+                      <p className="text-[14px] font-semibold text-ink leading-snug">{q.prompt}</p>
+                    </div>
+                    <div className="mt-2.5 ml-8 rounded-xl bg-surface/70 p-3 border border-line-soft/80">
+                      <p className="text-[11.5px] font-medium text-ink-soft uppercase tracking-wider">Farmer&apos;s Answer</p>
+                      <p className="mt-1 whitespace-pre-wrap text-[13.5px] font-semibold text-ink">
+                        {answerText(viewing.answers[q.id])}
+                      </p>
+                    </div>
                   </li>
                 ))}
               </ol>

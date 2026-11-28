@@ -70,6 +70,10 @@ export const NAV_GROUPS: NavGroup[] = [
       { title: "My Teams", href: "/my-teams", roles: ["DA"], part: 1 },
       // The Supervisor's team is the agents registry of their Woreda, so it is named "My Teams" for them.
       { title: "Agents", href: "/agents", roles: OFFICERS, titleFor: { Supervisor: "My Teams" }, part: 1 },
+      // Org hierarchy (region → kebele tree, supervisors and teams) sits right under My Teams, scoped to the user's own
+      // area (see features/hierarchy/scope.ts). Only Executive and Admin see it; DA, Supervisor and the Communications
+      // Officer do not.
+      { title: "Hierarchy", href: "/hierarchy", roles: ["Executive", "Admin"], part: 1 },
       // Supervisor sees field operations here (visits + kebele assignment) instead of the registry-admin items
       { title: "Field Visits", href: "/visits", roles: ["Supervisor"], part: 1 },
       { title: "Assignments", href: "/assignments", roles: ["Supervisor"], part: 1 },
@@ -79,23 +83,16 @@ export const NAV_GROUPS: NavGroup[] = [
       // Internal Feedback (/feedback) is hidden from the sidebar; the page still opens by URL.
     ],
   },
-  {
-    title: "Leave",
-    items: [
-      // My Leave (/lifecycle/leave) and Team Leave (/team-leave) are Part 2: hidden from the sidebar; the pages still open by URL.
-      // The Admin runs leave for the whole programme instead of having a leave record of their own.
-      { title: "Leave Overview", href: "/leave-overview", roles: ["Admin"], part: 1 },
-      { title: "Leave Configure", href: "/leave-configure", roles: ["Admin"], part: 1 },
-      { title: "Government Calendar", href: "/government-calendar", roles: ["Admin"], part: 1 },
-    ],
-  },
+  // The Leave section (Leave Overview, Leave Configure, Government Calendar for the Admin; My Leave and Team Leave
+  // for the others) is hidden from the sidebar; the pages still open by URL.
   {
     title: "Communication",
     items: [
       { title: "Knowledge Base", href: "/knowledge", roles: ALL, part: 1 },
       { title: "Broadcast", href: "/broadcast", roles: ["DA", "Supervisor", "CommsOfficer", "Admin"], part: 1 },
-      // The Supervisor broadcasts to their Woreda from Broadcast instead of triaging Alerts.
-      { title: "Alerts", href: "/alerts", roles: ["CommsOfficer", "Admin"], part: 1 },
+      // The Supervisor broadcasts to their Woreda from Broadcast instead of triaging Alerts. The Communications Officer's
+      // rail is Dashboard, Knowledge Base and Broadcast only; /alerts still opens for them by URL.
+      { title: "Alerts", href: "/alerts", roles: ["Admin"], part: 1 },
       // Admin maintains the directory; DAs open it from My Teams.
       { title: "Advisors", href: "/advisors", roles: ["Admin"], part: 1 },
     ],
@@ -115,7 +112,7 @@ export const NAV_GROUPS: NavGroup[] = [
     title: "Administration",
     items: [
       { title: "Users & Roles", href: "/admin/users", roles: ["Admin"], part: "shared" },
-      { title: "Reports", href: "/admin/reports", roles: OFFICERS, part: "shared" },
+      // Reports (/admin/reports) is hidden from the sidebar for every role; the page still opens by URL.
       { title: "Settings", href: "/admin/settings", roles: ["Admin"], part: "shared" },
     ],
   },
@@ -142,6 +139,7 @@ export const PAGE_TITLES: { prefix: string; title: string }[] = [
   { prefix: "/agents/", title: "DA Profile" },
   { prefix: "/agents", title: "Agents" },
   { prefix: "/my-teams", title: "My Teams" },
+  { prefix: "/hierarchy", title: "Org Hierarchy" },
   { prefix: "/approvals", title: "Approvals" },
   { prefix: "/lifecycle/leave", title: "My Leave" },
   { prefix: "/team-leave", title: "Team Leave" },

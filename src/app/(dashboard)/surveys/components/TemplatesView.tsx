@@ -18,20 +18,49 @@ import {
   type SurveyTask,
   type SurveyType,
 } from "@/features/surveys";
+import { AreaPicker, areaName, loadAreaNames, type AreaSelection } from "@/features/geo";
 
 const Icon = ({ d, className = "h-6 w-6" }: { d: string; className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
 );
 
-function StatCard({ title, value, hint, accent, tile, icon }: { title: string; value: number; hint: string; accent: string; tile: string; icon: string }) {
+function StatCard({ title, value, hint, accentColor, tile, icon }: { title: string; value: number; hint: string; accentColor: string; tile: string; icon: string }) {
   return (
-    <div className={cn("flex items-start justify-between gap-3 rounded-xl border border-line border-l-4 bg-white px-4 py-3.5 shadow-card", accent)}>
-      <div className="min-w-0">
-        <p className="text-[14px] text-ink-soft">{title}</p>
-        <p className="mt-1 text-[28px] font-bold leading-none text-ink">{value}</p>
-        <p className="mt-2 truncate text-[12px] text-ink-soft">{hint}</p>
+    <div
+      className={cn(
+        "group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-line bg-white p-3.5 sm:p-4.5 cursor-default select-none",
+        "shadow-card transition-all duration-300 ease-out min-w-0",
+        "hover:-translate-y-1 hover:shadow-lg hover:border-slate-300/90"
+      )}
+    >
+      {/* Crisp vertical accent strip that expands on hover */}
+      <div
+        className={cn(
+          "absolute left-0 top-0 bottom-0 w-1.25 sm:w-1.5 transition-all duration-300 ease-out group-hover:w-2",
+          accentColor
+        )}
+      />
+      <div className="flex items-start justify-between gap-2 pl-1 min-w-0">
+        <div className="min-w-0 flex-1">
+          <p className="text-[11.5px] sm:text-[12.5px] font-bold text-ink-soft tracking-wider uppercase truncate">{title}</p>
+          <div className="mt-1 sm:mt-1.5 flex items-baseline transition-transform duration-300 ease-out group-hover:translate-x-0.5">
+            <span className="text-[22px] sm:text-[26px] md:text-[28px] font-bold leading-none text-ink tracking-tight">{value}</span>
+          </div>
+        </div>
+        <span
+          className={cn(
+            "flex h-9.5 w-9.5 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl",
+            "transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]",
+            "group-hover:-translate-y-1 group-hover:scale-[1.12] group-hover:shadow-sm",
+            tile
+          )}
+        >
+          <Icon d={icon} className="h-5 w-5 sm:h-5.5 sm:w-5.5" />
+        </span>
       </div>
-      <span className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-xl", tile)}><Icon d={icon} /></span>
+      <div className="mt-2.5 sm:mt-3 pt-2 border-t border-line-soft pl-1">
+        <p className="truncate text-[11px] sm:text-[12px] text-ink-soft">{hint}</p>
+      </div>
     </div>
   );
 }
@@ -48,11 +77,16 @@ export function TemplatesView({ reloadKey = 0, notice, onDismissNotice }: { relo
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<SurveyStatus | "">("");
   const [type, setType] = useState<SurveyType | "">("");
+  // Woreda filter from the area picker: a Supervisor's own Woreda (from /me) is fixed, others pick one or leave it empty.
+  const [woreda, setWoreda] = useState("");
+  const pickArea = useCallback((area: AreaSelection) => setWoreda(area.woreda?.code ?? ""), []);
 
   const load = useCallback(() => {
     setState("loading");
-    listSurveyTemplates({ q: query, status: status || undefined, type: type || undefined })
-      .then(({ items, total: t }) => {
+    listSurveyTemplates({ q: query, status: status || undefined, type: type || undefined, woreda: woreda || undefined })
+      .then(async ({ items, total: t }) => {
+        // Templates carry the Woreda code; its name is read from the Master Data before the rows show.
+        await loadAreaNames(items.map((i) => i.woreda));
         setRows(items);
         setTotal(t);
         setState("ready");
@@ -61,7 +95,7 @@ export function TemplatesView({ reloadKey = 0, notice, onDismissNotice }: { relo
         setError(describeSurveyError(err));
         setState("error");
       });
-  }, [query, status, type]);
+  }, [query, status, type, woreda]);
 
   // Debounce typing in the search box.
   useEffect(() => {
@@ -77,28 +111,49 @@ export function TemplatesView({ reloadKey = 0, notice, onDismissNotice }: { relo
       key: "sno",
       header: "S.No.",
       align: "center",
-      className: "w-16 min-w-[64px] whitespace-nowrap",
+      className: "w-14 min-w-[56px] whitespace-nowrap",
       cell: (t) => <span className="text-[13px] font-medium text-muted">{rows.indexOf(t) + 1}</span>,
     },
     {
-      key: "name", header: "Template", className: "min-w-[260px]", cell: (t) => (
+      key: "name", header: "Template", className: "min-w-[200px]", cell: (t) => (
         <span className="block">
           <span className="font-semibold text-ink">{t.name}</span>
-          <span className="mt-0.5 block text-[12.5px] text-ink-soft">Template {t.templateVersion}{t.woreda ? ` · ${t.woreda}` : ""}</span>
+          <span className="mt-0.5 block text-[12px] sm:text-[12.5px] text-ink-soft">Template {t.templateVersion}{t.woreda ? ` · ${areaName(t.woreda)}` : ""}</span>
         </span>
       ),
     },
-    { key: "type", header: "Type", cell: (t) => <span className="whitespace-nowrap">{t.type}</span> },
-    { key: "window", header: "Window", cell: (t) => <span className="whitespace-nowrap text-[13px]">{t.window.open} → {t.window.close}</span> },
-    { key: "assign", header: "Assigned to", cell: (t) => <span className="whitespace-nowrap">{t.assignmentMode === "Selected" ? `${t.assignedDaIds?.length ?? 0} selected DA${t.assignedDaIds?.length === 1 ? "" : "s"}` : "Whole Woreda"}</span> },
-    { key: "langs", header: "Languages", cell: (t) => <span className="text-[13px] text-ink-soft">{t.languages.join(" · ")}</span> },
-    { key: "resp", header: "Responses", cell: (t) => <span className="font-medium text-ink">{t.collected}{t.queued > 0 ? <span className="ml-1 text-[12px] font-normal text-amber-700">+{t.queued} queued</span> : null}</span> },
-    { key: "status", header: "Status", cell: (t) => <Pill tone={SURVEY_STATUS_TONE[t.status]} dot>{t.status}</Pill> },
+    { key: "type", header: "Type", className: "whitespace-nowrap", cell: (t) => <span className="whitespace-nowrap rounded-md bg-surface px-2 py-0.5 text-[12px] font-medium text-ink-soft border border-line-soft">{t.type}</span> },
+    { key: "window", header: "Window", className: "whitespace-nowrap", cell: (t) => <span className="whitespace-nowrap text-[12.5px] font-medium text-ink">{t.window.open} → {t.window.close}</span> },
+    { key: "assign", header: "Assigned to", className: "whitespace-nowrap", cell: (t) => <span className="whitespace-nowrap text-[13px]">{t.assignmentMode === "Selected" ? `${t.assignedUsers?.length ?? 0} selected DA${t.assignedUsers?.length === 1 ? "" : "s"}` : "Whole Woreda"}</span> },
+    { key: "langs", header: "Languages", className: "whitespace-nowrap", cell: (t) => <span className="text-[12.5px] text-ink-soft">{t.languages.join(" · ")}</span> },
+    { key: "resp", header: "Responses", align: "center", className: "whitespace-nowrap", cell: (t) => <span className="font-medium text-ink">{t.collected}{t.queued > 0 ? <span className="ml-1 text-[12px] font-normal text-amber-700">+{t.queued} queued</span> : null}</span> },
+    { key: "status", header: "Status", className: "whitespace-nowrap", cell: (t) => <Pill tone={SURVEY_STATUS_TONE[t.status]} dot>{t.status}</Pill> },
     {
-      key: "actions", header: <span className="sr-only">Actions</span>, align: "right", cell: (t) => (
-        <span className="flex justify-end gap-4">
-          <button type="button" onClick={() => router.push(`/surveys/templates/${encodeURIComponent(t.id)}`)} className="text-[13.5px] font-semibold text-brand-green hover:underline">View</button>
-          <button type="button" onClick={() => router.push(`/surveys?view=results&survey=${encodeURIComponent(t.id)}`)} className="text-[13.5px] font-semibold text-ink hover:underline">Results</button>
+      key: "actions", header: <span className="sr-only">Actions</span>, align: "right", className: "whitespace-nowrap", cell: (t) => (
+        <span className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+          <button
+            type="button"
+            onClick={() => router.push(`/surveys/templates/${encodeURIComponent(t.id)}`)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 py-1 text-[12.5px] font-semibold text-brand-green hover:border-brand-green hover:bg-brand-wash/30 transition-all shadow-2xs"
+          >
+            <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            <span>View</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => router.push(`/surveys?view=results&survey=${encodeURIComponent(t.id)}`)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 py-1 text-[12.5px] font-semibold text-ink hover:border-brand-green hover:text-brand-green hover:bg-brand-wash/30 transition-all shadow-2xs"
+          >
+            <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 20V10" />
+              <path d="M12 20V4" />
+              <path d="M6 20v-6" />
+            </svg>
+            <span>Results</span>
+          </button>
         </span>
       ),
     },
@@ -106,34 +161,36 @@ export function TemplatesView({ reloadKey = 0, notice, onDismissNotice }: { relo
 
   return (
     <>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Templates" value={total} hint="Published in your scope" accent="border-l-violet-500" tile="bg-violet-50 text-violet-600" icon="M9 13h6M9 17h6M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5zM14 3v5h5" />
-        <StatCard title="Open" value={count("Open")} hint="Collecting responses" accent="border-l-brand-green" tile="bg-brand-mint text-brand-green" icon="M22 11.1V12a10 10 0 11-5.9-9.1M22 4L12 14l-3-3" />
-        <StatCard title="Closing soon" value={count("Closing soon")} hint="Window ends within 7 days" accent="border-l-amber-500" tile="bg-amber-50 text-amber-600" icon="M12 22a10 10 0 100-20 10 10 0 000 20zM12 6v6l4 2" />
-        <StatCard title="Responses" value={responses} hint={`${count("Closed")} closed template${count("Closed") === 1 ? "" : "s"}`} accent="border-l-blue-500" tile="bg-blue-50 text-blue-600" icon="M6 20V12M12 20V6M18 20v-5" />
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5 xl:grid-cols-4 min-w-0 max-w-full">
+        <StatCard title="Total Templates" value={total} hint="Published in your scope" accentColor="bg-violet-500" tile="bg-violet-50 text-violet-600" icon="M9 13h6M9 17h6M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5zM14 3v5h5" />
+        <StatCard title="Open for Responses" value={count("Open")} hint="Currently collecting answers" accentColor="bg-brand-green" tile="bg-brand-mint text-brand-green" icon="M22 11.1V12a10 10 0 11-5.9-9.1M22 4L12 14l-3-3" />
+        <StatCard title="Closing Soon" value={count("Closing soon")} hint="Window ends within 7 days" accentColor="bg-amber-500" tile="bg-amber-50 text-amber-600" icon="M12 22a10 10 0 100-20 10 10 0 000 20zM12 6v6l4 2" />
+        <StatCard title="Collected Responses" value={responses} hint={`${count("Closed")} closed template${count("Closed") === 1 ? "" : "s"}`} accentColor="bg-blue-500" tile="bg-blue-50 text-blue-600" icon="M6 20V12M12 20V6M18 20v-5" />
       </div>
 
-      <p className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-[13px] text-blue-700">
-        <Icon d="M12 22a10 10 0 100-20 10 10 0 000 20zM12 16v-4M12 8h.01" className="h-4 w-4 shrink-0" />
-        Publishing a template opens it for the DAs right away. Changing questions after responses are in creates a new template version; earlier responses stay on their version.
-      </p>
+      <div className="flex items-start sm:items-center gap-3 rounded-xl border border-blue-200/90 bg-blue-50/80 px-4 py-3 text-[12.5px] sm:text-[13px] text-blue-900 leading-relaxed shadow-2xs min-w-0 max-w-full">
+        <Icon d="M12 22a10 10 0 100-20 10 10 0 000 20zM12 16v-4M12 8h.01" className="h-5 w-5 shrink-0 text-blue-600 mt-0.5 sm:mt-0" />
+        <p>
+          Publishing a template opens it for the DAs right away. Changing questions after responses are in creates a new template version; earlier responses stay on their version.
+        </p>
+      </div>
 
       {notice && <Banner tone="success" onDismiss={onDismissNotice}>{notice}</Banner>}
       {state === "error" && error && <Banner tone="error">{error}</Banner>}
 
-      <Card className="overflow-hidden p-0 shadow-card">
-        <div className="flex flex-col gap-2.5 sm:gap-3 p-3.5 sm:p-4 lg:flex-row lg:items-center lg:justify-between border-b border-line-soft">
-          <div>
-            <h2 className="text-[15px] sm:text-[17px] font-semibold text-ink">Survey Templates</h2>
+      <Card className="overflow-hidden rounded-2xl border border-line bg-white p-0 shadow-card min-w-0 max-w-full">
+        <div className="flex flex-col gap-3 p-3.5 sm:p-4 lg:flex-row lg:items-center lg:justify-between border-b border-line-soft bg-white min-w-0">
+          <div className="min-w-0 shrink-0">
+            <h2 className="text-[16px] sm:text-[18px] font-bold text-ink tracking-tight">Survey Templates</h2>
             <p className="mt-0.5 text-[12px] sm:text-[12.5px] text-ink-soft">Published templates · version · collection window</p>
           </div>
-          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center w-full lg:w-auto">
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center w-full lg:w-auto min-w-0">
             <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center">
-              <Select aria-label="Status" className="h-9 sm:h-10 w-full sm:w-36" value={status} onChange={(e) => setStatus(e.target.value as SurveyStatus | "")}>
+              <Select aria-label="Status" className="h-10 w-full sm:w-32 lg:w-36 rounded-xl font-medium" value={status} onChange={(e) => setStatus(e.target.value as SurveyStatus | "")}>
                 <option value="">All status</option>
                 {STATUSES.map((s) => <option key={s}>{s}</option>)}
               </Select>
-              <Select aria-label="Survey type" className="h-9 sm:h-10 w-full sm:w-44" value={type} onChange={(e) => setType(e.target.value as SurveyType | "")}>
+              <Select aria-label="Survey type" className="h-10 w-full sm:w-36 lg:w-40 rounded-xl font-medium" value={type} onChange={(e) => setType(e.target.value as SurveyType | "")}>
                 <option value="">All types</option>
                 {SURVEY_TYPES.map((s) => <option key={s}>{s}</option>)}
               </Select>
@@ -142,13 +199,23 @@ export function TemplatesView({ reloadKey = 0, notice, onDismissNotice }: { relo
               value={query}
               onChange={setQuery}
               placeholder="Search template name…"
-              className="w-full sm:w-60 lg:w-[240px] [&_input]:w-full"
+              className="w-full sm:flex-1 sm:w-auto lg:flex-initial lg:w-56 xl:w-64 [&_input]:w-full [&_input]:h-10 [&_input]:rounded-xl"
             />
           </div>
         </div>
-        <DataTable itemLabel="templates" columns={columns} rows={rows} rowKey={(t) => t.id} minWidth="1180px" state={state} onRetry={load}
-          emptyTitle={query || status || type ? "No templates match your filters" : "No survey templates yet"}
-          emptyHint={query || status || type ? "Clear a filter or try a different name." : "Use New Template to publish the first survey."} />
+        <div className="border-b border-line-soft bg-surface/25 p-3.5 sm:p-4 min-w-0">
+          <AreaPicker
+            depth="woreda"
+            idPrefix="tpl-filter"
+            onChange={pickArea}
+            gridClassName="grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4"
+            controlClassName="h-10 rounded-xl font-medium"
+            fieldClassName="[&>label]:text-[12.5px] [&>label]:font-semibold [&>label]:text-ink-soft [&>label]:mb-1.5"
+          />
+        </div>
+        <DataTable itemLabel="templates" columns={columns} rows={rows} rowKey={(t) => t.id} minWidth="880px" state={state} onRetry={load}
+          emptyTitle={query || status || type || woreda ? "No templates match your filters" : "No survey templates yet"}
+          emptyHint={query || status || type || woreda ? "Clear a filter or try a different name." : "Use New Template to publish the first survey."} />
       </Card>
     </>
   );

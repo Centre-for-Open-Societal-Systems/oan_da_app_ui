@@ -221,10 +221,10 @@ export function CustomDateAttendance({
   }, [currentView, filteredDailyRecords, filteredSummaryRecords, customRange, targetedAgents]);
 
   return (
-    <Card className="overflow-hidden p-0 shadow-card border border-slate-200 bg-white animate-fade-in">
-      {/* Top Table Tabs: Team Summary & Daily Logs (matching user reference image) */}
+    <Card className="overflow-hidden p-0 shadow-card border border-line bg-white animate-fade-in rounded-2xl">
+      {/* Top Table Tabs: Team Summary & Daily Logs */}
       {!isSingleDay && (
-        <div className="flex items-stretch border-b border-slate-200 bg-white">
+        <div className="flex items-stretch border-b border-line-soft bg-slate-50/50">
           <button
             type="button"
             onClick={() => {
@@ -232,13 +232,19 @@ export function CustomDateAttendance({
               setPage(1);
             }}
             className={cn(
-              "px-5 py-2.5 text-[13.5px] border-slate-200 transition-all cursor-pointer font-semibold",
+              "px-4 sm:px-6 py-2.5 sm:py-3 text-[13px] sm:text-[13.5px] transition-all cursor-pointer font-semibold select-none flex items-center gap-2",
               currentView === "summary"
-                ? "bg-[#ecfdf3] text-brand-green border-b-2 border-brand-green -mb-px font-bold"
-                : "bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 border-b-2 border-transparent"
+                ? "bg-white text-brand-green border-b-2 border-brand-green -mb-px font-bold shadow-2xs"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/60 border-b-2 border-transparent"
             )}
           >
-            {isSingleAgent ? "Agent Summary" : "Team Summary"}
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            <span>{isSingleAgent ? "Agent Summary" : "Team Summary"}</span>
           </button>
 
           <button
@@ -248,32 +254,38 @@ export function CustomDateAttendance({
               setPage(1);
             }}
             className={cn(
-              "px-5 py-2.5 text-[13.5px] border-slate-200 transition-all cursor-pointer font-semibold",
+              "px-4 sm:px-6 py-2.5 sm:py-3 text-[13px] sm:text-[13.5px] transition-all cursor-pointer font-semibold select-none flex items-center gap-2",
               currentView === "daily"
-                ? "bg-[#ecfdf3] text-brand-green border-b-2 border-brand-green -mb-px font-bold"
-                : "bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 border-b-2 border-transparent"
+                ? "bg-white text-brand-green border-b-2 border-brand-green -mb-px font-bold shadow-2xs"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/60 border-b-2 border-transparent"
             )}
           >
-            Daily Logs
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            <span>Daily Logs</span>
           </button>
-          <div className="flex-1 bg-white" />
+          <div className="flex-1" />
         </div>
       )}
 
       {/* Header Row: Title, Subtitle & Summary Pills on Left; Search Box Cleanly Aligned on Right */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 px-5 py-4 border-b border-line-soft bg-white">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3.5 sm:gap-4 px-4 sm:px-5 py-4 border-b border-line-soft bg-white">
         <div className="flex flex-col gap-1 min-w-0">
-          <h2 className="text-[16px] font-bold text-slate-900 leading-snug">
+          <h2 className="text-[15px] sm:text-[16px] font-bold text-slate-900 leading-snug">
             Custom date attendance
           </h2>
-          <p className="text-[12.5px] text-slate-500">
+          <p className="text-[12px] sm:text-[12.5px] text-slate-500">
             {isSingleAgent
               ? `Daily attendance logs for ${targetedAgents[0]?.name || "agent"} across ${customRange?.label || "selected period"}.`
               : "View attendance records for a specific date or period."}
           </p>
 
           {/* Inline Period & Summary Pills */}
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-[12.5px]">
+          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[12px] sm:text-[12.5px]">
             <span className="font-semibold text-slate-700">Period:</span>
             <span className="inline-flex items-center rounded-md bg-white px-2.5 py-0.5 font-medium text-slate-800 border border-slate-200 shadow-2xs">
               {customRange?.label || `09 Nov – ${getTodayIso()}`}
@@ -287,34 +299,37 @@ export function CustomDateAttendance({
 
             <span className="text-slate-300">|</span>
 
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11.5px] font-semibold text-brand-green">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] sm:text-[11.5px] font-semibold text-brand-green">
               <span className="h-1.5 w-1.5 rounded-full bg-brand-green" />
               {currentView === "daily" ? `${stats.checkedIn} Checked In` : `${stats.checkedIn} Present`}
             </span>
 
             {stats.notCheckedIn > 0 && (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-0.5 text-[11.5px] font-semibold text-danger">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-0.5 text-[11px] sm:text-[11.5px] font-semibold text-danger">
                 <span className="h-1.5 w-1.5 rounded-full bg-danger" />
                 {stats.notCheckedIn} Not Checked In
               </span>
             )}
 
-            <span className="ml-1 font-semibold text-slate-700">
-              Attendance: <span className="text-brand-green font-bold">{stats.rate}%</span>
+            <span className="text-slate-300">|</span>
+
+            <span className="font-bold text-brand-green">
+              Attendance: {stats.rate}%
             </span>
           </div>
         </div>
 
-        {/* Search Box cleanly aligned on the right without overflow/clipping */}
-        <SearchInput
-          value={query}
-          onChange={(val) => {
-            setQuery(val);
-            setPage(1);
-          }}
-          placeholder={isSingleAgent ? "Search date or status" : "Search agent or kebele"}
-          className="w-full sm:w-72 shrink-0"
-        />
+        <div className="w-full lg:w-72 shrink-0">
+          <SearchInput
+            value={query}
+            onChange={(val) => {
+              setQuery(val);
+              setPage(1);
+            }}
+            placeholder={isSingleAgent ? "Search date or status" : "Search agent or kebele"}
+            className="w-full"
+          />
+        </div>
       </div>
 
       {/* Table Content */}

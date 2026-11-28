@@ -20,6 +20,7 @@ import { formatDate } from "../lifecycle/components/lifecycle";
 import { ICONS } from "../lifecycle/components/shared";
 import { PageIntro, SELECT_CLASS, SummaryTile, has, optionsOf } from "../leave-admin/shared";
 import { todayIso } from "@/lib/utils";
+import { useScopeAreaNames } from "@/features/geo";
 
 interface CalendarRow {
   id: string;
@@ -51,8 +52,6 @@ const layerTone = (layer: string) => LAYER_TONE[layer] ?? "blue";
 
 const LEAVE_YEARS = ["Leave year 2026", "Leave year 2027"];
 const FEDERAL = "Federal (base)";
-const REGIONS = ["Oromia", FEDERAL, "Amhara", "Sidama", "South Ethiopia", "Tigray"];
-const WOREDA = "Bako Tibe woreda";
 
 const NAME_OPTIONS = ["Irreecha", "Fichee-Chambalaalla", "Eid al-Adha", "Mawlid", "Fasika", "Harvest campaign", "Staff day"];
 const LAYER_OPTIONS = ["Regional holiday", "Local closure", "Block period"];
@@ -65,16 +64,16 @@ const PASS_DOWN = [
 
 const EMPTY_FILTERS = { layer: new Set<string>() };
 
-function AddDateModal({ region, onClose, onAdd }: { region: string; onClose: () => void; onAdd: (row: CalendarRow) => void }) {
+function AddDateModal({ region, regions, woredas, onClose, onAdd }: { region: string; regions: string[]; woredas: string[]; onClose: () => void; onAdd: (row: CalendarRow) => void }) {
   const [name, setName] = useState("");
   const [dateMode, setDateMode] = useState("each-year");
   const [date, setDate] = useState(() => todayIso());
   const [layer, setLayer] = useState(LAYER_OPTIONS[0]);
-  const [scope, setScope] = useState(region === FEDERAL ? REGIONS[0] : region);
+  const [scope, setScope] = useState(region === FEDERAL ? "" : region);
   const [rule, setRule] = useState("move");
 
   const isLocal = layer === "Local closure";
-  const scopes = isLocal ? [WOREDA] : REGIONS.filter((r) => r !== FEDERAL);
+  const scopes = isLocal ? woredas : regions.filter((r) => r !== FEDERAL);
   const scopeValue = scopes.includes(scope) ? scope : scopes[0];
   const valid = name !== "" && (dateMode === "each-year" || date !== "");
 
@@ -140,7 +139,10 @@ function AddDateModal({ region, onClose, onAdd }: { region: string; onClose: () 
 
 export function GovernmentCalendar() {
   const [year, setYear] = useState(LEAVE_YEARS[0]);
-  const [region, setRegion] = useState(REGIONS[0]);
+  // The Federal base, then every Region from the geo Master Data; local closures pick one of the user's Woredas.
+  const regions = [FEDERAL, ...useScopeAreaNames("region", [])];
+  const woredas = useScopeAreaNames("woreda", []);
+  const [region, setRegion] = useState(FEDERAL);
   const [rows, setRows] = useState(ROWS);
   const [isAdding, setIsAdding] = useState(false);
   const [added, setAdded] = useState("");
@@ -178,7 +180,7 @@ export function GovernmentCalendar() {
           {LEAVE_YEARS.map((y) => <option key={y}>{y}</option>)}
         </Select>
         <Select value={region} onChange={(e) => { setRegion(e.target.value); setFilters(EMPTY_FILTERS); }} className={SELECT_CLASS}>
-          {REGIONS.map((r) => <option key={r}>{r}</option>)}
+          {regions.map((r) => <option key={r}>{r}</option>)}
         </Select>
         <Button variant="brand" className="h-10" onClick={() => setIsAdding(true)}>Add date</Button>
       </PageIntro>
@@ -221,6 +223,8 @@ export function GovernmentCalendar() {
 
       {isAdding && (
         <AddDateModal
+          regions={regions}
+          woredas={woredas}
           region={region}
           onClose={() => setIsAdding(false)}
           onAdd={(row) => {

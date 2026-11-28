@@ -50,7 +50,7 @@ export async function listSurveyTemplates({ limit = 200, start = 0, ...filters }
   return page(await authRequest<ListResponse<SurveyTask>>(`${BASE}/templates${query({ ...filters, limit, start })}`));
 }
 
-/** GET /surveys/templates/{id}: full template with parameters and assignedDaIds. */
+/** GET /surveys/templates/{id}: full template with parameters and assignedUsers. */
 export async function getSurveyTemplate(id: string): Promise<SurveyTask> {
   return (await authRequest<{ data: SurveyTask }>(`${BASE}/templates/${encodeURIComponent(id)}`)).data;
 }
@@ -65,7 +65,7 @@ export interface TemplateQuestionBody {
   translations?: Record<string, string>;
 }
 
-/** POST /surveys/templates body. Consent, Farmer ID and Kebele (p1–p3) are prepended by the server. */
+/** POST /surveys/templates body. Only the questions: consent, Farmer ID and Kebele are taken by the capture form. */
 export interface TemplateBody {
   name: string;
   type: SurveyType;
@@ -78,8 +78,8 @@ export interface TemplateBody {
   /** Woreda code. Admin must send it; a Supervisor may leave it out when they have exactly one Woreda. */
   woreda?: string;
   assignmentMode?: "Woreda" | "Selected";
-  /** Required when assignmentMode is Selected; every DA must be in the Woreda. */
-  assignedDaIds?: string[];
+  /** Required when assignmentMode is Selected: the DAs' portal User ids (emails), each a DA of the Woreda. */
+  assignedUsers?: string[];
   /** Same id on a retry returns the template already created instead of a second one. */
   client_op_id?: string;
 }
@@ -100,7 +100,7 @@ export interface TemplatePatch {
   /** With collected == 0 the template is edited in place; otherwise the server creates a new template version. */
   questions?: TemplateQuestionBody[];
   assignmentMode?: "Woreda" | "Selected";
-  assignedDaIds?: string[];
+  assignedUsers?: string[];
 }
 
 /** PATCH /surveys/templates/{id}. Returns the id saved to: the same template, or a new version when questions changed after responses. */

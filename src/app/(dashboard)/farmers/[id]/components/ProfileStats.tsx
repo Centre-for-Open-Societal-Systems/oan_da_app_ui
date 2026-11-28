@@ -26,7 +26,8 @@ export function ProfileStats({ farmer, fromApi = false, known = { plots: true, v
     },
     {
       label: "Total land",
-      value: `${totalLandHa.toFixed(1)} ha`,
+      // Up to two decimals, as the Holdings tab shows each plot (3.75, not 3.8; 4 not 4.00).
+      value: `${Number(totalLandHa.toFixed(2))} ha`,
       accent: "border-l-blue-600",
       tile: "bg-info-tint text-blue-600",
       icon: (

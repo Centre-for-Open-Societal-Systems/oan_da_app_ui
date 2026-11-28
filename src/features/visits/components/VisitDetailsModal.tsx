@@ -5,7 +5,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import { getFarmer } from "@/features/farmers";
-import { canAddEvidence, fetchVisit, formatVisitTime, type ApiVisitDetail } from "../api";
+import { canAddEvidence, fetchVisit, formatVisitTime, toVisitRecord, visitStatusLabel, type ApiVisitDetail } from "../api";
 import { VISIT_TIMELINE } from "../data";
 import type { VisitRecord, VisitTimelineEntry } from "../types";
 import { AdvisoryQaList } from "./AdvisoryQaList";
@@ -17,26 +17,31 @@ interface VisitDetailsModalProps {
   visit: VisitRecord | null;
   onClose: () => void;
   onReschedule: (visit: VisitRecord) => void;
+  /** Whether Reschedule is offered (the visit is still open and the caller may act on it). */
+  canReschedule?: boolean;
 }
 
-export function VisitDetailsModal({ visit, onClose, onReschedule }: VisitDetailsModalProps) {
+export function VisitDetailsModal({ visit, ...rest }: VisitDetailsModalProps) {
   if (!visit) return null;
-  return <VisitDetails visit={visit} onClose={onClose} onReschedule={onReschedule} />;
+  return <VisitDetails visit={visit} {...rest} />;
 }
 
 const toTimeline = (detail: ApiVisitDetail): VisitTimelineEntry[] =>
   detail.timeline.map((e) => ({ label: e.label, by: e.by ?? undefined, when: formatVisitTime(e.when), done: e.done }));
 
-function VisitDetails({ visit, onClose, onReschedule }: VisitDetailsModalProps & { visit: VisitRecord }) {
-  const farmer = getFarmer(visit.farmerId);
+function VisitDetails({ visit: row, onClose, onReschedule, canReschedule = true }: VisitDetailsModalProps & { visit: VisitRecord }) {
+  const farmer = getFarmer(row.farmerId);
   // Backend visits carry a physical status; their timeline and stored evidence come from GET /visits/{id}.
-  const isApiVisit = visit.physicalStatus !== undefined;
+  const isApiVisit = row.physicalStatus !== undefined;
   const [detail, setDetail] = useState<ApiVisitDetail | null>(null);
+  // The fresh copy from GET /visits/{id} once read (the row may be older); the row's avatar / email are kept.
+  const visit: VisitRecord = detail ? { ...toVisitRecord(detail), farmerAvatar: row.farmerAvatar, farmerEmail: row.farmerEmail } : row;
+  const status = visitStatusLabel(visit);
 
   useEffect(() => {
     if (!isApiVisit) return;
     let current = true;
-    fetchVisit(visit.id)
+    fetchVisit(row.id)
       .then((d) => current && setDetail(d))
       .catch(() => {
         // The table row is enough to show the modal; the timeline stays empty.
@@ -44,17 +49,24 @@ function VisitDetails({ visit, onClose, onReschedule }: VisitDetailsModalProps &
     return () => {
       current = false;
     };
-  }, [isApiVisit, visit.id]);
+  }, [isApiVisit, row.id]);
 
   const timeline = isApiVisit ? (detail ? toTimeline(detail) : []) : VISIT_TIMELINE;
+  const hasLocation = detail?.location_lat != null && detail?.location_lng != null;
 
+  // Rows without a value (older visits, or before GET /visits/{id} answers) are left out.
   const info: { label: string; value: string; highlight?: boolean; small?: boolean }[] = [
     { label: "Agent", value: visit.agent },
+    { label: "Farmer ID", value: visit.farmerId, small: true },
+    ...(visit.visitType ? [{ label: "Visit type", value: visit.visitType }] : []),
     { label: "Purpose", value: visit.purpose },
     { label: "Date & time", value: isApiVisit ? `${visit.date}, ${visit.time}` : `Today - ${visit.time}`, highlight: true },
-    { label: "Plot reference", value: visit.plotRef, small: true },
-    { label: "Kebele", value: visit.kebele, small: true },
     { label: "Estimated duration", value: `${visit.durationMin} min`, highlight: true },
+    ...(detail?.priority ? [{ label: "Priority", value: detail.priority_reason ? `${detail.priority} · ${detail.priority_reason}` : detail.priority }] : []),
+    { label: "Plot reference", value: visit.plotRef, small: true },
+    ...(hasLocation ? [{ label: "Location (lat, lng)", value: `${detail!.location_lat}, ${detail!.location_lng}`, small: true }] : []),
+    { label: "Kebele", value: visit.kebele, small: true },
+    ...(visit.assignedBy ? [{ label: "Assigned by", value: visit.assignedBy, small: true }] : []),
   ];
 
   return (
@@ -62,16 +74,18 @@ function VisitDetails({ visit, onClose, onReschedule }: VisitDetailsModalProps &
       isOpen
       onClose={onClose}
       title="Visit Details"
-      titleAddon={<VisitStatusPill status={visit.status} className="min-w-0" />}
+      titleAddon={<VisitStatusPill status={status} className="min-w-0" />}
       size="xl"
       footer={
         <>
           <Button type="button" variant="outline" onClick={onClose}>
-            Cancel
+            Close
           </Button>
-          <Button type="button" variant="brand" onClick={() => onReschedule(visit)}>
-            Reschedule
-          </Button>
+          {canReschedule && (
+            <Button type="button" variant="brand" onClick={() => onReschedule(visit)}>
+              Reschedule
+            </Button>
+          )}
         </>
       }
     >

@@ -7,15 +7,6 @@ export type { FilterOption };
 export const farmerActivity = (status: FarmerStatus): FarmerActivity => (status === "Verified" ? "Active" : "Inactive");
 
 // Option lists (with registry-wide counts) for the column filter dropdowns and the Advanced Filters panel.
-export const KEBELE_OPTIONS: FilterOption[] = [
-  { value: "Bako Tibe 01", label: "Bako Tibe 01", count: 482 },
-  { value: "Bako Tibe 02", label: "Bako Tibe 02", count: 319 },
-  { value: "Dendi 03", label: "Dendi 03", count: 206 },
-  { value: "Gedo 01", label: "Gedo 01", count: 116 },
-  { value: "Adea 04", label: "Adea 04", count: 100 },
-  { value: "Lume 02", label: "Lume 02", count: 61 },
-];
-
 export const CROP_OPTIONS: FilterOption[] = [
   { value: "Teff", label: "Teff", count: 482 },
   { value: "Maize", label: "Maize", count: 319 },
@@ -49,7 +40,6 @@ export const EDUCATION_OPTIONS: FilterOption[] = [
 
 // Fields shown in the Advanced Filters drawer on the My Farmers page.
 export const FARMER_FILTER_FIELDS: FilterFieldConfig[] = [
-  { key: "kebele", label: "Kebele", allLabel: "All kebeles", placeholder: "All", options: KEBELE_OPTIONS },
   { key: "crop", label: "Crop", allLabel: "All crops", placeholder: "All", options: CROP_OPTIONS },
   { key: "livestock", label: "Livestock", allLabel: "All livestock", placeholder: "All", options: LIVESTOCK_OPTIONS },
   { key: "status", label: "Status", allLabel: "All Status", placeholder: "All Status", options: STATUS_OPTIONS },

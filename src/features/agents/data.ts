@@ -14,12 +14,6 @@ import type {
 } from "./types";
 
 export const WOREDAS = ["Bako Tibe", "Ambo", "Dendi", "Cheliya"];
-export const KEBELES: Record<string, string[]> = {
-  "Bako Tibe": ["Bako 01", "Bako 02", "Dambi Gobu", "Koye Feche", "Amarti Gibe"],
-  Ambo: ["Ambo 01", "Awaro", "Gosu Kora"],
-  Dendi: ["Ginchi", "Olonkomi", "Chitu"],
-  Cheliya: ["Gedo", "Ijaji", "Tulu Dimtu"],
-};
 
 export const AGENTS: Agent[] = [
   { daId: "DA-OR-000341", fullName: "Tadesse Alemu", faydaId: "3512 4498 7712", faydaStatus: "Verified", activeStatus: "Active", educationTier: "Diploma", kebele: "Bako 01", woreda: "Bako Tibe", region: "Oromia", farmerCount: 248, approvalStatus: "Published", moaPublication: "Published", phone: "+251 91 234 5678", specialisation: "Crop production", joinedAt: "12 Mar 2019", updatedAt: "14 Sep 2026, 09:12", source: "MoA sync" },

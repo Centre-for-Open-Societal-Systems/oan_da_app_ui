@@ -7,17 +7,40 @@ import { DatePicker } from "@/components/ui/DatePicker";
 import { TimePicker } from "@/components/ui/TimePicker";
 import { todayIso } from "@/lib/utils";
 import type { Farmer } from "../types";
-import { DURATIONS, type VisitPreset } from "./planVisit";
+import { Checkbox } from "@/components/ui/Checkbox";
+import { DURATIONS, PRIORITY_LEVELS, type PlotLocation, type PriorityLevel, type VisitPreset } from "./planVisit";
+import { PlotLocationFields } from "./PlotLocationFields";
 
 interface VisitDetailsFieldsProps {
   selected: Farmer[];
   preset: VisitPreset | undefined;
   isSchedule: boolean;
+  /** Each farmer's plot reference and latitude / longitude, by farmer id. */
+  locations: Record<string, PlotLocation>;
+  onLocationChange: (farmer: Farmer, patch: Partial<PlotLocation>) => void;
+  priority: PriorityLevel;
+  onPriorityChange: (priority: PriorityLevel) => void;
+  priorityReason: string;
+  onPriorityReasonChange: (reason: string) => void;
+  notifySms: boolean;
+  onNotifySmsChange: (notify: boolean) => void;
 }
 
-// Purpose, date/time and location (uncontrolled inputs) plus the priority / offline notice. Priority is not asked: a
-// Priority-list preset sends its own level, every other visit the backend's default (Medium).
-export function VisitDetailsFields({ selected, preset, isSchedule }: VisitDetailsFieldsProps) {
+// Purpose, date/time and location (uncontrolled inputs), priority and its reason, the SMS choice and the offline notice.
+// A Priority-list preset fills in the priority and reason; the DA can change both.
+export function VisitDetailsFields({
+  selected,
+  preset,
+  isSchedule,
+  locations,
+  onLocationChange,
+  priority,
+  onPriorityChange,
+  priorityReason,
+  onPriorityReasonChange,
+  notifySms,
+  onNotifySmsChange,
+}: VisitDetailsFieldsProps) {
   const today = todayIso();
   const [date, setDate] = useState(today);
   const [time, setTime] = useState("09:00");
@@ -59,25 +82,28 @@ export function VisitDetailsFields({ selected, preset, isSchedule }: VisitDetail
         </FormField>
       </div>
 
-      <FormField label="Location" htmlFor="visit-location" hint="Auto-filled from the farmer's registered parcel">
-          <Input
-            id="visit-location"
-            className="h-10 border-transparent bg-slate-100 text-ink"
-            value={selected.length > 1 ? "Each farmer's registered parcel" : selected.length === 1 ? `${selected[0].kebele} 01 · plot 8.191°N, 37.052°E` : ""}
-            placeholder="Select a farmer first"
-            readOnly
-            endAdornment={
-              <svg className="h-4 w-4 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" /><circle cx="12" cy="10" r="3" />
-              </svg>
-            }
-          />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <FormField label="Priority" htmlFor="visit-priority">
+          <Select id="visit-priority" className="h-10" value={priority} onChange={(e) => onPriorityChange(e.target.value as PriorityLevel)}>
+            {PRIORITY_LEVELS.map((p) => <option key={p}>{p}</option>)}
+          </Select>
         </FormField>
+        <FormField label="Priority reason" htmlFor="visit-priority-reason" className="sm:col-span-2">
+          <Input id="visit-priority-reason" className="h-10" placeholder="e.g. Overdue by 4 days" maxLength={140} value={priorityReason} onChange={(e) => onPriorityReasonChange(e.target.value)} />
+        </FormField>
+      </div>
+
+      <PlotLocationFields selected={selected} values={locations} onChange={onLocationChange} />
+
+      <label className="flex cursor-pointer items-center gap-2.5 text-[14px] text-ink">
+        <Checkbox id="visit-notify-sms" checked={notifySms} onChange={(e) => onNotifySmsChange(e.target.checked)} />
+        Notify the farmer by SMS
+      </label>
 
       {isSchedule && (!preset || preset.level === "high") ? (
         <Banner tone="error">{preset ? `Flagged for ${preset.reason.toLowerCase()} — high priority, aim to schedule within 48 hours.` : "This farmer is flagged as high priority — aim to schedule within 48 hours."}</Banner>
       ) : (
-        <Banner tone="info">The visit is saved to your plan and the farmer is notified by SMS. Save as draft keeps it on this device only.</Banner>
+        <Banner tone="info">The visit is saved to your plan{notifySms ? " and the farmer is notified by SMS" : ""}. Save as draft keeps it on this device only.</Banner>
       )}
     </>
   );

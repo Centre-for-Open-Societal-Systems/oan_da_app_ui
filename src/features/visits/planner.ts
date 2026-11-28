@@ -1,4 +1,5 @@
 import { visitFarmerLabel, type ApiVisit } from "./api";
+import { kebeleName } from "./kebeleNames";
 import type { ArrivalState, PlannerVisit, TodaysVisit } from "./types";
 
 // API visits in the planner's shapes. A visit without a farmer name shows the registry id instead.
@@ -13,7 +14,7 @@ export const toPlannerVisit = (v: ApiVisit): PlannerVisit => ({
   id: v.name,
   time: v.scheduled_at.slice(11, 16),
   farmerName: visitFarmerLabel(v),
-  kebele: v.kebele ?? "—",
+  kebele: kebeleName(v.kebele) ?? "—",
   status: v.physical_status === "Missed" ? "overdue" : (v.planner_status ?? "scheduled"),
 });
 
@@ -41,7 +42,7 @@ export const toTodaysVisit = (v: ApiVisit): TodaysVisit => ({
   plannedArrival: v.scheduled_at.slice(11, 16),
   state: arrivalState(v),
   note: arrivalNote(v),
-  kebele: v.kebele ?? undefined,
+  kebele: kebeleName(v.kebele) ?? undefined,
   parcel: v.plot_ref ?? undefined,
   lat: v.location_lat ?? undefined,
   lng: v.location_lng ?? undefined,

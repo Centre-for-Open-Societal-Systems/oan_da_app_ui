@@ -17,6 +17,7 @@ import { ExportButton } from "@/components/ui/ExportButton";
 import { matchesQuery, searchPlaceholder } from "@/lib/search";
 import { fileDate, type CsvColumn } from "@/lib/download";
 import { downloadTable, formatLabel } from "@/lib/export";
+import { areaFilterOptions, useScopeAreaNames } from "@/features/geo";
 
 const SEARCH_PLACEHOLDER = searchPlaceholder(["Name", "Expertise Area", "MoA Unit", "Region", "Woreda"]);
 
@@ -61,8 +62,11 @@ export function AdvisorDirectory({
   const [notice, setNotice] = useState<string | null>(null);
 
   const expertiseOptions = optionsOf(advisors.map((a) => a.expertise));
-  const regionOptions = optionsOf(advisors.map((a) => a.region));
-  const woredaOptions = optionsOf(advisors.map((a) => a.woreda));
+  // Region and Woreda options: the areas of the user's own area from the geo Master Data, then those the rows hold.
+  const regionNames = useScopeAreaNames("region", advisors.map((a) => a.region));
+  const woredaNames = useScopeAreaNames("woreda", advisors.map((a) => a.woreda));
+  const regionOptions = areaFilterOptions(advisors.map((a) => a.region), regionNames);
+  const woredaOptions = areaFilterOptions(advisors.map((a) => a.woreda), woredaNames);
   const filterFields: FilterFieldConfig[] = [
     { key: "expertise", label: "Expertise Area", allLabel: "All expertise areas", placeholder: "All Expertise Areas", options: expertiseOptions },
     { key: "region", label: "Region", allLabel: "All regions", placeholder: "All Regions", options: regionOptions },

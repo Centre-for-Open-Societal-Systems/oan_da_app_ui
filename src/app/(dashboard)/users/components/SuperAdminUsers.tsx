@@ -18,6 +18,7 @@ import { DEFAULT_ROLE_NAMES, SA_USERS, coverageOf, type SuperAdminUser } from "@
 import { matchesQuery } from "@/lib/search";
 import { SuperAdminUserFormModal, type UserFormValues } from "./SuperAdminUserFormModal";
 import { SuperAdminUserViewModal } from "./SuperAdminUserViewModal";
+import { useScopeAreaNames } from "@/features/geo";
 
 type FilterKey = "role" | "status" | "region";
 type Filters = Record<FilterKey, Set<string>>;
@@ -44,7 +45,9 @@ export function SuperAdminUsers() {
 
   const roleOptions = optionsOf(users.map((u) => u.role), DEFAULT_ROLE_NAMES);
   const statusOptions = optionsOf(users.map(statusLabel), ["Active", "Inactive"]);
-  const regionOptions = optionsOf(users.map((u) => u.region));
+  // Every Region from the geo Master Data, then those the rows hold.
+  const regionNames = useScopeAreaNames("region", users.map((u) => u.region));
+  const regionOptions = optionsOf(users.map((u) => u.region), regionNames);
 
   const rows = users.filter(
     (u) =>

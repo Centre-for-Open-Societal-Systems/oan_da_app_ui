@@ -18,6 +18,8 @@ export interface PlanVisitRequest {
   duration_min: number;
   priority: "Low" | "Medium" | "High";
   priority_reason?: string;
+  /** The farmer's plot the visit is for: a plot_id from GET /farmers/{id}/plots (as on the Holdings tab). */
+  plot_ref?: string;
   location?: { lat: number; lng: number };
   notify_farmer_sms: boolean;
   /** Advisory visits only: the farmer's questions and the advice to give. */

@@ -10,7 +10,7 @@ import { TablePagination, usePagination } from "./TablePagination";
 export interface Column<T> {
   key: string;
   header: ReactNode;
-  cell: (row: T) => ReactNode;
+  cell: (row: T, index: number) => ReactNode;
   className?: string;
   align?: "left" | "center" | "right";
 }
@@ -38,12 +38,14 @@ interface DataTableProps<T> {
   itemLabel?: string;
   /** Set false for tiny fixed lists that should not page. */
   paginate?: boolean;
+  tableClassName?: string;
 }
 
 const ALIGN = { left: "text-left", center: "text-center", right: "text-right" };
 
 // Generic bordered table used by the registry / queue screens. Header + zebra-free rows match FarmersTable.
-export function DataTable<T>({ columns, rows, rowKey, state = "ready", emptyTitle = "Nothing to show", emptyHint, onRetry, onRowClick, minWidth = "900px", selectedKey, rowClassName, searchable, searchPlaceholder: placeholderOverride, title, itemLabel = "records", paginate = true }: DataTableProps<T>) {
+export function DataTable<T>({ columns, rows, rowKey, state = "ready", emptyTitle = "Nothing to show", emptyHint, onRetry, onRowClick, minWidth = "900px", selectedKey, rowClassName, searchable, searchPlaceholder: placeholderOverride, title, itemLabel = "records", paginate = true, tableClassName }: DataTableProps<T>) {
+  const isClassMinWidth = typeof minWidth === "string" && (minWidth.startsWith("min-w") || minWidth.startsWith("w-"));
   const [query, setQuery] = useState("");
   const visibleRows = searchable ? rows.filter((row) => matchesQuery(query, row)) : rows;
   const isFiltered = !!searchable && query.trim() !== "";
@@ -68,18 +70,21 @@ export function DataTable<T>({ columns, rows, rowKey, state = "ready", emptyTitl
       </div>
     )}
     {!searchable && title && <div className="px-4 py-3">{title}</div>}
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-left" style={{ minWidth }}>
+    <div className="overflow-x-auto min-w-0 max-w-full">
+      <table
+        className={cn("w-full border-collapse text-left", isClassMinWidth && minWidth, tableClassName)}
+        style={!isClassMinWidth && minWidth ? { minWidth } : undefined}
+      >
         <thead>
-          <tr className="border-y border-line bg-surface text-[14px] font-semibold text-slate-500">
+          <tr className="border-y border-line bg-surface text-[13.5px] sm:text-[14px] font-semibold text-slate-500">
             {columns.map((c) => (
-              <th key={c.key} className={cn("whitespace-nowrap px-4 py-3 font-semibold", ALIGN[c.align ?? "left"], c.className)}>
+              <th key={c.key} className={cn("whitespace-nowrap px-3 sm:px-4 py-3 font-semibold", ALIGN[c.align ?? "left"], c.className)}>
                 {c.header}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="text-[14px] text-slate-700">
+        <tbody className="text-[13.5px] sm:text-[14px] text-slate-700">
           {state === "loading" &&
             // Fixed placeholder rows that never reorder, so the index is a stable key here.
             [0, 1, 2, 3, 4].map((i) => (
@@ -109,7 +114,7 @@ export function DataTable<T>({ columns, rows, rowKey, state = "ready", emptyTitl
             </tr>
           )}
           {state === "ready" &&
-            shownRows.map((row) => {
+            shownRows.map((row, index) => {
               const key = rowKey(row);
               return (
                 <tr
@@ -123,8 +128,8 @@ export function DataTable<T>({ columns, rows, rowKey, state = "ready", emptyTitl
                   )}
                 >
                   {columns.map((c) => (
-                    <td key={c.key} className={cn("px-4 py-3.5 align-middle", ALIGN[c.align ?? "left"], c.className)}>
-                      {c.cell(row)}
+                    <td key={c.key} className={cn("px-3 sm:px-4 py-3 sm:py-3.5 align-middle", ALIGN[c.align ?? "left"], c.className)}>
+                      {c.cell(row, index)}
                     </td>
                   ))}
                 </tr>

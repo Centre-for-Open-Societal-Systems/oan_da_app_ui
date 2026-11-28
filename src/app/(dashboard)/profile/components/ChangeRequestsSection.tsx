@@ -39,6 +39,8 @@ type Detail = { request?: ChangeRequest; error?: string };
 interface Props {
   /** Bumped by the page after a submit or cancel so the list reloads. */
   refreshKey: number;
+  /** The signed-in user's own DA-ID: the list is scope-wide for a Supervisor or Executive, so it is narrowed to it. */
+  daId?: string;
   cancelling: string | null;
   onCancel: (request: ChangeRequest) => void;
 }
@@ -62,7 +64,7 @@ const sectionIcon = (section?: string) => {
 // The DA's own change requests (GET /profile/change-requests, filtered by status) and, on expand, the full row
 // (GET /profile/change-requests/{id}) with each field's from → to, the supervisor's decision and the registry's
 // own outcome. A Pending request can still be cancelled from here.
-export function ChangeRequestsSection({ refreshKey, cancelling, onCancel }: Props) {
+export function ChangeRequestsSection({ refreshKey, daId, cancelling, onCancel }: Props) {
   const [status, setStatus] = useState<"" | ChangeRequestStatus>("");
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -70,13 +72,13 @@ export function ChangeRequestsSection({ refreshKey, cancelling, onCancel }: Prop
 
   useEffect(() => {
     let cancelled = false;
-    listChangeRequests({ status: status || undefined })
+    listChangeRequests({ status: status || undefined, daId })
       .then((r) => !cancelled && setLoaded({ ...r, error: null }))
       .catch((err: unknown) => !cancelled && setLoaded({ items: [], total: 0, error: describeProfileError(err) }));
     return () => {
       cancelled = true;
     };
-  }, [status, refreshKey]);
+  }, [status, refreshKey, daId]);
 
   const toggle = (request: ChangeRequest) => {
     if (expanded === request.name) {

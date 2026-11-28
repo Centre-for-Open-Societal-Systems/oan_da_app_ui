@@ -7,6 +7,8 @@ export interface Farmer {
   id: string;
   /** Farmer-ID shown to people ("FR-675618129549"); also works in every farmer URL. Absent on sample farmers. */
   regId?: string;
+  /** Registry internal_record_id (UUID): the id of /details, /land_details and the profile URL. Absent on sample farmers. */
+  internalId?: string;
   name: string;
   email: string;
   phone: string;

@@ -15,17 +15,19 @@ interface TodaysVisitsProps {
   daId?: string;
   reload: number;
   canAct: (visit: VisitRecord) => boolean;
+  /** Start shows only for a signed-in Development Agent. */
+  canStart: boolean;
   onStart: (visit: VisitRecord) => void;
   onLogOutcome: (visit: VisitRecord) => void;
 }
 
-export function TodaysVisits({ daId, reload, canAct, onStart, onLogOutcome }: TodaysVisitsProps) {
+export function TodaysVisits({ daId, reload, canAct, canStart, onStart, onLogOutcome }: TodaysVisitsProps) {
   const { items, error, loading } = usePlannerVisits({ date: todayIso, da_id: daId }, reload);
   const today = items.filter(isOnPlanner);
   const visits = today.map(toTodaysVisit);
   const records = today.map(toVisitRecord);
   // In progress first: the visit under way has to be closed before the next one is started.
-  const next = records.find((r) => canAct(r) && canLogOutcome(r)) ?? records.find((r) => canAct(r) && canStartVisit(r));
+  const next = records.find((r) => canAct(r) && canLogOutcome(r)) ?? (canStart ? records.find((r) => canStartVisit(r)) : undefined);
   const todayLabel = longDate(TODAY);
 
   return (

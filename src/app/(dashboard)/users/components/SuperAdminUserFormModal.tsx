@@ -9,13 +9,12 @@ import { Dropdown } from "@/components/ui/Dropdown";
 import { MultiSelectDropdown } from "@/components/ui/MultiSelectDropdown";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
+import { useGeoChildren } from "@/features/geo";
 import {
   DEFAULT_ROLE_NAMES,
   DEPARTMENTS,
   DEPARTMENT_TYPES,
   GENDERS,
-  GEOGRAPHY,
-  KEBELES,
   REGISTRIES,
   REGISTRY_ENTITIES,
   SERVICES,
@@ -96,8 +95,20 @@ export function SuperAdminUserFormModal({ mode, initial, suggestedCode, onClose,
   const err = (key: Field, rule?: string, broken = false) => ({ hint: errors[key] ?? rule, hintTone: errors[key] || broken ? ("error" as const) : ("muted" as const) });
   const today = new Date().toISOString().slice(0, 10);
 
-  const zones = region ? Object.keys(GEOGRAPHY[region] ?? {}) : [];
-  const woredas = region && zone ? (GEOGRAPHY[region]?.[zone] ?? []) : [];
+  // Coverage: Region > Zone > Woreda > Kebele from the geo Master Data (get_master_data), each under the one picked above.
+  // The form keeps the names; their codes find the next level's list.
+  const regionList = useGeoChildren("region", ["ET"]);
+  const regionCode = regionList?.find((a) => a.name === region)?.code;
+  const zoneList = useGeoChildren("zone", regionCode ? [regionCode] : []);
+  const zoneCode = zoneList?.find((a) => a.name === zone)?.code;
+  const woredaList = useGeoChildren("woreda", zoneCode ? [zoneCode] : []);
+  const woredaCode = woredaList?.find((a) => a.name === woreda)?.code;
+  const kebeleList = useGeoChildren("kebele", woredaCode ? [woredaCode] : []);
+  const namesOf = (list: { name: string }[] | null) => [...new Set((list ?? []).map((a) => a.name))];
+  const regions = namesOf(regionList);
+  const zones = namesOf(zoneList);
+  const woredas = namesOf(woredaList);
+  const kebeles = namesOf(kebeleList);
 
   // Picking a department fills in its type (still changeable); a wider coverage choice resets the narrower ones.
   const pickDepartment = (value: string) => {
@@ -237,7 +248,7 @@ export function SuperAdminUserFormModal({ mode, initial, suggestedCode, onClose,
 
       <Section title="Coverage details">
         <FormField label="Region" htmlFor="su-region" required {...err("region")} className={FIELD}>
-          <Dropdown id="su-region" value={region} placeholder="Select region" options={Object.keys(GEOGRAPHY)} onChange={pickRegion} />
+          <Dropdown id="su-region" value={region} placeholder="Select region" options={regions} onChange={pickRegion} />
         </FormField>
         <FormField label="Zone" htmlFor="su-zone" required {...err("zone")} className={FIELD}>
           <Dropdown id="su-zone" value={zone} placeholder="Select zone" options={zones} disabled={!region} onChange={pickZone} />
@@ -246,7 +257,7 @@ export function SuperAdminUserFormModal({ mode, initial, suggestedCode, onClose,
           <Dropdown id="su-woreda" value={woreda} placeholder="Select woreda" options={woredas} disabled={!zone} onChange={pickWoreda} />
         </FormField>
         <FormField label="Kebele" htmlFor="su-kebele" required {...err("kebele")} className={FIELD}>
-          <Dropdown id="su-kebele" value={kebele} placeholder="Select kebele" options={KEBELES} disabled={!woreda} onChange={(v) => { setKebele(v); clear("kebele"); }} />
+          <Dropdown id="su-kebele" value={kebele} placeholder="Select kebele" options={kebeles} disabled={!woreda} onChange={(v) => { setKebele(v); clear("kebele"); }} />
         </FormField>
       </Section>
 

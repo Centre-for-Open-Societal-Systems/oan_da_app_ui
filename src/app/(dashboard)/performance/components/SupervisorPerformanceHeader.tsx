@@ -4,11 +4,15 @@ import { useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Dropdown } from "@/components/ui/Dropdown";
-import { REGIONS, WOREDA_SUMMARY } from "@/features/performance";
+import { WOREDA_SUMMARY } from "@/features/performance";
+import { useScopeAreaNames } from "@/features/geo";
 import { DateRangeDropdown } from "../../dashboard/components/DateRangeDropdown";
 
 export function SupervisorPerformanceHeader() {
-  const [region, setRegion] = useState(REGIONS[0]);
+  // Every Region from the geo Master Data; the first one until the user picks.
+  const regions = useScopeAreaNames("region", []);
+  const [picked, setRegion] = useState("");
+  const region = picked || regions[0] || "";
 
   return (
     <Card className="relative z-50 flex flex-col gap-4 px-4 py-5 shadow-card md:flex-row md:items-center md:justify-between">
@@ -23,7 +27,7 @@ export function SupervisorPerformanceHeader() {
         <Dropdown
           value={region}
           onChange={setRegion}
-          options={REGIONS}
+          options={regions}
           align="right"
           className="sm:w-[170px] [&>button]:h-9 [&>button]:rounded-lg [&>button]:border-zinc-200"
           renderValue={(o) => <span className="text-[13.5px] text-slate-700">Region: {o.label}</span>}

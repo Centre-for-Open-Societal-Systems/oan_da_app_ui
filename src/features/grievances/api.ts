@@ -233,31 +233,6 @@ export async function submitGrievance(body: SubmitGrievanceRequest): Promise<Sub
   };
 }
 
-// --- administrative area ----------------------------------------------------
-// The create endpoint validates administrative_area against the Grievance Service's own area list, as
-// `kebele-<code>` (e.g. "kebele-ET140108101008"). Those codes are not the DA record's Kebele codes.
-
-/** One row of the Grievance Service's area list. */
-export interface GrievanceArea {
-  /** "region-ET14", "kebele-ET140108101008", … */
-  area_id: string;
-  area_name: string;
-  code: string;
-}
-
-/** The areas under `parent` (the regions without one), read through this app's /api/grievance-areas. */
-export async function fetchGrievanceAreas(parent?: string): Promise<GrievanceArea[]> {
-  const res = await fetch(`/api/grievance-areas${parent ? `?parent=${encodeURIComponent(parent)}` : ""}`);
-  if (!res.ok) throw new Error("Could not load the areas. Please try again.");
-  return ((await res.json()) as { areas: GrievanceArea[] }).areas;
-}
-
-/** administrative_area the create endpoint expects for a Kebele: `kebele-<geo value_id>`. */
-export const toAdministrativeArea = (kebeleCode: string) => {
-  const code = kebeleCode.trim();
-  return code.startsWith("kebele-") ? code : `kebele-${code}`;
-};
-
 /** POST /grievances/sync/retry (OAN Administrator): replays failed grievance sync events, one by name or all when omitted. */
 export async function retryGrievanceSync(eventName?: string): Promise<{ retried: string[]; count: number }> {
   return (await authRequest<{ data: { retried: string[]; count: number } }>("/da-services/grievances/sync/retry", { method: "POST", body: eventName ? { event_name: eventName } : {} })).data;
@@ -343,6 +318,16 @@ export function caseFromApi(grievance: Grievance, detail?: ApiGrievanceDetail, t
 }
 
 /**
+ * An Ethiopian mobile in the form the Grievance Service's Phone field accepts ("+251911234567"), or null when `input`
+ * is not one. Takes 0911234567, 911234567, 251911234567 or +251 911 234 567 (Safaricom 07… too).
+ */
+export function toEthiopianMobile(input: string): string | null {
+  const digits = input.replace(/[\s().-]/g, "");
+  const m = digits.match(/^(?:\+?251|0)?([79]\d{8})$/);
+  return m ? `+251${m[1]}` : null;
+}
+
+/**
  * Submitter details for a DA raising a grievance for themselves, from the registry record GET /me returns
  * (`agent`). The account name stands in when the record has no name; anything else missing comes back empty.
  */
@@ -351,7 +336,5 @@ export function selfSubmitter(agent: Record<string, unknown> | null | undefined,
   return {
     name: text(agent?.full_name) || accountName.trim(),
     mobile: text(agent?.phone) || text(agent?.mobile),
-    woredaCode: text(agent?.woreda),
-    kebeleName: text(agent?.kebele_name),
   };
 }

@@ -28,17 +28,15 @@ import {
   assignAgent,
   fetchCoverage,
   fetchMyAssignment,
-  listAreas,
   listAssignments,
-  listKebeles,
   newClientOpId,
   toAgentAssignment,
-  type AdminArea,
   type AgentAssignment,
   type AssignmentSummary,
   type AssociationMode,
   type CoverageResponse,
 } from "@/features/assignments";
+import { AreaPicker, areaCodesOf, useAreaNames, useScopeAreaNames, type AreaSelection } from "@/features/geo";
 
 const icon = (d: string) => <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>;
 
@@ -78,9 +76,11 @@ const EMPTY_COVERAGE_FILTERS: CoverageFilters = { woreda: new Set(), coverage: n
 
 interface Draft {
   daId: string;
-  /** Woreda and Kebele codes from the administrative-area master. */
+  /** Woreda and Kebele geo Master Data codes. */
   woreda: string;
   kebele: string;
+  /** The Kebele's name as the area picker shows it. */
+  kebeleName?: string;
   effectiveDate: string;
   reason: string;
   mode: AssociationMode | "";
@@ -105,8 +105,6 @@ export function AssignmentsWorkspace() {
   const [reload, setReload] = useState(0);
   const [list, setList] = useState<Loaded<{ rows: AgentAssignment[]; summary: AssignmentSummary | null }> & { key: number } | null>(null);
   const [coverage, setCoverage] = useState<Loaded<CoverageResponse> | null>(null);
-  const [woredaAreas, setWoredaAreas] = useState<AdminArea[]>([]);
-  const [kebeles, setKebeles] = useState<{ woreda: string; items: AdminArea[]; error: string | null } | null>(null);
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<AgentFilters>(EMPTY_AGENT_FILTERS);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
@@ -118,18 +116,12 @@ export function AssignmentsWorkspace() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<{ tone: "success" | "warning"; title: string; body: string } | null>(null);
 
-  const woredaNames = useMemo(() => Object.fromEntries(woredaAreas.map((a) => [a.code, a.name_en])), [woredaAreas]);
-
-  // Woreda names for display and the assign form; rows fall back to codes if the master cannot be read.
-  useEffect(() => {
-    let current = true;
-    listAreas({ level: "Woreda" })
-      .then((areas) => current && setWoredaAreas(areas))
-      .catch(() => { });
-    return () => {
-      current = false;
-    };
-  }, []);
+  // Woreda names for display, from the geo Master Data; rows fall back to codes if it cannot be read.
+  const woredaNames = useAreaNames([
+    ...(list?.data?.rows ?? []).map((r) => r.woredaCode),
+    coverage?.data?.woreda,
+    ...(coverage?.data?.kebeles ?? []).map((k) => k.woreda),
+  ]);
 
   // Officers: the Woreda's agents, then its coverage tiles. A DA: their own posting.
   useEffect(() => {
@@ -161,19 +153,6 @@ export function AssignmentsWorkspace() {
     };
   }, [isDA, reload, role]);
 
-  // Kebeles of the Woreda picked in the assign form.
-  const draftWoreda = draft?.woreda ?? "";
-  useEffect(() => {
-    if (!draftWoreda) return;
-    let current = true;
-    listKebeles(draftWoreda)
-      .then((items) => current && setKebeles({ woreda: draftWoreda, items, error: null }))
-      .catch((err: unknown) => current && setKebeles({ woreda: draftWoreda, items: [], error: messageOf(err, "Could not load kebeles.") }));
-    return () => {
-      current = false;
-    };
-  }, [draftWoreda]);
-
   const loading = list?.key !== reload;
   const rows = useMemo(
     () => (list?.data?.rows ?? []).map((r) => ({ ...r, woreda: (r.woredaCode && woredaNames[r.woredaCode]) || r.woreda })),
@@ -186,16 +165,19 @@ export function AssignmentsWorkspace() {
   const setCoverageFilter = (key: keyof CoverageFilters) => (next: Set<string>) => setCoverageFilters((prev) => ({ ...prev, [key]: next }));
 
   // Kebeles present under the selected woredas, plus the "no kebele yet" bucket.
-  const kebelesFor = (woredas: Set<string>) => [...new Set(rows.filter((r) => has(woredas, r.woreda)).map((r) => r.kebele ?? NO_KEBELE))];
+  // Kebele and Woreda options: the areas of the user's own area from the geo Master Data, then those the rows hold.
+  const scopeKebeleNames = useScopeAreaNames("kebele", []);
+  const woredaNameList = useScopeAreaNames("woreda", rows.map((r) => r.woreda));
+  const kebelesFor = (woredas: Set<string>) => [...new Set([...(woredas.size === 0 ? scopeKebeleNames : []), ...rows.filter((r) => has(woredas, r.woreda)).map((r) => r.kebele ?? NO_KEBELE)])];
   const pruneKebeles = (next: AgentFilters): AgentFilters => {
     const allowed = new Set(kebelesFor(next.woreda));
     return { ...next, kebele: new Set([...next.kebele].filter((k) => allowed.has(k))) };
   };
 
-  const woredaOptions = optionsOf(rows.map((r) => r.woreda));
+  const woredaOptions = optionsOf(rows.map((r) => r.woreda), woredaNameList);
   const kebeleOptions = optionsOf(
     rows.filter((r) => has(filters.woreda, r.woreda)).map((r) => r.kebele ?? NO_KEBELE),
-    undefined,
+    kebelesFor(filters.woreda),
     (k) => (k === NO_KEBELE ? "No kebele yet" : k),
   );
   const statusOptions = optionsOf(rows.map((r) => r.status), STATUSES);
@@ -227,7 +209,7 @@ export function AssignmentsWorkspace() {
     households: k.households,
     coverage: k.coverage,
   }));
-  const coverageWoredaOptions = optionsOf(coverageAll.map((k) => k.woreda));
+  const coverageWoredaOptions = optionsOf(coverageAll.map((k) => k.woreda), [...new Set([...woredaNameList, ...coverageAll.map((k) => k.woreda)])]);
   const coverageOptions = optionsOf(coverageAll.map((k) => k.coverage), COVERAGE_STATES);
   const coverageFilterFields: FilterFieldConfig[] = [
     { key: "woreda", label: "Woreda", allLabel: "All woredas", placeholder: "All Woredas", options: coverageWoredaOptions },
@@ -259,11 +241,20 @@ export function AssignmentsWorkspace() {
   const agentsInWoreda = (woreda: string) => rows.filter((r) => r.status !== "Separated" && (!r.woredaCode || r.woredaCode === woreda));
 
   const draftAgent = draft ? rows.find((r) => r.daId === draft.daId) : undefined;
-  const draftKebeles = kebeles && kebeles.woreda === draft?.woreda ? kebeles : null;
+  // The assign form's Woreda and Kebele from the area picker; a picked agent from another Woreda no longer fits.
+  const pickDraftArea = (area: AreaSelection) =>
+    setDraft((d) => {
+      if (!d) return d;
+      const woreda = area.woreda?.code ?? "";
+      const kebele = area.kebele?.code ?? "";
+      if (woreda === d.woreda && kebele === d.kebele && area.kebele?.name === d.kebeleName) return d;
+      const keepAgent = woreda === d.woreda || !d.pickAgent || agentsInWoreda(woreda).some((r) => r.daId === d.daId);
+      return { ...d, woreda, kebele, kebeleName: area.kebele?.name, daId: keepAgent ? d.daId : "" };
+    });
 
   const commit = async () => {
     if (!draft || !draft.mode || !draftAgent) return;
-    const kebeleName = draftKebeles?.items.find((k) => k.code === draft.kebele)?.name_en ?? draft.kebele;
+    const kebeleName = draft.kebeleName || draft.kebele;
     const isReassign = Boolean(draftAgent.kebele);
     setSaving(true);
     setSaveError(null);
@@ -470,7 +461,7 @@ export function AssignmentsWorkspace() {
             rows={coverageRows}
             state={!coverage ? "loading" : coverage.error ? "error" : "ready"}
             onRetry={() => setReload((n) => n + 1)}
-            emptyTitle={coverageAll.length === 0 ? "No kebeles in the area master for this Woreda" : "No kebeles match the selected filters"}
+            emptyTitle={coverageAll.length === 0 ? "No kebeles in the Master Data for this Woreda" : "No kebeles match the selected filters"}
             emptyHint={coverageAll.length === 0 ? undefined : "Clear a filter or try a different search."}
             columns={[
               {
@@ -514,29 +505,14 @@ export function AssignmentsWorkspace() {
         >
           {saveError && <Banner tone="error" title="Assignment not saved" className="mb-4">{saveError}</Banner>}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="Woreda" htmlFor="as-woreda" required hint={ownWoreda ? "Your Woreda." : undefined}>
-              <Select
-                id="as-woreda"
-                value={draft.woreda}
-                disabled={!!ownWoreda}
-                onChange={(e) => {
-                  const woreda = e.target.value;
-                  // A picked agent from another Woreda no longer fits.
-                  const keepAgent = !draft.pickAgent || agentsInWoreda(woreda).some((r) => r.daId === draft.daId);
-                  setDraft({ ...draft, woreda, kebele: "", daId: keepAgent ? draft.daId : "" });
-                }}
-              >
-                <option value="">Select woreda</option>
-                {woredaAreas.map((w) => <option key={w.code} value={w.code}>{w.name_en}</option>)}
-                {draft.woreda && !woredaAreas.some((w) => w.code === draft.woreda) && <option value={draft.woreda}>{draft.woreda}</option>}
-              </Select>
-            </FormField>
-            <FormField label="Kebele" htmlFor="as-kebele" required hint={draftKebeles?.error ?? (draft.woreda && draftKebeles && draftKebeles.items.length === 0 ? "No kebeles in the area master for this Woreda." : undefined)} hintTone={draftKebeles?.error ? "error" : "muted"}>
-              <Select id="as-kebele" value={draft.kebele} disabled={!draft.woreda || !draftKebeles} onChange={(e) => setDraft({ ...draft, kebele: e.target.value })}>
-                <option value="">{draft.woreda && !draftKebeles ? "Loading kebeles…" : "Select kebele"}</option>
-                {draftKebeles?.items.map((k) => <option key={k.code} value={k.code}>{k.name_en}</option>)}
-              </Select>
-            </FormField>
+            <AreaPicker
+              depth="kebele"
+              required
+              idPrefix="as"
+              initial={{ ...areaCodesOf(draft.woreda), ...(draft.kebele ? { kebele: draft.kebele } : {}) }}
+              onChange={pickDraftArea}
+              className="sm:col-span-2"
+            />
             {draft.pickAgent && (
               <FormField label="Agent" htmlFor="as-agent" required className="sm:col-span-2" hint={draftAgent?.kebele ? `Currently in ${draftAgent.kebele} — committing supersedes that assignment.` : undefined}>
                 <Select id="as-agent" value={draft.daId} disabled={!draft.woreda} onChange={(e) => setDraft({ ...draft, daId: e.target.value })}>

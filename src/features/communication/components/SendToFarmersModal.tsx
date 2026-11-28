@@ -9,15 +9,20 @@ import { Textarea } from "@/components/ui/Textarea";
 import { Select } from "@/components/ui/Select";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { SmsPreview } from "./SmsPreview";
-import { BROADCAST_WOREDAS, audienceOf, audienceSize, type Article, type Channel } from "../data";
+import { audienceOf, audienceSize, type Article, type Channel } from "../data";
+import { AreaPicker, type AreaSelection } from "@/features/geo";
 
 // FR-11 "Send to farmers": snippet composer → channels (SMS/Telegram) → dispatch via the Broadcast engine, logged.
 // Like every broadcast, the audience is all farmers of one Woreda.
 export function SendToFarmersModal({ article, isOpen, onClose }: { article: Article; isOpen: boolean; onClose: () => void }) {
   const [text, setText] = useState(article.snippet);
-  const [woreda, setWoreda] = useState(BROADCAST_WOREDAS[0]);
+  // The Woreda from the geo Master Data: the user's own (from /me) is fixed, other levels are picked.
+  const [woreda, setWoreda] = useState("");
+  const pickArea = (area: AreaSelection) => setWoreda(area.woreda?.name ?? "");
   const audience = audienceOf("Farmers", woreda);
-  const size = audienceSize("Farmers", woreda).toLocaleString();
+  const reach = audienceSize("Farmers", woreda);
+  // The number when known for the Woreda, else just "the".
+  const size = reach > 0 ? reach.toLocaleString() : "the";
   const [channels, setChannels] = useState<Set<Channel>>(new Set(["SMS"]));
   const [language, setLanguage] = useState<"en" | "am">("en");
   const [sent, setSent] = useState(false);
@@ -40,7 +45,7 @@ export function SendToFarmersModal({ article, isOpen, onClose }: { article: Arti
       footer={sent ? <Button variant="brand" onClick={close}>Done</Button> : (
         <>
           <Button variant="outline" onClick={close}>Cancel</Button>
-          <Button variant="brand" disabled={channels.size === 0 || text.trim().length === 0} onClick={() => setSent(true)}>Send to {size} recipients</Button>
+          <Button variant="brand" disabled={!woreda || channels.size === 0 || text.trim().length === 0} onClick={() => setSent(true)}>Send to {size} recipients</Button>
         </>
       )}
     >
@@ -55,9 +60,10 @@ export function SendToFarmersModal({ article, isOpen, onClose }: { article: Arti
               <Textarea id="snippet" rows={5} value={text} onChange={(e) => setText(e.target.value)} />
             </FormField>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FormField label="Woreda" htmlFor="audience" required hint={`All ${size} farmers in ${woreda} Woreda`}>
-                <Select id="audience" value={woreda} onChange={(e) => setWoreda(e.target.value)}>{BROADCAST_WOREDAS.map((w) => <option key={w} value={w}>{w}</option>)}</Select>
-              </FormField>
+              <div className="sm:col-span-2">
+                <AreaPicker depth="woreda" required idPrefix="audience" onChange={pickArea} />
+                {woreda && <p className="mt-1 text-[12.5px] text-muted">All {reach > 0 ? `${reach.toLocaleString()} ` : ""}farmers in {woreda} Woreda</p>}
+              </div>
               <FormField label="Language" htmlFor="lang">
                 <Select id="lang" value={language} onChange={(e) => setLanguage(e.target.value as "en" | "am")}><option value="en">English</option><option value="am">Amharic (አማርኛ)</option></Select>
               </FormField>

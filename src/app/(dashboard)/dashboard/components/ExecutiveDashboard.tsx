@@ -5,7 +5,6 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { AdvancedFiltersButton } from "@/components/ui/AdvancedFiltersButton";
 import { Banner } from "@/components/ui/Banner";
-import { StatCard } from "@/components/ui/StatCard";
 import { Pill } from "@/components/ui/Pill";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { FilterDropdown, type FilterOption } from "@/components/ui/FilterDropdown";
@@ -16,15 +15,17 @@ import { REGION_SUMMARY, REGION_WATCHLIST, WOREDA_ROLLUPS } from "@/features/das
 import { matchesQuery, searchPlaceholder } from "@/lib/search";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { DateRangeDropdown } from "./DateRangeDropdown";
+import { KpiTiles, KPI_RANGES } from "./KpiTiles";
 import { TablePagination, usePagination } from "@/components/ui/TablePagination";
+import { useAreaFilterOptions, withFieldOptions } from "@/features/geo";
 
 const SEARCH_PLACEHOLDER = searchPlaceholder(["Woreda", "Farmers", "Kebeles", "Agents", "Visit coverage", "Data quality", "Grievances", "Status"]);
 
 const STATUSES: KebeleStatus[] = ["On track", "Watch", "At risk"];
-const WOREDA_OPTIONS: FilterOption[] = WOREDA_ROLLUPS.map((w) => ({ value: w.woreda, label: w.woreda, count: w.kebeles }));
 const STATUS_OPTIONS: FilterOption[] = STATUSES.map((s) => ({ value: s, label: s, count: WOREDA_ROLLUPS.filter((w) => w.status === s).length }));
 const FILTER_FIELDS: FilterFieldConfig[] = [
-  { key: "woreda", label: "Woreda", allLabel: "All woredas", placeholder: "All Woredas", options: WOREDA_OPTIONS },
+  // Filled in by the component from the geo Master Data (useAreaFilterOptions).
+  { key: "woreda", label: "Woreda", allLabel: "All woredas", placeholder: "All Woredas", options: [] },
   { key: "status", label: "Status", allLabel: "All statuses", placeholder: "All Statuses", options: STATUS_OPTIONS },
 ];
 
@@ -37,20 +38,19 @@ const EMPTY: WoredaFilters = { woreda: new Set(), status: new Set() };
 const BAR_COLOUR: Record<KebeleStatus, string> = { "On track": "bg-brand-green", Watch: "bg-orange-600", "At risk": "bg-danger" };
 const PCT_COLOUR: Record<KebeleStatus, string> = { "On track": "text-brand-green", Watch: "text-orange-600", "At risk": "text-danger" };
 
-const icon = (d: string) => (
-  <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d={d} />
-  </svg>
-);
 
 // Executive (Regional) home: read-only regional roll-up with a woreda league table (FSD §2.4).
 // The Executive has no write actions in Part 1 — every card links through to a read view.
 export function ExecutiveDashboard() {
+  const [range, setRange] = useState("Last 30 days");
   const r = REGION_SUMMARY;
   const [sortKey, setSortKey] = useState<"woreda" | "visitPct" | "dataQuality" | "openGrievances">("visitPct");
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<WoredaFilters>(EMPTY);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+  // Every Woreda of the user's own area from the geo Master Data, then those the rows hold.
+  const woredaOptions = useAreaFilterOptions("woreda", WOREDA_ROLLUPS.map((w) => w.woreda));
+  const filterFields = withFieldOptions(FILTER_FIELDS, { woreda: woredaOptions });
 
   const activeFilterCount = Object.values(filters).filter((set) => set.size > 0).length;
   const setFilter = (key: keyof WoredaFilters) => (next: Set<string>) => setFilters((prev) => ({ ...prev, [key]: next }));
@@ -77,19 +77,14 @@ export function ExecutiveDashboard() {
             {r.woredas} woredas · {r.kebeles} kebeles · updated {r.updatedAt}
           </p>
         </div>
-        <DateRangeDropdown />
+        <DateRangeDropdown ranges={KPI_RANGES} defaultValue="Last 30 days" onChange={setRange} />
       </Card>
 
       {/* Read-only notice */}
       <Banner tone="info" title="Regional view — read only">Figures roll up from the same kebele records supervisors see. Case actions stay with the woreda.</Banner>
 
-      {/* Region KPIs */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Farmers registered" value={r.farmers.toLocaleString()} accent="border-l-blue-600" tile="bg-blue-50 text-blue-600" hint={`Across ${r.woredas} woredas`} icon={icon("M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z")} />
-        <StatCard label="Active agents" value={String(r.agents)} accent="border-l-violet-600" tile="bg-violet-50 text-violet-600" hint={`${Math.round(r.farmers / r.agents)} farmers per agent`} icon={icon("M12 12a4 4 0 100-8 4 4 0 000 8zM4 20a8 8 0 0116 0M12 12v8")} />
-        <StatCard label="Visit coverage" value={`${r.visitPct}%`} accent="border-l-brand-green" tile="bg-brand-tint text-brand-green" hint={`Data quality ${r.dataQuality}/100`} icon={icon("M22 7l-8.5 8.5-5-5L2 17M16 7h6v6")} />
-        <StatCard label="Kebeles at risk" value={String(r.atRiskKebeles)} accent="border-l-danger" tile="bg-danger-wash text-danger" hint={`${r.openGrievances} open grievances`} icon={icon("M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4M12 17h.01")} />
-      </div>
+      {/* KPI tiles, each from its own feature API */}
+      <KpiTiles range={range} />
 
       {/* Woreda league table */}
       <Card className="overflow-hidden p-0 shadow-card">
@@ -133,7 +128,7 @@ export function ExecutiveDashboard() {
             <thead>
               <tr className="border-y border-line bg-surface text-[14px] font-semibold text-slate-500">
                 <th className="whitespace-nowrap px-4 py-3 font-semibold">
-                  <FilterDropdown label="Woreda" allLabel="All woredas" options={WOREDA_OPTIONS} selected={filters.woreda} onApply={setFilter("woreda")} />
+                  <FilterDropdown label="Woreda" allLabel="All woredas" options={woredaOptions} selected={filters.woreda} onApply={setFilter("woreda")} />
                 </th>
                 <th className="px-4 py-3 font-semibold">Farmers</th>
                 <th className="px-4 py-3 text-center font-semibold">Kebeles</th>
@@ -184,7 +179,7 @@ export function ExecutiveDashboard() {
         <AdvancedFiltersDrawer
           isOpen={isFiltersOpen}
           onClose={() => setIsFiltersOpen(false)}
-          fields={FILTER_FIELDS}
+          fields={filterFields}
           filters={filters}
           onApply={(next) =>
             setFilters({
@@ -226,7 +221,7 @@ export function ExecutiveDashboard() {
             {[
               { href: "/agents", title: "Agent registry", detail: "Regional DA roster and coverage" },
               { href: "/farmers", title: "Farmers", detail: "Registered farmer records" },
-              { href: "/admin/reports", title: "Reports", detail: "Programme and KPI exports" },
+              // Reports (/admin/reports) is hidden for now; the page still opens by URL.
             ].map((l) => (
               <li key={l.href}>
                 <Link href={l.href} className="flex items-center justify-between gap-3 px-5 py-4 transition-colors hover:bg-surface">

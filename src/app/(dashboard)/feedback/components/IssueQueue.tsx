@@ -18,6 +18,7 @@ import { FilterDropdown, type FilterOption } from "@/components/ui/FilterDropdow
 import { AdvancedFiltersDrawer, type FilterFieldConfig, type FilterSelection } from "@/components/ui/AdvancedFiltersDrawer";
 import { matchesQuery, searchPlaceholder } from "@/lib/search";
 import { ISSUE_CATEGORIES, ISSUE_SEVERITIES, type IssueCategory, type IssueSeverity } from "../types";
+import { useScopeAreaNames } from "@/features/geo";
 
 // FR-13a queue row: Ref · Subject · Category/Severity · Reporter · Assignee · SLA · Status
 type QueueStatus = "New" | "In Review" | "Assigned" | "In Progress" | "Needs more info" | "Resolved" | "Closed" | "Reopened" | "Rejected";
@@ -56,7 +57,6 @@ type Action = "assign" | "info" | "resolve" | "reopen";
 const OPEN: QueueStatus[] = ["New", "In Review", "Assigned", "In Progress", "Needs more info", "Reopened"];
 
 const STATUSES: QueueStatus[] = ["New", "In Review", "Assigned", "In Progress", "Needs more info", "Reopened", "Resolved", "Closed", "Rejected"];
-const WOREDAS = ["Bako Tibe"];
 
 const SEARCH_PLACEHOLDER = searchPlaceholder(["Ref", "Subject", "Category", "Severity", "Reporter", "Assignee", "Status"]);
 
@@ -92,7 +92,9 @@ export function IssueQueue() {
   const severityOptions = optionsOf(issues.map((i) => i.severity), ISSUE_SEVERITIES);
   const statusOptions = optionsOf(issues.map((i) => i.status), STATUSES);
   const assigneeOptions = optionsOf(issues.map((i) => i.assignee), ASSIGNEES);
-  const woredaOptions = optionsOf(issues.map((i) => i.woreda), WOREDAS);
+  // Every Woreda of the user's own area from the geo Master Data, then those the rows hold.
+  const woredaNames = useScopeAreaNames("woreda", issues.map((i) => i.woreda));
+  const woredaOptions = optionsOf(issues.map((i) => i.woreda), woredaNames);
   const filterFields: FilterFieldConfig[] = [
     { key: "category", label: "Category", allLabel: "All categories", placeholder: "All Categories", options: categoryOptions },
     { key: "severity", label: "Severity", allLabel: "All severities", placeholder: "All Severities", options: severityOptions },
