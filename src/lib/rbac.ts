@@ -112,7 +112,7 @@ export const NAV_GROUPS: NavGroup[] = [
     title: "Administration",
     items: [
       { title: "Users & Roles", href: "/admin/users", roles: ["Admin"], part: "shared" },
-      { title: "Reports", href: "/admin/reports", roles: OFFICERS, part: "shared" },
+      // Reports (/admin/reports) is hidden from the sidebar for every role; the page still opens by URL.
       { title: "Settings", href: "/admin/settings", roles: ["Admin"], part: "shared" },
     ],
   },

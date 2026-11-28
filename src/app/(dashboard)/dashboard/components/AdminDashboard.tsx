@@ -1,34 +1,13 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useState } from "react";
 import { Card } from "@/components/ui/Card";
-import { StatCard } from "@/components/ui/StatCard";
 import { cn } from "@/lib/utils";
-import { ADMIN_STATS, RECENT_ACTIVITY, REGISTRATIONS_TREND, type ActivityTone, type AdminStat } from "@/features/dashboard";
+import { RECENT_ACTIVITY, REGISTRATIONS_TREND, type ActivityTone } from "@/features/dashboard";
 import { RegistrationsTrendChart } from "./RegistrationsTrendChart";
 import { PendingRegistrations } from "./PendingRegistrations";
 import { DateRangeDropdown } from "./DateRangeDropdown";
-
-const ICONS: Record<AdminStat["icon"], ReactNode> = {
-  handshake: (
-    <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M11 17l2 2a1 1 0 003-3" /><path d="M14 14l2.5 2.5a1 1 0 003-3l-3.88-3.88a3 3 0 00-4.24 0l-.88.88a1 1 0 11-3-3l2.81-2.81a5.79 5.79 0 017.06-.87l.47.28a2 2 0 001.42.25L21 4" /><path d="M21 3l1 11h-2" /><path d="M3 3L2 14l6.5 6.5a1 1 0 003-3" /><path d="M3 4h8" />
-    </svg>
-  ),
-  calendar: (
-    <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="5" width="18" height="16" rx="2" /><path d="M8 3v4M16 3v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 17h.01M12 17h.01" />
-    </svg>
-  ),
-  shield: (
-    <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="M9 12l2 2 4-4" />
-    </svg>
-  ),
-  alert: (
-    <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z" /><path d="M12 9v4M12 17h.01" />
-    </svg>
-  ),
-};
+import { KpiTiles, KPI_RANGES } from "./KpiTiles";
 
 const AVATAR_TONES: Record<ActivityTone, string> = {
   green: "bg-brand-border-soft text-brand-green",
@@ -39,6 +18,7 @@ const AVATAR_TONES: Record<ActivityTone, string> = {
 
 // OAN / ATI Administrator home: registry KPIs, registration trend, recent activity and pending registrations.
 export function AdminDashboard() {
+  const [range, setRange] = useState("Last 30 days");
   return (
     <div className="flex w-full flex-col gap-4">
       <Card className="relative z-50 flex w-full flex-col justify-between gap-4 px-4 py-5 shadow-card md:flex-row md:items-center">
@@ -46,14 +26,10 @@ export function AdminDashboard() {
           <h1 className="text-[20px] font-semibold tracking-tight text-ink sm:text-[22px]">Dashboard</h1>
           <p className="hidden mt-1.5 text-[14px] text-ink-soft">National registry overview · all regions</p>
         </div>
-        <DateRangeDropdown />
+        <DateRangeDropdown ranges={KPI_RANGES} defaultValue="Last 30 days" onChange={setRange} />
       </Card>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {ADMIN_STATS.map((stat) => (
-          <StatCard key={stat.key} label={stat.label} value={stat.value} accent={stat.accent} tile={stat.tile} icon={ICONS[stat.icon]} />
-        ))}
-      </div>
+      <KpiTiles range={range} />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.6fr_1fr]">
         <Card className="p-0 shadow-card">
