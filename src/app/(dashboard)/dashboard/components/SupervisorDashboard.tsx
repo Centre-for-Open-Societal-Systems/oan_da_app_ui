@@ -5,7 +5,6 @@ import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorAlert } from "@/components/ui/ErrorAlert";
-import { StatCard } from "@/components/ui/StatCard";
 import { Pill, type PillTone } from "@/components/ui/Pill";
 import { FilterDropdown, type FilterOption } from "@/components/ui/FilterDropdown";
 import { SearchInput } from "@/components/ui/SearchInput";
@@ -18,6 +17,7 @@ import { fetchCoverage, type CoverageResponse, type KebeleCoverage } from "@/fea
 import { useAreaNames } from "@/features/geo";
 import { STATUS_TONE, fetchWoredaHealth, formatDate, formatDateTime, rangeFor, type KebeleStatus, type WoredaFilters, type WoredaProgrammeHealth } from "@/features/dashboard";
 import { DateRangeDropdown } from "./DateRangeDropdown";
+import { KpiTiles } from "./KpiTiles";
 
 const STATUSES: KebeleStatus[] = ["On track", "Watch", "At risk"];
 const COVERAGE_STATES: KebeleCoverage["coverage"][] = ["Full", "Agent on leave", "Flagged", "Uncovered"];
@@ -26,18 +26,10 @@ const BAR_COLOUR: Record<KebeleStatus, string> = { "On track": "bg-brand-green",
 const TRACK_COLOUR: Record<KebeleStatus, string> = { "On track": "bg-green-100", Watch: "bg-yellow-100", "At risk": "bg-red-50" };
 const PCT_COLOUR: Record<KebeleStatus, string> = { "On track": "text-brand-green", Watch: "text-orange-600", "At risk": "text-danger" };
 
-const icon = (d: string) => (
-  <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d={d} />
-  </svg>
-);
 
 // Ranges the summary API can be asked for; a custom range needs a date picker the header does not have yet.
 const RANGES = ["Last 7 days", "Last 30 days", "Last 90 days", "This quarter", "This year"] as const;
 const DEFAULT_RANGE = "Last 30 days";
-
-// Placeholder while the first answer loads, so the cards keep their size.
-const Pending = () => <span className="inline-block h-[22px] w-14 animate-pulse rounded bg-slate-200 align-middle" />;
 
 const TH = "whitespace-nowrap px-4 py-3 font-semibold";
 const SEARCH_PLACEHOLDER = searchPlaceholder(["Kebele", "Farmers", "Agents", "Visit %", "Last sync", "Status"]);
@@ -154,8 +146,6 @@ export function SupervisorDashboard() {
   const coverageLoading = coverageAnswer?.key !== coverageKey;
   const healthError = healthAnswer?.key === healthKey ? healthAnswer.error : null;
   const coverageError = coverageAnswer?.key === coverageKey ? coverageAnswer.error : null;
-  // A failed load shows a dash instead of a placeholder that pulses forever.
-  const placeholder = healthError ? "—" : <Pending />;
 
   const woredaCode = health?.code ?? coverage?.woreda ?? "";
   // Display names are a nicety: without the geo Master Data the screen falls back to the codes.
@@ -227,13 +217,8 @@ export function SupervisorDashboard() {
         </p>
       </div>
 
-      {/* KPI tiles: always the whole woreda, whatever the table is filtered to */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Farmer registered" value={health ? health.stats.farmers.toLocaleString() : placeholder} accent="border-l-blue-600" tile="bg-blue-50 text-blue-600" icon={icon("M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z")} />
-        <StatCard label="Active agents" value={health ? String(health.stats.activeAgents) : placeholder} accent="border-l-violet-600" tile="bg-violet-50 text-violet-600" icon={icon("M12 12a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0")} />
-        <StatCard label="Avg. data quality" value={health ? `${health.stats.dataQuality}/100` : placeholder} accent="border-l-brand-green" tile="bg-brand-tint text-brand-green" icon={icon("M22 7l-8.5 8.5-5-5L2 17M16 7h6v6")} />
-        <StatCard label="Open grievances" value={health ? String(health.stats.openGrievances) : placeholder} accent="border-l-danger" tile="bg-danger-wash text-danger" icon={icon("M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4M12 17h.01")} />
-      </div>
+      {/* KPI tiles, each from its own feature API */}
+      <KpiTiles range={range} />
 
       {/* Kebele breakdown */}
       <Card className="overflow-hidden p-0 shadow-card">
